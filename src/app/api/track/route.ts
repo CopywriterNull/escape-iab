@@ -4,12 +4,34 @@ import { type NextRequest } from "next/server";
 
 const ALLOWED_EVENTS = new Set([
   "impression",
+  "iab_detected",
   "escape_attempt",
+  "escape_skipped",
   "fallback_shown",
   "fallback_clicked",
 ]);
+const ALLOWED_KINDS = new Set([
+  "instagram",
+  "facebook",
+  "messenger",
+  "tiktok",
+  "snapchat",
+  "pinterest",
+  "line",
+  "wechat",
+  "webview",
+]);
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const ROLLUP_FIELD: Record<string, string> = {
+  impression: "impressions",
+  iab_detected: "iab_detected",
+  escape_attempt: "escape_attempts",
+  escape_skipped: "escape_skipped",
+  fallback_shown: "fallback_shown",
+  fallback_clicked: "fallback_clicked",
+};
 
 function ipFrom(req: NextRequest): string {
   return (
@@ -48,6 +70,8 @@ export async function POST(req: NextRequest) {
   const eventType = String(body.t ?? "");
   const bucket = body.b === "b" ? "b" : "a";
   const isIg = body.ig === 1 || body.ig === true;
+  const rawKind = typeof body.k === "string" ? body.k : null;
+  const iabKind = rawKind && ALLOWED_KINDS.has(rawKind) ? rawKind : null;
   const url = typeof body.u === "string" ? body.u.slice(0, 1024) : null;
   const referrer = typeof body.r === "string" ? body.r.slice(0, 1024) : null;
 
@@ -74,21 +98,15 @@ export async function POST(req: NextRequest) {
       event_type: eventType,
       bucket,
       is_ig: Boolean(isIg),
+      iab_kind: iabKind,
       url,
       referrer,
       user_agent: userAgent,
       ip_hash: ipHash,
     });
 
-    // Best-effort daily rollup. Single-row upsert; cheap.
     const today = new Date().toISOString().slice(0, 10);
-    const fieldMap: Record<string, string> = {
-      impression: "impressions",
-      escape_attempt: "escape_attempts",
-      fallback_shown: "fallback_shown",
-      fallback_clicked: "fallback_clicked",
-    };
-    const field = fieldMap[eventType];
+    const field = ROLLUP_FIELD[eventType];
     if (field) {
       await admin.rpc("eh_increment_rollup", {
         p_merchant_id: merchantId,
@@ -98,7 +116,7 @@ export async function POST(req: NextRequest) {
       });
     }
   } else if (process.env.NODE_ENV !== "production") {
-    console.log("[eh-track]", { merchantId, eventType, bucket, isIg, url });
+    console.log("[eh-track]", { merchantId, eventType, bucket, iabKind, isIg, url });
   }
 
   return new Response(JSON.stringify({ ok: true }), {

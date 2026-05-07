@@ -23,9 +23,14 @@ create index if not exists merchants_user_id_idx on public.merchants(user_id);
 create table if not exists public.escape_events (
   id bigserial primary key,
   merchant_id uuid not null references public.merchants(id) on delete cascade,
-  event_type text not null check (event_type in ('impression','escape_attempt','fallback_shown','fallback_clicked')),
+  event_type text not null check (event_type in (
+    'impression','iab_detected','escape_attempt','escape_skipped','fallback_shown','fallback_clicked'
+  )),
   bucket text not null check (bucket in ('a','b')),
   is_ig boolean not null default false,
+  iab_kind text check (iab_kind in (
+    'instagram','facebook','messenger','tiktok','snapchat','pinterest','line','wechat','webview'
+  )),
   url text,
   referrer text,
   user_agent text,
@@ -34,6 +39,7 @@ create table if not exists public.escape_events (
 );
 create index if not exists escape_events_merchant_created_idx on public.escape_events(merchant_id, created_at desc);
 create index if not exists escape_events_merchant_type_idx on public.escape_events(merchant_id, event_type);
+create index if not exists escape_events_merchant_kind_idx on public.escape_events(merchant_id, iab_kind);
 
 -- ============================================================================
 -- daily_rollups: pre-aggregated counts per merchant/day for fast dashboard.
@@ -44,7 +50,9 @@ create table if not exists public.daily_rollups (
   day date not null,
   bucket text not null check (bucket in ('a','b')),
   impressions int not null default 0,
+  iab_detected int not null default 0,
   escape_attempts int not null default 0,
+  escape_skipped int not null default 0,
   fallback_shown int not null default 0,
   fallback_clicked int not null default 0,
   primary key (merchant_id, day, bucket)
@@ -92,15 +100,21 @@ create or replace function public.eh_increment_rollup(
 ) returns void
 language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.daily_rollups(merchant_id, day, bucket, impressions, escape_attempts, fallback_shown, fallback_clicked)
-  values (p_merchant_id, p_day, p_bucket, 0, 0, 0, 0)
+  insert into public.daily_rollups(merchant_id, day, bucket)
+  values (p_merchant_id, p_day, p_bucket)
   on conflict (merchant_id, day, bucket) do nothing;
 
   if p_field = 'impressions' then
     update public.daily_rollups set impressions = impressions + 1
       where merchant_id = p_merchant_id and day = p_day and bucket = p_bucket;
+  elsif p_field = 'iab_detected' then
+    update public.daily_rollups set iab_detected = iab_detected + 1
+      where merchant_id = p_merchant_id and day = p_day and bucket = p_bucket;
   elsif p_field = 'escape_attempts' then
     update public.daily_rollups set escape_attempts = escape_attempts + 1
+      where merchant_id = p_merchant_id and day = p_day and bucket = p_bucket;
+  elsif p_field = 'escape_skipped' then
+    update public.daily_rollups set escape_skipped = escape_skipped + 1
       where merchant_id = p_merchant_id and day = p_day and bucket = p_bucket;
   elsif p_field = 'fallback_shown' then
     update public.daily_rollups set fallback_shown = fallback_shown + 1

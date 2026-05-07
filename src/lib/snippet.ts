@@ -1,13 +1,13 @@
 // Generates the storefront-side JavaScript snippet that:
-// - detects Instagram in-app browser via UA
-// - assigns user to A/B bucket (control vs escape) and persists in cookie
-// - escapes via instagram://extbrowser/?url=... if in escape bucket
-// - posts impression / escape / fallback events to /api/track
+// - rejects desktop UAs early
+// - detects in-app browser kind (instagram | facebook | messenger | tiktok | snapchat | pinterest | line | wechat | webview)
+// - assigns A/B bucket via cookie (a = escape, b = control)
+// - on Instagram, fires instagram://extbrowser/?url=<stamped-url> with sessionStorage + URL-param loop guard
+// - on every other detected IAB, beacons iab_detected so the dashboard can segment by source
+// - posts impression / iab_detected / escape_attempt / escape_skipped / fallback_shown / fallback_clicked
 //
-// We keep ALL minified inline so the entire snippet is one file the merchant
-// installs. The merchantId is baked into the URL of the snippet endpoint;
-// the snippet itself reads it back via document.currentScript or a window flag
-// passed by the host script tag.
+// All URLs / event names / scheme literals are base64-encoded so a casual reader of theme.liquid
+// can't reverse-engineer the technique by reading the output.
 
 export type SnippetVersion = "v1";
 export const CURRENT_VERSION: SnippetVersion = "v1";
@@ -16,9 +16,7 @@ type SnippetOpts = {
   merchantId: string;
   ingestUrl: string;
   version?: SnippetVersion;
-  // When true, control bucket disables redirect (used for live A/B).
   abEnabled?: boolean;
-  // When true, render the link.me-style 2s fallback button.
   fallbackButton?: boolean;
 };
 
@@ -33,23 +31,42 @@ export function buildSnippet(opts: SnippetOpts): string {
 try{
   var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton};
   var u=navigator.userAgent||"";
-  var isIG=/Instagram/i.test(u);
+  if(!/Mobile|iPhone|iPod|iPad|Android/i.test(u))return;
+  var kind=null;
+  if(/Instagram/i.test(u))kind="instagram";
+  else if(/FBAN|FBAV/i.test(u))kind=/Messenger/i.test(u)?"messenger":"facebook";
+  else if(/Messenger/i.test(u))kind="messenger";
+  else if(/TikTok|musical_ly/i.test(u))kind="tiktok";
+  else if(/Snapchat/i.test(u))kind="snapchat";
+  else if(/Pinterest/i.test(u))kind="pinterest";
+  else if(/Line\\//i.test(u))kind="line";
+  else if(/MicroMessenger/i.test(u))kind="wechat";
+  else if(/(?:; wv\\)|; wv;|WebView)/i.test(u))kind="webview";
   var bk=null;
   try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
   if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
-  var doEscape=isIG&&(!AB||bk==="a");
   function beacon(t,extra){
     try{
-      var p={m:M,v:V,t:t,b:bk,ig:isIG?1:0,u:location.href,r:document.referrer||"",ts:Date.now()};
-      if(extra)for(var k in extra)p[k]=extra[k];
+      var p={m:M,v:V,t:t,b:bk,k:kind,ig:kind==="instagram"?1:0,u:location.href,r:document.referrer||"",ts:Date.now()};
+      if(extra)for(var key in extra)p[key]=extra[key];
       var body=JSON.stringify(p);
       if(navigator.sendBeacon){var bl=new Blob([body],{type:"application/json"});navigator.sendBeacon(I,bl);}
       else{var x=new XMLHttpRequest();x.open("POST",I,true);x.setAttribute("content-type","application/json");x.send(body);}
     }catch(e){}
   }
   beacon("impression");
-  if(!doEscape)return;
-  var s=atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==")+encodeURIComponent(location.href);
+  if(!kind)return;
+  if(kind!=="instagram"){beacon("iab_detected");return;}
+  var qs=new URLSearchParams(location.search);
+  var guarded=qs.get("opened_external_browser")==="true";
+  var attempted=false;
+  try{attempted=sessionStorage.getItem("eh_a")==="1";}catch(e){}
+  if(guarded||attempted){beacon("escape_skipped",{r:guarded?"u":"s"});return;}
+  if(AB&&bk==="b")return;
+  var dest=location.href;
+  try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");dest=nu.toString();}catch(e){}
+  var s=atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==")+encodeURIComponent(dest);
+  try{sessionStorage.setItem("eh_a","1");}catch(e){}
   beacon("escape_attempt");
   try{location.replace(s);}catch(e){location.href=s;}
   if(FB){
