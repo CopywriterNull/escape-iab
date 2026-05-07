@@ -42,7 +42,7 @@ export default async function DashboardLayout({
             <span
               aria-hidden
               className="inline-flex size-6 items-center justify-center rounded-md"
-              style={{ background: "linear-gradient(135deg, #5b8cff 0%, #b46bff 100%)" }}
+              style={{ background: "linear-gradient(135deg, #4f7cff 0%, #06b6d4 100%)" }}
             />
             {brand.name}
           </Link>

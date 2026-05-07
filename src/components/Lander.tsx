@@ -66,7 +66,7 @@ function Logo() {
     <span
       aria-hidden
       className="inline-flex size-7 items-center justify-center rounded-md"
-      style={{ background: "linear-gradient(135deg, #5b8cff 0%, #b46bff 100%)" }}
+      style={{ background: "linear-gradient(135deg, #4f7cff 0%, #06b6d4 100%)" }}
     >
       <svg viewBox="0 0 24 24" className="size-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.4">
         <path d="M14 4h6v6" strokeLinecap="round" />
@@ -281,8 +281,8 @@ function ConnectorArrow() {
       style={{ top: "calc(50% - 30px)" }}
     >
       <div
-        className="size-12 rounded-full grid place-items-center text-white shadow-[0_18px_40px_-10px_rgba(91,140,255,0.55)] ring-4 ring-[var(--color-bg)]"
-        style={{ background: "linear-gradient(135deg, #5b8cff 0%, #b46bff 100%)" }}
+        className="size-12 rounded-full grid place-items-center text-white shadow-[0_18px_40px_-10px_rgba(79,124,255,0.55)] ring-4 ring-[var(--color-bg)]"
+        style={{ background: "linear-gradient(135deg, #4f7cff 0%, #06b6d4 100%)" }}
       >
         <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.6">
           <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
@@ -403,7 +403,7 @@ function CheckoutShell({ broken = false }: { broken?: boolean }) {
       <div className="mx-3 rounded-lg border border-current/10 bg-current/[0.03] p-2 flex items-center gap-2">
         <div
           className="size-8 rounded-md shrink-0"
-          style={{ background: "linear-gradient(135deg, #5b8cff 0%, #b46bff 100%)" }}
+          style={{ background: "linear-gradient(135deg, #4f7cff 0%, #06b6d4 100%)" }}
         />
         <div className="flex-1 min-w-0">
           <div className="h-[6px] w-3/4 rounded bg-current opacity-30" />

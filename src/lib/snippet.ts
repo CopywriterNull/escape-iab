@@ -45,9 +45,11 @@ try{
   var bk=null;
   try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
   if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
+  var sy=null;
+  try{sy=(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){}
   function beacon(t,extra){
     try{
-      var p={m:M,v:V,t:t,b:bk,k:kind,ig:kind==="instagram"?1:0,u:location.href,r:document.referrer||"",ts:Date.now()};
+      var p={m:M,v:V,t:t,b:bk,k:kind,sy:sy,ig:kind==="instagram"?1:0,u:location.href,r:document.referrer||"",ts:Date.now()};
       if(extra)for(var key in extra)p[key]=extra[key];
       var body=JSON.stringify(p);
       if(navigator.sendBeacon){var bl=new Blob([body],{type:"application/json"});navigator.sendBeacon(I,bl);}

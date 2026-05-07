@@ -21,6 +21,8 @@ export type DailyRollup = {
   escape_skipped: number;
   fallback_shown: number;
   fallback_clicked: number;
+  purchases: number;
+  revenue_cents: number;
 };
 
 export type IabKind =
@@ -103,6 +105,8 @@ export type Totals = {
   escape_skipped: { a: number; b: number };
   fallback_shown: { a: number; b: number };
   fallback_clicked: { a: number; b: number };
+  purchases: { a: number; b: number };
+  revenue_cents: { a: number; b: number };
 };
 
 export function totalize(rows: DailyRollup[]): Totals {
@@ -114,6 +118,8 @@ export function totalize(rows: DailyRollup[]): Totals {
     escape_skipped: { ...init },
     fallback_shown: { ...init },
     fallback_clicked: { ...init },
+    purchases: { ...init },
+    revenue_cents: { ...init },
   };
   for (const r of rows) {
     const b = r.bucket === "b" ? "b" : "a";
@@ -123,6 +129,82 @@ export function totalize(rows: DailyRollup[]): Totals {
     out.escape_skipped[b] += r.escape_skipped ?? 0;
     out.fallback_shown[b] += r.fallback_shown ?? 0;
     out.fallback_clicked[b] += r.fallback_clicked ?? 0;
+    out.purchases[b] += r.purchases ?? 0;
+    out.revenue_cents[b] += r.revenue_cents ?? 0;
   }
   return out;
+}
+
+// Two-proportion z-test. Returns null if either bucket has zero impressions.
+export type ZTestResult = {
+  pA: number; // CVR in bucket A (0..1)
+  pB: number; // CVR in bucket B
+  liftRel: number | null; // (pA - pB) / pB
+  z: number;
+  pValue: number; // two-sided
+  significant: boolean; // p < 0.05
+};
+
+export function zTestTwoProp(
+  xA: number,
+  nA: number,
+  xB: number,
+  nB: number,
+): ZTestResult | null {
+  if (nA <= 0 || nB <= 0) return null;
+  const pA = xA / nA;
+  const pB = xB / nB;
+  const pPool = (xA + xB) / (nA + nB);
+  const se = Math.sqrt(pPool * (1 - pPool) * (1 / nA + 1 / nB));
+  if (se === 0) {
+    return {
+      pA,
+      pB,
+      liftRel: pB > 0 ? (pA - pB) / pB : null,
+      z: 0,
+      pValue: 1,
+      significant: false,
+    };
+  }
+  const z = (pA - pB) / se;
+  // two-sided p-value via standard normal CDF approximation
+  const pValue = 2 * (1 - normalCdf(Math.abs(z)));
+  return {
+    pA,
+    pB,
+    liftRel: pB > 0 ? (pA - pB) / pB : null,
+    z,
+    pValue,
+    significant: pValue < 0.05,
+  };
+}
+
+function normalCdf(x: number): number {
+  // Abramowitz & Stegun approximation, max error ~7.5e-8.
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  const ax = Math.abs(x) / Math.SQRT2;
+  const t = 1 / (1 + p * ax);
+  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
+  return 0.5 * (1 + sign * y);
+}
+
+// Sample size required per bucket for a two-proportion test, given baseline CVR
+// (pB), minimum detectable RELATIVE effect (e.g., 0.20 for +20%), confidence
+// 0.95 (z=1.96), power 0.80 (z=0.84). Returns visitors needed per bucket.
+export function sampleSizePerBucket(pB: number, mdeRel: number): number {
+  if (pB <= 0 || pB >= 1) return Infinity;
+  const pA = pB * (1 + mdeRel);
+  if (pA <= 0 || pA >= 1) return Infinity;
+  const zAlpha = 1.96;
+  const zBeta = 0.84;
+  const sd1 = Math.sqrt(2 * pB * (1 - pB));
+  const sd2 = Math.sqrt(pA * (1 - pA) + pB * (1 - pB));
+  const n = Math.pow(zAlpha * sd1 + zBeta * sd2, 2) / Math.pow(pA - pB, 2);
+  return Math.ceil(n);
 }

@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { getCurrentMerchant } from "@/lib/db";
+import { buildShopifyPixel } from "@/lib/pixel";
 
 export default async function InstallPage() {
   const merchant = await getCurrentMerchant();
@@ -15,13 +16,17 @@ export default async function InstallPage() {
 
   const html = `<script src="${snippetUrl}" async></script>`;
   const liquid = `{% comment %} EscapeHatch — IG IAB redirect {% endcomment %}\n${html}`;
+  const pixelJs = buildShopifyPixel({
+    merchantId: merchant.id,
+    ingestUrl: `${origin}/api/track/purchase`,
+  });
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Install</h1>
         <p className="mt-1 text-sm text-[var(--color-fg-dim)]">
-          Paste the snippet into your storefront. Top of <code className="font-mono">&lt;head&gt;</code> is best.
+          Two steps: drop the snippet on your storefront, then drop the pixel in Shopify Customer Events.
         </p>
       </div>
 
@@ -37,8 +42,29 @@ export default async function InstallPage() {
         </p>
       </div>
 
-      <CodeBlock title="HTML / any storefront" lang="html" code={html} />
-      <CodeBlock title="Shopify (theme.liquid)" lang="liquid" code={liquid} />
+      <Section
+        n="1"
+        title="Storefront snippet"
+        sub="Drop in the top of <head> on every page. This sets the bucket cookie, escapes IG sessions to Safari, and beacons impressions."
+      >
+        <CodeBlock title="HTML / any storefront" lang="html" code={html} />
+        <CodeBlock title="Shopify (theme.liquid)" lang="liquid" code={liquid} />
+      </Section>
+
+      <Section
+        n="2"
+        title="Shopify Customer Events pixel"
+        sub="Required to attribute purchases back to the bucket. Without this, the dashboard only shows escape rates — no CVR or revenue lift."
+      >
+        <ol className="list-decimal list-inside space-y-1 text-sm text-[var(--color-fg-dim)] mb-3">
+          <li>Shopify admin → <strong>Settings</strong> → <strong>Customer events</strong>.</li>
+          <li>Click <strong>Add custom pixel</strong>. Name it <code className="font-mono">EscapeHatch</code>.</li>
+          <li>Set <strong>Permission</strong> to <em>Not required</em> so it fires for all visitors.</li>
+          <li>Paste the code below into the pixel code area.</li>
+          <li><strong>Save</strong>, then <strong>Connect</strong>.</li>
+        </ol>
+        <CodeBlock title="Custom pixel code" lang="javascript" code={pixelJs} />
+      </Section>
 
       <div className="card p-6 text-sm">
         <h2 className="font-semibold">Why top of <code className="font-mono">&lt;head&gt;</code>?</h2>
@@ -53,11 +79,37 @@ export default async function InstallPage() {
         <h2 className="font-semibold">Verify it&apos;s working</h2>
         <ol className="mt-3 list-decimal list-inside space-y-1 text-[var(--color-fg-dim)]">
           <li>DM yourself a link to your storefront on Instagram.</li>
-          <li>Tap it on your phone (inside Instagram).</li>
-          <li>You should bounce out to Safari (iOS) or your default browser (Android) within ~1s.</li>
-          <li>Refresh this page — an &quot;impression&quot; event should appear in Overview.</li>
+          <li>Tap it on your phone (inside Instagram). You should bounce out to Safari within ~1s.</li>
+          <li>Complete a test order on the same device. Use a real cart so checkout_completed fires.</li>
+          <li>Refresh this page — impression and purchase events should appear in Overview within 30s.</li>
+          <li>If purchases don&apos;t show up, check Shopify admin → Customer Events → EscapeHatch → status is <em>Connected</em>.</li>
         </ol>
       </div>
+    </div>
+  );
+}
+
+function Section({
+  n,
+  title,
+  sub,
+  children,
+}: {
+  n: string;
+  title: string;
+  sub: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="card p-6 space-y-4">
+      <div className="flex items-baseline gap-3">
+        <span className="font-mono text-sm text-[var(--color-accent)]">{n}.</span>
+        <div className="flex-1">
+          <h2 className="font-semibold">{title}</h2>
+          <p className="mt-1 text-sm text-[var(--color-fg-dim)]">{sub}</p>
+        </div>
+      </div>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }

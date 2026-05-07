@@ -72,6 +72,10 @@ export async function POST(req: NextRequest) {
   const isIg = body.ig === 1 || body.ig === true;
   const rawKind = typeof body.k === "string" ? body.k : null;
   const iabKind = rawKind && ALLOWED_KINDS.has(rawKind) ? rawKind : null;
+  const shopifyClientId =
+    typeof body.sy === "string" && body.sy.length > 0 && body.sy.length < 128
+      ? body.sy
+      : null;
   const url = typeof body.u === "string" ? body.u.slice(0, 1024) : null;
   const referrer = typeof body.r === "string" ? body.r.slice(0, 1024) : null;
 
@@ -99,6 +103,7 @@ export async function POST(req: NextRequest) {
       bucket,
       is_ig: Boolean(isIg),
       iab_kind: iabKind,
+      shopify_client_id: shopifyClientId,
       url,
       referrer,
       user_agent: userAgent,

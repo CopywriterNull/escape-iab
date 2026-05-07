@@ -24,13 +24,18 @@ create table if not exists public.escape_events (
   id bigserial primary key,
   merchant_id uuid not null references public.merchants(id) on delete cascade,
   event_type text not null check (event_type in (
-    'impression','iab_detected','escape_attempt','escape_skipped','fallback_shown','fallback_clicked'
+    'impression','iab_detected','escape_attempt','escape_skipped',
+    'fallback_shown','fallback_clicked','purchase'
   )),
   bucket text not null check (bucket in ('a','b')),
   is_ig boolean not null default false,
   iab_kind text check (iab_kind in (
     'instagram','facebook','messenger','tiktok','snapchat','pinterest','line','wechat','webview'
   )),
+  shopify_client_id text,
+  value_cents int,
+  currency text,
+  order_id text,
   url text,
   referrer text,
   user_agent text,
@@ -40,6 +45,12 @@ create table if not exists public.escape_events (
 create index if not exists escape_events_merchant_created_idx on public.escape_events(merchant_id, created_at desc);
 create index if not exists escape_events_merchant_type_idx on public.escape_events(merchant_id, event_type);
 create index if not exists escape_events_merchant_kind_idx on public.escape_events(merchant_id, iab_kind);
+create index if not exists escape_events_merchant_sy_idx
+  on public.escape_events(merchant_id, shopify_client_id, created_at desc)
+  where shopify_client_id is not null;
+create unique index if not exists escape_events_purchase_dedup
+  on public.escape_events(merchant_id, order_id)
+  where event_type = 'purchase' and order_id is not null;
 
 -- ============================================================================
 -- daily_rollups: pre-aggregated counts per merchant/day for fast dashboard.
@@ -55,6 +66,8 @@ create table if not exists public.daily_rollups (
   escape_skipped int not null default 0,
   fallback_shown int not null default 0,
   fallback_clicked int not null default 0,
+  purchases int not null default 0,
+  revenue_cents bigint not null default 0,
   primary key (merchant_id, day, bucket)
 );
 
@@ -96,7 +109,8 @@ create or replace function public.eh_increment_rollup(
   p_merchant_id uuid,
   p_day date,
   p_bucket text,
-  p_field text
+  p_field text,
+  p_revenue_cents int default 0
 ) returns void
 language plpgsql security definer set search_path = public as $$
 begin
@@ -122,8 +136,13 @@ begin
   elsif p_field = 'fallback_clicked' then
     update public.daily_rollups set fallback_clicked = fallback_clicked + 1
       where merchant_id = p_merchant_id and day = p_day and bucket = p_bucket;
+  elsif p_field = 'purchases' then
+    update public.daily_rollups
+       set purchases = purchases + 1,
+           revenue_cents = revenue_cents + greatest(coalesce(p_revenue_cents, 0), 0)
+      where merchant_id = p_merchant_id and day = p_day and bucket = p_bucket;
   end if;
 end; $$;
 
-revoke all on function public.eh_increment_rollup(uuid, date, text, text) from public;
-grant execute on function public.eh_increment_rollup(uuid, date, text, text) to service_role;
+revoke all on function public.eh_increment_rollup(uuid, date, text, text, int) from public;
+grant execute on function public.eh_increment_rollup(uuid, date, text, text, int) to service_role;

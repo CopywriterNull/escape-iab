@@ -4,6 +4,8 @@ import {
   getRollups,
   getIabBreakdown,
   totalize,
+  zTestTwoProp,
+  sampleSizePerBucket,
   type DailyRollup,
   type IabKind,
 } from "@/lib/db";
@@ -76,6 +78,9 @@ export default async function DashboardOverview() {
         />
       </div>
 
+      <RevenueLift totals={totals} />
+
+
       <div className="card p-6">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">A/B comparison</h2>
@@ -132,6 +137,132 @@ export default async function DashboardOverview() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function RevenueLift({ totals }: { totals: ReturnType<typeof totalize> }) {
+  const z = zTestTwoProp(
+    totals.purchases.a,
+    totals.impressions.a,
+    totals.purchases.b,
+    totals.impressions.b,
+  );
+  const cvrA = totals.impressions.a > 0 ? (100 * totals.purchases.a) / totals.impressions.a : 0;
+  const cvrB = totals.impressions.b > 0 ? (100 * totals.purchases.b) / totals.impressions.b : 0;
+  const revenueA = totals.revenue_cents.a / 100;
+  const revenueB = totals.revenue_cents.b / 100;
+  const rpsA = totals.impressions.a > 0 ? revenueA / totals.impressions.a : 0;
+  const rpsB = totals.impressions.b > 0 ? revenueB / totals.impressions.b : 0;
+  const rpsLift = rpsB > 0 ? (rpsA - rpsB) / rpsB : null;
+
+  // Sample size: assume baseline ~bucket B CVR (or default 2% if no data yet),
+  // 30% MDE for low-volume default.
+  const baseline = cvrB > 0 ? cvrB / 100 : 0.02;
+  const needed = sampleSizePerBucket(baseline, 0.3);
+  const haveA = totals.impressions.a;
+  const haveB = totals.impressions.b;
+  const havePerBucket = Math.min(haveA, haveB);
+  const progressPct = needed > 0 ? Math.min(100, (havePerBucket / needed) * 100) : 0;
+
+  const noData = totals.purchases.a + totals.purchases.b === 0;
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-semibold">Revenue lift</h2>
+        {noData ? (
+          <span className="text-[11px] text-[var(--color-fg-muted)] font-mono">
+            no purchases tracked yet · install the Shopify pixel
+          </span>
+        ) : z?.significant ? (
+          <span className="text-[11px] font-semibold rounded-full px-2 py-0.5 text-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] border border-[color-mix(in_srgb,var(--color-success)_28%,transparent)]">
+            statistically significant · p = {z.pValue.toFixed(3)}
+          </span>
+        ) : (
+          <span className="text-[11px] font-mono text-[var(--color-fg-muted)]">
+            {z ? `p = ${z.pValue.toFixed(3)} · need more data` : "—"}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <RevTile
+          label="CVR · A (escape)"
+          value={`${cvrA.toFixed(2)}%`}
+          sub={`${totals.purchases.a.toLocaleString()} purchases / ${totals.impressions.a.toLocaleString()}`}
+          accent
+        />
+        <RevTile
+          label="CVR · B (control)"
+          value={`${cvrB.toFixed(2)}%`}
+          sub={`${totals.purchases.b.toLocaleString()} purchases / ${totals.impressions.b.toLocaleString()}`}
+        />
+        <RevTile
+          label="Lift"
+          value={
+            z?.liftRel != null
+              ? `${z.liftRel > 0 ? "+" : ""}${(z.liftRel * 100).toFixed(1)}%`
+              : "—"
+          }
+          sub={z?.liftRel != null ? "relative CVR change" : "need both buckets > 0"}
+          positive={z?.liftRel != null && z.liftRel > 0}
+        />
+        <RevTile
+          label="Revenue / session lift"
+          value={rpsLift != null ? `${rpsLift > 0 ? "+" : ""}${(rpsLift * 100).toFixed(1)}%` : "—"}
+          sub={`A: $${rpsA.toFixed(2)} · B: $${rpsB.toFixed(2)}`}
+          positive={rpsLift != null && rpsLift > 0}
+        />
+      </div>
+
+      <div className="mt-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elev)] p-4">
+        <div className="flex items-center justify-between text-[11px] text-[var(--color-fg-muted)]">
+          <span>Sample size · 30% MDE @ 95% confidence, 80% power</span>
+          <span className="font-mono">
+            {havePerBucket.toLocaleString()} / {Number.isFinite(needed) ? needed.toLocaleString() : "—"} per bucket
+          </span>
+        </div>
+        <div className="mt-2 h-2 rounded-full bg-[var(--color-border)] overflow-hidden">
+          <div
+            className="h-full bg-[var(--color-accent)]"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+        <p className="mt-2 text-[11px] text-[var(--color-fg-muted)]">
+          {progressPct >= 100
+            ? "Enough data to detect a 30% relative lift. Smaller MDEs need more sessions."
+            : "Keep traffic flowing; we'll declare a winner once you cross the threshold."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RevTile({
+  label,
+  value,
+  sub,
+  accent,
+  positive,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: boolean;
+  positive?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elev)] p-3.5">
+      <div className="text-[11px] text-[var(--color-fg-muted)]">{label}</div>
+      <div
+        className={`mt-1 text-2xl font-semibold tracking-tight ${
+          accent ? "text-[var(--color-accent)]" : positive ? "text-[var(--color-success)]" : ""
+        }`}
+      >
+        {value}
+      </div>
+      {sub ? <div className="mt-1 text-[11px] text-[var(--color-fg-muted)]">{sub}</div> : null}
     </div>
   );
 }
