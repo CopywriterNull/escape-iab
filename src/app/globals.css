@@ -8,17 +8,42 @@
   --color-fg: #ededf2;
   --color-fg-dim: #9598a8;
   --color-fg-muted: #6b6e7e;
+  --color-cta-bg: #ffffff;
+  --color-cta-fg: #07070a;
   --color-accent: #5b8cff;
   --color-accent-2: #b46bff;
   --color-success: #2ecc71;
   --color-danger: #ff5876;
+  --color-grad-from: #ffffff;
+  --color-grad-mid: #c4c8e0;
+  --color-grad-to: #5b8cff;
+  --color-dot: rgba(255,255,255,0.05);
   --font-sans: var(--font-inter);
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-:root {
-  color-scheme: dark;
+[data-theme="light"] {
+  --color-bg: #fbfbfd;
+  --color-bg-elev: #f4f5f9;
+  --color-card: #ffffff;
+  --color-border: #e7e7ee;
+  --color-fg: #0a0a14;
+  --color-fg-dim: #54596a;
+  --color-fg-muted: #8f93a3;
+  --color-cta-bg: #0a0a14;
+  --color-cta-fg: #ffffff;
+  --color-accent: #4a6dff;
+  --color-accent-2: #8a3fe8;
+  --color-success: #11a050;
+  --color-danger: #d93655;
+  --color-grad-from: #0a0a14;
+  --color-grad-mid: #4a6dff;
+  --color-grad-to: #8a3fe8;
+  --color-dot: rgba(0,0,0,0.06);
 }
+
+:root { color-scheme: dark; }
+[data-theme="light"] { color-scheme: light; }
 
 html, body { background: var(--color-bg); color: var(--color-fg); }
 
@@ -31,25 +56,26 @@ body {
 * { border-color: var(--color-border); }
 
 .gradient-text {
-  background: linear-gradient(135deg, #ffffff 0%, #c4c8e0 50%, #5b8cff 100%);
+  background: linear-gradient(135deg, var(--color-grad-from) 0%, var(--color-grad-mid) 50%, var(--color-grad-to) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
 .glow {
-  background: radial-gradient(800px 400px at 50% -10%, rgba(91,140,255,.18), transparent 60%),
-              radial-gradient(600px 300px at 80% 20%, rgba(180,107,255,.12), transparent 70%);
+  background:
+    radial-gradient(800px 400px at 50% -10%, color-mix(in srgb, var(--color-accent) 18%, transparent), transparent 60%),
+    radial-gradient(600px 300px at 80% 20%, color-mix(in srgb, var(--color-accent-2) 12%, transparent), transparent 70%);
 }
 
 .dotgrid {
-  background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-image: radial-gradient(var(--color-dot) 1px, transparent 1px);
   background-size: 18px 18px;
 }
 
 @keyframes pulse-ring {
-  0%   { box-shadow: 0 0 0 0 rgba(91,140,255,.45); }
-  70%  { box-shadow: 0 0 0 14px rgba(91,140,255,0); }
-  100% { box-shadow: 0 0 0 0 rgba(91,140,255,0); }
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 45%, transparent); }
+  70%  { box-shadow: 0 0 0 14px color-mix(in srgb, var(--color-accent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 0%, transparent); }
 }
 .pulse-ring { animation: pulse-ring 2.4s cubic-bezier(0.66,0,0,1) infinite; }
