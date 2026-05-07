@@ -82,7 +82,7 @@ function Hero() {
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 mesh-bg pointer-events-none" />
       <div className="absolute inset-0 dotgrid opacity-40 pointer-events-none [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_70%)]" />
-      <div className="relative mx-auto max-w-6xl px-5 pt-16 md:pt-24 pb-10">
+      <div className="relative mx-auto max-w-6xl px-5 pt-14 md:pt-20 pb-8">
         <div className="flex justify-center mb-6">
           <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)]/80 px-3 py-1 text-[12px] text-[var(--color-fg-dim)] backdrop-blur">
             <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
@@ -135,52 +135,156 @@ function Waitlist() {
 
 function HeroVisual() {
   return (
-    <div className="relative mx-auto max-w-5xl px-5 pb-24">
-      <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 items-end">
+    <div className="relative mx-auto max-w-[760px] px-5 pb-20">
+      <div className="relative grid grid-cols-2 gap-3 sm:gap-5 items-start">
         {/* Before */}
-        <div className="md:pt-8">
-          <Pill variant="danger" label="Before · Instagram in-app browser" right="CVR 0.8%" />
-          <div className="mt-3">
-            <PhoneFrame label="yourshop.com">
-              <IGChrome />
-              <CheckoutShell broken />
-            </PhoneFrame>
-          </div>
-        </div>
+        <PhoneCol
+          variant="danger"
+          stickerLabel="Before · Instagram IAB"
+          stickerStat="CVR 0.8%"
+          chrome={<IGChrome />}
+          inner={<CheckoutShell broken />}
+          captions={[
+            { label: "Apple Pay", state: "missing" },
+            { label: "Shop Pay autofill", state: "missing" },
+            { label: "Saved cart", state: "lost" },
+          ]}
+        />
+
         {/* After */}
-        <div className="float-slow">
-          <Pill variant="success" label="After · Safari, real browser" right="CVR 2.4%" />
-          <div className="mt-3 relative">
-            <div
-              className="absolute -inset-3 rounded-[44px] blur-2xl opacity-50 pointer-events-none"
-              style={{
-                background:
-                  "linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 35%, transparent), color-mix(in srgb, var(--color-accent-2) 35%, transparent))",
-              }}
-            />
-            <PhoneFrame label="yourshop.com" highlight>
-              <SafariChrome />
-              <CheckoutShell />
-            </PhoneFrame>
-          </div>
-        </div>
+        <PhoneCol
+          variant="success"
+          stickerLabel="After · Safari"
+          stickerStat="CVR 2.4%"
+          chrome={<SafariChrome />}
+          inner={<CheckoutShell />}
+          highlight
+          floats
+          captions={[
+            { label: "Apple Pay", state: "ok" },
+            { label: "Shop Pay autofill", state: "ok" },
+            { label: "Saved cart", state: "ok" },
+          ]}
+        />
+
         <ConnectorArrow />
       </div>
-      <p className="text-center text-[11px] text-[var(--color-fg-muted)] mt-8 italic">
-        Illustrative numbers. Actual lift varies — your dashboard A/B tests against your own traffic.
+      <p className="text-center text-[11px] text-[var(--color-fg-muted)] mt-7 italic">
+        Illustrative checkout. Actual lift varies — your dashboard A/B tests against your own traffic.
       </p>
     </div>
   );
 }
 
+function PhoneCol({
+  variant,
+  stickerLabel,
+  stickerStat,
+  chrome,
+  inner,
+  highlight,
+  floats,
+  captions,
+}: {
+  variant: "success" | "danger";
+  stickerLabel: string;
+  stickerStat: string;
+  chrome: React.ReactNode;
+  inner: React.ReactNode;
+  highlight?: boolean;
+  floats?: boolean;
+  captions: { label: string; state: "ok" | "missing" | "lost" }[];
+}) {
+  return (
+    <div className="flex flex-col items-center">
+      <Sticker variant={variant} label={stickerLabel} stat={stickerStat} />
+      <div className={`mt-3 relative ${floats ? "float-slow" : ""}`}>
+        {highlight ? (
+          <div
+            aria-hidden
+            className="absolute -inset-4 rounded-[48px] blur-2xl opacity-50 pointer-events-none"
+            style={{
+              background:
+                "linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 38%, transparent), color-mix(in srgb, var(--color-accent-2) 38%, transparent))",
+            }}
+          />
+        ) : null}
+        <PhoneFrame highlight={highlight}>
+          {chrome}
+          {inner}
+        </PhoneFrame>
+      </div>
+      <ul className="mt-5 w-full max-w-[220px] space-y-1.5">
+        {captions.map((c) => (
+          <CaptionRow key={c.label} {...c} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Sticker({
+  variant,
+  label,
+  stat,
+}: {
+  variant: "success" | "danger";
+  label: string;
+  stat: string;
+}) {
+  const tone =
+    variant === "success"
+      ? "bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] text-[var(--color-success)] border-[color-mix(in_srgb,var(--color-success)_28%,transparent)]"
+      : "bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] text-[var(--color-danger)] border-[color-mix(in_srgb,var(--color-danger)_28%,transparent)]";
+  return (
+    <div
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium ${tone}`}
+    >
+      <span className="opacity-90">{label}</span>
+      <span className="opacity-50">·</span>
+      <span className="font-mono">{stat}</span>
+    </div>
+  );
+}
+
+function CaptionRow({
+  label,
+  state,
+}: {
+  label: string;
+  state: "ok" | "missing" | "lost";
+}) {
+  const ok = state === "ok";
+  const text = ok ? "available" : state === "lost" ? "lost" : "missing";
+  return (
+    <li className="flex items-center justify-between text-[11.5px]">
+      <span className={`${ok ? "text-[var(--color-fg)]" : "text-[var(--color-fg-dim)]"} font-medium`}>
+        {label}
+      </span>
+      <span
+        className={`inline-flex items-center gap-1 font-mono ${
+          ok ? "text-[var(--color-success)]" : "text-[var(--color-danger)]"
+        }`}
+      >
+        {ok ? <Tick /> : <Cross />}
+        {text}
+      </span>
+    </li>
+  );
+}
+
 function ConnectorArrow() {
   return (
-    <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 items-center justify-center pointer-events-none">
+    <div
+      aria-hidden
+      className="hidden md:flex absolute left-1/2 -translate-x-1/2 z-20 items-center justify-center pointer-events-none"
+      style={{ top: "calc(50% - 30px)" }}
+    >
       <div
-        className="size-14 rounded-full grid place-items-center text-white shadow-2xl"
+        className="size-12 rounded-full grid place-items-center text-white shadow-[0_18px_40px_-10px_rgba(91,140,255,0.55)] ring-4 ring-[var(--color-bg)]"
         style={{ background: "linear-gradient(135deg, #5b8cff 0%, #b46bff 100%)" }}
       >
-        <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="2.4">
+        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.6">
           <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
@@ -188,19 +292,19 @@ function ConnectorArrow() {
   );
 }
 
-function Pill({ variant, label, right }: { variant: "success" | "danger"; label: string; right: string }) {
-  const dot =
-    variant === "success" ? "bg-[var(--color-success)]" : "bg-[var(--color-danger)]";
-  const tag =
-    variant === "success" ? "text-[var(--color-success)]" : "text-[var(--color-danger)]";
+function Tick() {
   return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="inline-flex items-center gap-1.5 text-[var(--color-fg-dim)]">
-        <span className={`size-2 rounded-full ${dot}`} />
-        {label}
-      </span>
-      <span className={`font-mono ${tag}`}>{right}</span>
-    </div>
+    <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="2.4">
+      <path d="M2 6.5l2.5 2.5L10 3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Cross() {
+  return (
+    <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="2.4">
+      <path d="M3 3l6 6M9 3l-6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -208,122 +312,292 @@ function Pill({ variant, label, right }: { variant: "success" | "danger"; label:
 
 function PhoneFrame({
   children,
-  label,
   highlight,
 }: {
   children: React.ReactNode;
-  label: string;
   highlight?: boolean;
 }) {
   return (
     <div
-      className={`relative mx-auto w-[260px] aspect-[10/19] rounded-[40px] p-2 elevated ${
+      className={`relative mx-auto w-[212px] sm:w-[228px] aspect-[9/19] rounded-[34px] p-[5px] elevated ${
         highlight
-          ? "bg-gradient-to-b from-[var(--color-card)] to-[var(--color-bg-elev)] ring-1 ring-[var(--color-accent)]/30"
-          : "bg-[var(--color-card)] ring-1 ring-[var(--color-border)]"
+          ? "bg-gradient-to-b from-[#1c1d28] to-[#0a0a14] ring-1 ring-[var(--color-accent)]/30"
+          : "bg-gradient-to-b from-[#1c1d28] to-[#0a0a14] ring-1 ring-black/40"
       }`}
     >
-      <div className="absolute left-1/2 -translate-x-1/2 top-3 h-5 w-24 rounded-full bg-black/85 z-10" />
-      <div className="relative h-full w-full rounded-[32px] overflow-hidden bg-[var(--color-bg-elev)] flex flex-col">
-        <div className="h-7" aria-hidden />
-        <div className="px-1.5 -mt-1.5 flex-1 flex flex-col">{children}</div>
-        <div className="pb-2 pt-1 flex items-center justify-center" aria-hidden>
-          <div className="h-1 w-20 rounded-full bg-[var(--color-fg-muted)]/40" />
+      {/* dynamic island */}
+      <div className="absolute left-1/2 -translate-x-1/2 top-2 h-[18px] w-[80px] rounded-full bg-black z-20" />
+      {/* side buttons */}
+      <span className="absolute -left-[2px] top-[88px] h-9 w-[2px] rounded bg-black/50" />
+      <span className="absolute -left-[2px] top-[136px] h-14 w-[2px] rounded bg-black/50" />
+      <span className="absolute -right-[2px] top-[120px] h-20 w-[2px] rounded bg-black/50" />
+
+      <div className="relative h-full w-full rounded-[28px] overflow-hidden bg-[var(--color-bg)] flex flex-col">
+        {/* status bar */}
+        <div className="relative h-7 flex items-center justify-between px-5 text-[9px] font-semibold text-[var(--color-fg)]">
+          <span>9:41</span>
+          <span className="inline-flex items-center gap-1 opacity-80">
+            <svg viewBox="0 0 14 8" className="h-2 w-3" fill="currentColor"><rect x="0" y="2" width="2" height="6" rx="0.5"/><rect x="3" y="1" width="2" height="7" rx="0.5"/><rect x="6" y="0" width="2" height="8" rx="0.5"/></svg>
+            <svg viewBox="0 0 14 10" className="h-2.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1"><path d="M1 4 a6 6 0 0 1 12 0"/><path d="M3 6 a4 4 0 0 1 8 0"/><circle cx="7" cy="8" r="0.8" fill="currentColor"/></svg>
+            <svg viewBox="0 0 22 10" className="h-2.5 w-5" fill="none" stroke="currentColor" strokeWidth="1"><rect x="0.5" y="0.5" width="18" height="9" rx="2"/><rect x="2" y="2" width="13" height="6" rx="0.5" fill="currentColor"/><rect x="19" y="3" width="2" height="4" rx="0.5" fill="currentColor"/></svg>
+          </span>
+        </div>
+        <div className="flex-1 flex flex-col min-h-0">{children}</div>
+        {/* home indicator */}
+        <div className="pb-1.5 pt-1.5 flex items-center justify-center" aria-hidden>
+          <div className="h-[3px] w-[100px] rounded-full bg-[var(--color-fg)] opacity-70" />
         </div>
       </div>
-      <span className="sr-only">{label}</span>
     </div>
   );
 }
 
 function IGChrome() {
   return (
-    <div className="ig-chrome rounded-t-[20px] flex items-center gap-2 px-3 py-2 text-[10px]">
-      <span className="opacity-90">×</span>
-      <div className="flex-1 truncate text-center font-medium tracking-tight">yourshop.com</div>
-      <span className="opacity-90">⋯</span>
+    <div className="ig-chrome flex items-center gap-2 px-3 py-2 text-[10px]">
+      <svg viewBox="0 0 16 16" className="size-3 opacity-90" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+      </svg>
+      <div className="flex-1 truncate text-center font-medium tracking-tight opacity-90">yourshop.com</div>
+      <svg viewBox="0 0 16 16" className="size-3 opacity-90" fill="currentColor">
+        <circle cx="3" cy="8" r="1.3" />
+        <circle cx="8" cy="8" r="1.3" />
+        <circle cx="13" cy="8" r="1.3" />
+      </svg>
     </div>
   );
 }
 
 function SafariChrome() {
   return (
-    <div className="rounded-t-[20px] flex items-center gap-2 px-2 py-1.5 text-[10px] bg-[var(--color-bg)] text-[var(--color-fg)] border border-[var(--color-border)]">
-      <span className="opacity-50">‹</span>
-      <span className="opacity-50">›</span>
-      <div className="flex-1 inline-flex items-center justify-center gap-1 rounded-md bg-[var(--color-bg-elev)] px-2 py-1 truncate">
-        <svg viewBox="0 0 12 12" className="size-2.5 opacity-60" fill="none" stroke="currentColor" strokeWidth="1.6">
+    <div className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] bg-[var(--color-bg-elev)] text-[var(--color-fg)] border-b border-[var(--color-border)]">
+      <span className="opacity-40 text-[12px] leading-none">‹</span>
+      <span className="opacity-40 text-[12px] leading-none">›</span>
+      <div className="flex-1 inline-flex items-center justify-center gap-1 rounded-md bg-[var(--color-card)] px-2 py-[3px] truncate border border-[var(--color-border)]">
+        <svg viewBox="0 0 12 12" className="size-2.5 opacity-50" fill="none" stroke="currentColor" strokeWidth="1.6">
           <rect x="3" y="5.5" width="6" height="4.5" rx="1" />
           <path d="M4.5 5.5V4a1.5 1.5 0 113 0v1.5" />
         </svg>
-        <span>yourshop.com</span>
+        <span className="font-medium">yourshop.com</span>
       </div>
-      <span className="opacity-50">⤴</span>
+      <svg viewBox="0 0 16 16" className="size-3 opacity-50" fill="none" stroke="currentColor" strokeWidth="1.4">
+        <path d="M8 1v9M5 4l3-3 3 3M3 9v4a1 1 0 001 1h8a1 1 0 001-1V9" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
     </div>
   );
 }
 
 function CheckoutShell({ broken = false }: { broken?: boolean }) {
   return (
-    <div className="checkout-shell flex-1 px-3 pt-3 pb-2 flex flex-col">
-      <div className="text-[8.5px] uppercase tracking-wider opacity-50">your order</div>
-      <div className="mt-1 flex items-center gap-2">
-        <div className="size-9 rounded-md bg-[var(--color-accent)]/15 grid place-items-center">
-          <svg viewBox="0 0 24 24" className="size-5 text-[var(--color-accent)]" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M3 9l9-6 9 6v9a2 2 0 01-2 2h-3v-7H8v7H5a2 2 0 01-2-2V9z" />
-          </svg>
-        </div>
-        <div className="flex-1">
-          <div className="h-1.5 w-3/4 rounded bg-current opacity-15" />
-          <div className="mt-1 h-1.5 w-1/2 rounded bg-current opacity-10" />
-        </div>
-        <div className="text-[10px] font-semibold">$48</div>
+    <div className="checkout-shell flex-1 flex flex-col min-h-0 text-current">
+      {/* page header */}
+      <div className="px-3 pt-2.5 pb-2 flex items-center justify-between">
+        <svg viewBox="0 0 16 16" className="size-3 opacity-50" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M10 3l-5 5 5 5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="text-[10px] font-semibold tracking-tight">Checkout</span>
+        <span className="size-3" />
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-1.5 text-[8.5px]">
-        <Field />
-        <Field wide />
-      </div>
-      <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-        <Field />
-        <Field />
+      {/* product summary */}
+      <div className="mx-3 rounded-lg border border-current/10 bg-current/[0.03] p-2 flex items-center gap-2">
+        <div
+          className="size-8 rounded-md shrink-0"
+          style={{ background: "linear-gradient(135deg, #5b8cff 0%, #b46bff 100%)" }}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="h-[6px] w-3/4 rounded bg-current opacity-30" />
+          <div className="mt-1 h-[5px] w-1/2 rounded bg-current opacity-15" />
+        </div>
+        <div className="text-[10px] font-semibold tabular-nums">$48</div>
       </div>
 
-      <div className="mt-auto space-y-1.5">
-        {broken ? (
-          <>
-            <div className="rounded-lg px-3 py-2 text-[10px] font-semibold flex items-center justify-center bg-current/5 text-current/30 border border-dashed border-current/20">
-              Apple Pay unavailable
-            </div>
-            <div className="rounded-lg px-3 py-2 text-[10px] font-semibold flex items-center justify-center bg-current/5 text-current/25 border border-dashed border-current/15">
-              Shop Pay disabled
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="rounded-lg px-3 py-2 text-[10px] font-semibold flex items-center justify-center bg-black text-white">
-              <svg viewBox="0 0 24 16" className="h-3 mr-1" fill="currentColor" aria-hidden>
-                <path d="M5.4 6.5c.4-.5.7-1.2.6-1.9-.6 0-1.3.4-1.7.9-.4.4-.7 1.1-.6 1.8.7.1 1.3-.3 1.7-.8zm.6.1c-.9 0-1.7.5-2.1.5-.5 0-1.1-.5-1.9-.5-1 0-1.9.6-2.4 1.5-1 1.8-.3 4.5.7 6 .5.7 1.1 1.5 1.9 1.5.7 0 1-.5 1.9-.5s1.2.5 2 .5c.8 0 1.4-.7 1.9-1.5.6-.9.8-1.7.8-1.7s-1.6-.6-1.6-2.4c0-1.5 1.2-2.2 1.3-2.3-.7-1-1.8-1.1-2.5-1.1z" />
-              </svg>
-              Pay
-            </div>
-            <div className="rounded-lg px-3 py-2 text-[10px] font-semibold flex items-center justify-center bg-[#5a31f4] text-white tracking-wide">
-              <span>Shop</span><span className="font-light ml-0.5">Pay</span>
-            </div>
-          </>
-        )}
+      {/* contact + shipping fields */}
+      <div className="mx-3 mt-2 space-y-1.5">
+        <FieldLabeled label="Email" filled={!broken} />
+        <FieldLabeled label="Address" filled={!broken} />
+        <div className="grid grid-cols-2 gap-1.5">
+          <FieldLabeled label="City" filled={!broken} small />
+          <FieldLabeled label="ZIP" filled={!broken} small />
+        </div>
+      </div>
+
+      {/* payment region — the focus */}
+      <div className="mx-3 mt-3 rounded-lg border border-current/10 p-2 pb-2.5 bg-current/[0.02]">
+        <div className="flex items-center justify-between text-[8.5px] uppercase tracking-wider opacity-60">
+          <span>Pay with</span>
+          {broken ? <BrokenTag /> : <SecureTag />}
+        </div>
+        <div className="mt-1.5 space-y-1.5">
+          {broken ? (
+            <>
+              <PayRow tone="apple" disabled label="Apple Pay" sub="unavailable in this browser" />
+              <PayRow tone="shop" disabled label="Shop Pay" sub="autofill blocked" />
+              <PayRow tone="card" label="Card details" sub="manual entry required" highlight />
+            </>
+          ) : (
+            <>
+              <PayRow tone="apple" label="Apple Pay" sub="ready · Face ID" />
+              <PayRow tone="shop" label="Shop Pay" sub="snowy@gmail.com" />
+              <PayRow tone="card" label="Card on file" sub="•••• 4242" />
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-auto px-3 pb-2 pt-2">
+        <div
+          className={`rounded-lg px-3 py-2 text-[10px] font-semibold flex items-center justify-center ${
+            broken
+              ? "bg-current/8 text-current/40 border border-current/15"
+              : "bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)]"
+          }`}
+        >
+          {broken ? "Continue — fill all fields" : "Continue · $48.00"}
+        </div>
       </div>
     </div>
   );
 }
 
-function Field({ wide = false }: { wide?: boolean }) {
+function FieldLabeled({
+  label,
+  filled = false,
+  small = false,
+}: {
+  label: string;
+  filled?: boolean;
+  small?: boolean;
+}) {
   return (
     <div
-      className={`h-6 rounded-md border ${
-        "border-current/15"
-      } bg-current/5 ${wide ? "col-span-2" : ""}`}
-    />
+      className={`rounded-md border border-current/12 bg-current/[0.04] px-1.5 ${
+        small ? "py-1" : "py-1"
+      } flex items-center justify-between`}
+    >
+      <span className="text-[8px] uppercase tracking-wider opacity-50">{label}</span>
+      {filled ? (
+        <span className="h-[5px] w-12 rounded bg-current opacity-40" />
+      ) : (
+        <span className="h-[5px] w-6 rounded bg-current opacity-15" />
+      )}
+    </div>
+  );
+}
+
+function PayRow({
+  tone,
+  label,
+  sub,
+  disabled,
+  highlight,
+}: {
+  tone: "apple" | "shop" | "card";
+  label: string;
+  sub: string;
+  disabled?: boolean;
+  highlight?: boolean;
+}) {
+  const baseStyle: React.CSSProperties = (() => {
+    if (disabled) return { background: "transparent" };
+    if (tone === "apple") return { background: "#000", color: "#fff" };
+    if (tone === "shop") return { background: "#5a31f4", color: "#fff" };
+    return {};
+  })();
+  return (
+    <div
+      className={`relative rounded-md px-2 py-1.5 flex items-center gap-2 ${
+        disabled
+          ? "border border-current/15 bg-current/[0.03]"
+          : tone === "card"
+            ? `border ${highlight ? "border-current/40" : "border-current/15"} bg-current/[0.04]`
+            : ""
+      }`}
+      style={baseStyle}
+    >
+      <PayIcon tone={tone} muted={disabled} />
+      <div className="flex-1 min-w-0">
+        <div className={`text-[10px] font-semibold leading-tight ${disabled ? "opacity-40" : ""}`}>
+          {label}
+        </div>
+        <div className={`text-[8.5px] leading-tight ${disabled ? "opacity-35" : "opacity-70"}`}>
+          {sub}
+        </div>
+      </div>
+      {disabled ? (
+        <svg viewBox="0 0 16 16" className="size-3 opacity-50 text-[var(--color-danger)]" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="8" cy="8" r="6" />
+          <path d="M4 12L12 4" strokeLinecap="round" />
+        </svg>
+      ) : null}
+      {disabled ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-md"
+          style={{
+            background:
+              "repeating-linear-gradient(135deg, transparent 0 7px, color-mix(in srgb, var(--color-danger) 12%, transparent) 7px 8px)",
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function PayIcon({ tone, muted }: { tone: "apple" | "shop" | "card"; muted?: boolean }) {
+  if (tone === "apple") {
+    return (
+      <span
+        className={`inline-flex items-center justify-center size-5 rounded ${
+          muted ? "bg-current/8 text-current/40" : "bg-white/15"
+        }`}
+      >
+        <svg viewBox="0 0 24 24" className="size-3" fill="currentColor" aria-hidden>
+          <path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.6-1.2-1.7-3-2-3.6-2-1.5-.2-3 .9-3.7.9-.7 0-2-.9-3.3-.8-1.7 0-3.2 1-4.1 2.5-1.7 3-.4 7.4 1.3 9.8.8 1.2 1.8 2.5 3 2.5 1.2 0 1.7-.8 3.2-.8 1.5 0 1.9.8 3.3.8 1.4 0 2.2-1.2 3.1-2.4 1-1.4 1.4-2.7 1.4-2.7-.1 0-2.7-1-2.7-4.1zM14 5.5c.7-.8 1.1-2 1-3.2-1 .1-2.2.7-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.5 2.9-1.3z" />
+        </svg>
+      </span>
+    );
+  }
+  if (tone === "shop") {
+    return (
+      <span
+        className={`inline-flex items-center justify-center size-5 rounded text-[7px] font-bold ${
+          muted ? "bg-current/8 text-current/40" : "bg-white/15 text-white"
+        }`}
+      >
+        S
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`inline-flex items-center justify-center size-5 rounded ${
+        muted ? "bg-current/8 text-current/40" : "bg-current/8 text-current/70"
+      }`}
+    >
+      <svg viewBox="0 0 16 12" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.4">
+        <rect x="0.5" y="0.5" width="15" height="11" rx="1.5" />
+        <path d="M0.5 4h15" />
+      </svg>
+    </span>
+  );
+}
+
+function BrokenTag() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[8px] font-semibold rounded-full px-1.5 py-0.5 text-[var(--color-danger)] bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] border border-[color-mix(in_srgb,var(--color-danger)_28%,transparent)]">
+      <span className="size-1 rounded-full bg-[var(--color-danger)]" />
+      blocked
+    </span>
+  );
+}
+
+function SecureTag() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[8px] font-semibold rounded-full px-1.5 py-0.5 text-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] border border-[color-mix(in_srgb,var(--color-success)_28%,transparent)]">
+      <span className="size-1 rounded-full bg-[var(--color-success)]" />
+      ready
+    </span>
   );
 }
 
