@@ -5,7 +5,7 @@ type Theme = "dark" | "light";
 
 export function Lander({ theme = "dark" }: { theme?: Theme }) {
   return (
-    <div data-theme={theme} className="text-[var(--color-fg)] bg-[var(--color-bg)]">
+    <div data-theme={theme} className="text-[var(--color-fg)] bg-[var(--color-bg)] grain relative">
       <Nav theme={theme} />
       <Hero />
       <LogoStrip />
@@ -27,37 +27,49 @@ function Nav({ theme }: { theme: Theme }) {
   const otherLabel = theme === "dark" ? "Light" : "Dark";
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-[var(--color-bg)]/75 border-b border-[var(--color-border)]/60">
-      <div className="mx-auto max-w-6xl px-5 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+      <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between gap-6">
+        <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight focus-ring rounded-md">
           <Logo />
           <span>{brand.name}</span>
         </Link>
-        <nav className="hidden md:flex items-center gap-7 text-sm text-[var(--color-fg-dim)]">
-          <a href="#how" className="hover:text-[var(--color-fg)]">How it works</a>
-          <a href="#dashboard" className="hover:text-[var(--color-fg)]">Dashboard</a>
-          <a href="#pricing" className="hover:text-[var(--color-fg)]">Pricing</a>
-          <a href="#faq" className="hover:text-[var(--color-fg)]">FAQ</a>
+        <nav className="hidden md:flex items-center gap-1 text-sm">
+          <NavLink href="#how">How it works</NavLink>
+          <NavLink href="#dashboard">Dashboard</NavLink>
+          <NavLink href="#pricing">Pricing</NavLink>
+          <NavLink href="#faq">FAQ</NavLink>
         </nav>
         <div className="flex items-center gap-2">
           <Link
             href={otherHref}
             aria-label={`Switch to ${otherLabel.toLowerCase()} theme`}
-            className="text-xs px-2.5 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:border-[var(--color-fg-muted)]"
+            className="text-xs px-2.5 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:border-[var(--color-fg-muted)] transition-colors focus-ring"
           >
             {otherLabel}
           </Link>
-          <a href="#waitlist" className="hidden sm:inline-block text-sm text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] px-3 py-1.5">
+          <a href="#waitlist" className="hidden sm:inline-block text-sm text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] px-3 py-1.5 transition-colors">
             Sign in
           </a>
           <a
             href="#waitlist"
-            className="text-sm font-medium px-3.5 py-1.5 rounded-lg bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] hover:opacity-90"
+            className="text-sm font-medium px-3.5 py-1.5 rounded-lg bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] press lift focus-ring"
+            style={{ boxShadow: "var(--shadow-cta)" }}
           >
             Get early access
           </a>
         </div>
       </div>
     </header>
+  );
+}
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      className="px-3 py-1.5 rounded-md text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:bg-[var(--color-card)] transition-colors focus-ring"
+    >
+      {children}
+    </a>
   );
 }
 
@@ -89,7 +101,7 @@ function Hero() {
             Now in private beta · Shopify, Liquid, custom storefronts
           </span>
         </div>
-        <h1 className="text-center text-4xl md:text-6xl font-semibold tracking-tight leading-[1.04] max-w-4xl mx-auto">
+        <h1 className="text-center h-display text-5xl md:text-7xl max-w-4xl mx-auto text-balance">
           <span className="gradient-text">Stop losing IG-sourced sales</span>
           <br />
           <span className="gradient-text">to the in-app browser.</span>
@@ -124,7 +136,8 @@ function Waitlist() {
       />
       <button
         type="submit"
-        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] font-medium hover:opacity-90 shadow-[0_8px_30px_-8px_color-mix(in_srgb,var(--color-accent)_45%,transparent)]"
+        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] font-medium press lift focus-ring"
+        style={{ boxShadow: "var(--shadow-cta)" }}
       >
         Get early access
         <ArrowRight />
@@ -631,7 +644,7 @@ function Problem() {
       <div className="grid md:grid-cols-2 gap-12 items-start">
         <div>
           <SectionLabel>The IG tax</SectionLabel>
-          <h2 className="mt-3 text-3xl md:text-[40px] font-semibold tracking-tight leading-[1.1]">
+          <h2 className="mt-3 h-section text-3xl md:text-[44px] text-balance">
             Your IG ads work. The in-app browser kills the sale.
           </h2>
           <p className="mt-5 text-[var(--color-fg-dim)] leading-relaxed">
@@ -647,8 +660,8 @@ function Problem() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           {stats.map((s) => (
-            <div key={s.v} className="card p-5">
-              <div className="text-3xl font-semibold tracking-tight">{s.k}</div>
+            <div key={s.v} className="card p-5 lift">
+              <div className="h-section text-3xl tnum">{s.k}</div>
               <div className="mt-1 text-sm text-[var(--color-fg)]">{s.v}</div>
               <div className="mt-2 text-[11px] text-[var(--color-fg-muted)]">{s.note}</div>
             </div>
@@ -700,13 +713,13 @@ function HowItWorks() {
       <div className="mx-auto max-w-6xl px-5 py-28">
         <div className="text-center max-w-2xl mx-auto">
           <SectionLabel>How it works</SectionLabel>
-          <h2 className="mt-3 text-3xl md:text-[40px] font-semibold tracking-tight leading-[1.1]">
+          <h2 className="mt-3 h-section text-3xl md:text-[44px] text-balance">
             One snippet. Three layers of recovery.
           </h2>
         </div>
         <div className="mt-14 grid md:grid-cols-3 gap-4">
           {steps.map((s) => (
-            <div key={s.n} className="card p-6">
+            <div key={s.n} className="card p-6 lift">
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center justify-center size-9 rounded-lg bg-[var(--color-accent)]/10 text-[var(--color-accent)]">
                   {s.icon}
@@ -736,7 +749,7 @@ function DashboardPreview() {
         <div className="grid md:grid-cols-12 gap-10 items-center">
           <div className="md:col-span-5">
             <SectionLabel>Your dashboard</SectionLabel>
-            <h2 className="mt-3 text-3xl md:text-[40px] font-semibold tracking-tight leading-[1.1]">
+            <h2 className="mt-3 h-section text-3xl md:text-[44px] text-balance">
               Watch the lift land in real time.
             </h2>
             <p className="mt-5 text-[var(--color-fg-dim)] leading-relaxed">
@@ -790,7 +803,7 @@ function DashboardMock() {
           <div>
             <div className="text-[11px] text-[var(--color-fg-muted)]">CVR · last 14 days</div>
             <div className="mt-0.5 flex items-baseline gap-2">
-              <span className="text-2xl font-semibold tracking-tight">2.41%</span>
+              <span className="h-section text-2xl tnum">2.41%</span>
               <span className="text-[12px] text-[var(--color-success)] font-medium">+190% vs control</span>
             </div>
           </div>
@@ -924,7 +937,7 @@ function Features() {
       <div className="mx-auto max-w-6xl px-5 py-28">
         <div className="text-center max-w-2xl mx-auto">
           <SectionLabel>Features</SectionLabel>
-          <h2 className="mt-3 text-3xl md:text-[40px] font-semibold tracking-tight leading-[1.1]">
+          <h2 className="mt-3 h-section text-3xl md:text-[44px] text-balance">
             More than a one-line script.
           </h2>
           <p className="mt-3 text-[var(--color-fg-dim)]">
@@ -933,7 +946,7 @@ function Features() {
         </div>
         <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map((it) => (
-            <div key={it.t} className="card p-5">
+            <div key={it.t} className="card p-5 lift">
               <h3 className="font-semibold">{it.t}</h3>
               <p
                 className="mt-2 text-sm text-[var(--color-fg-dim)] leading-relaxed"
@@ -959,7 +972,7 @@ function SnippetPreview() {
         <div className="grid md:grid-cols-2 gap-10 items-center">
           <div>
             <SectionLabel>Install</SectionLabel>
-            <h2 className="mt-3 text-3xl md:text-[40px] font-semibold tracking-tight leading-[1.1]">
+            <h2 className="mt-3 h-section text-3xl md:text-[44px] text-balance">
               One <code className="font-mono text-[0.85em] bg-[var(--color-card)] px-2 py-0.5 rounded border border-[var(--color-border)]">&lt;script&gt;</code> tag.
             </h2>
             <p className="mt-4 text-[var(--color-fg-dim)] leading-relaxed">
@@ -999,7 +1012,7 @@ function ABCallout() {
         <div className="grid md:grid-cols-12 gap-8 items-center">
           <div className="md:col-span-5">
             <SectionLabel accent="2">A/B by default</SectionLabel>
-            <h2 className="mt-3 text-3xl md:text-[40px] font-semibold tracking-tight leading-[1.1]">
+            <h2 className="mt-3 h-section text-3xl md:text-[44px] text-balance">
               Run the test on your own traffic.
             </h2>
             <p className="mt-4 text-[var(--color-fg-dim)] leading-relaxed">
@@ -1093,7 +1106,7 @@ function Pricing() {
       <div className="mx-auto max-w-6xl px-5 py-28">
         <div className="text-center max-w-2xl mx-auto">
           <SectionLabel>Pricing</SectionLabel>
-          <h2 className="mt-3 text-3xl md:text-[40px] font-semibold tracking-tight leading-[1.1]">
+          <h2 className="mt-3 h-section text-3xl md:text-[44px] text-balance">
             Pays for itself if you make a single extra sale.
           </h2>
           <p className="mt-3 text-[var(--color-fg-dim)]">
@@ -1120,7 +1133,7 @@ function Pricing() {
                 ) : null}
               </div>
               <div className="mt-4 flex items-baseline gap-1">
-                <span className="text-5xl font-semibold tracking-tight">{t.price}</span>
+                <span className="h-display text-5xl tnum">{t.price}</span>
                 <span className="text-sm text-[var(--color-fg-dim)]">{t.sub}</span>
               </div>
               <ul className="mt-7 space-y-2.5 text-sm flex-1">
@@ -1134,7 +1147,7 @@ function Pricing() {
                 href={t.cta.href}
                 className={`mt-7 block text-center rounded-xl px-4 py-2.5 font-medium ${
                   t.featured
-                    ? "bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] hover:opacity-90"
+                    ? "bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] press lift focus-ring"
                     : "border border-[var(--color-border)] hover:border-[var(--color-fg-muted)] text-[var(--color-fg)]"
                 }`}
               >
@@ -1183,7 +1196,7 @@ function FAQ() {
       <div className="mx-auto max-w-3xl px-5 py-28">
         <div className="text-center">
           <SectionLabel>FAQ</SectionLabel>
-          <h2 className="mt-3 text-3xl md:text-[40px] font-semibold tracking-tight leading-[1.1]">
+          <h2 className="mt-3 h-section text-3xl md:text-[44px] text-balance">
             Short answers.
           </h2>
         </div>
@@ -1199,11 +1212,12 @@ function FAQ() {
           ))}
         </div>
         <div className="mt-12 card p-8 text-center elevated">
-          <h3 className="text-2xl font-semibold tracking-tight">Stop losing IG-sourced sales tonight.</h3>
+          <h3 className="h-section text-2xl text-balance">Stop losing IG-sourced sales tonight.</h3>
           <p className="mt-2 text-[var(--color-fg-dim)]">Free tier covers most stores. Install in 60 seconds.</p>
           <a
             href="#waitlist"
-            className="inline-block mt-5 px-5 py-3 rounded-xl bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] font-medium hover:opacity-90"
+            className="inline-block mt-5 px-5 py-3 rounded-xl bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] font-medium press lift focus-ring"
+            style={{ boxShadow: "var(--shadow-cta)" }}
           >
             Get early access
           </a>
