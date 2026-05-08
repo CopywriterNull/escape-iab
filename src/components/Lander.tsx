@@ -5,7 +5,7 @@ type Theme = "dark" | "light";
 
 export function Lander({ theme = "light" }: { theme?: Theme }) {
   return (
-    <div data-theme={theme} className="text-[var(--color-fg)] bg-[var(--color-bg)] grain relative">
+    <div data-theme={theme} className="text-[var(--color-fg)] bg-[var(--color-bg)] grain relative overflow-x-clip">
       <Nav theme={theme} />
       <Hero />
       <LogoStrip />
@@ -29,8 +29,8 @@ function Nav({ theme }: { theme: Theme }) {
   const otherLabel = theme === "dark" ? "Light" : "Dark";
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-[var(--color-bg)]/80 border-b border-[var(--color-border)]/60">
-      <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between gap-6">
-        <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight focus-ring rounded-md">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between gap-3 sm:gap-6">
+        <Link href="/" className="flex items-center gap-2 sm:gap-2.5 font-semibold tracking-tight focus-ring rounded-md text-[15px] sm:text-base">
           <Logo />
           <span>{brand.name}</span>
         </Link>
@@ -40,20 +40,26 @@ function Nav({ theme }: { theme: Theme }) {
           <NavLink href="#pricing">Pricing</NavLink>
           <NavLink href="#faq">FAQ</NavLink>
         </nav>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <Link
             href={otherHref}
             aria-label={`Switch to ${otherLabel.toLowerCase()} theme`}
-            className="text-xs px-2.5 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:border-[var(--color-fg-muted)] transition-colors focus-ring"
+            className="hidden sm:inline-block text-xs px-2.5 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:border-[var(--color-fg-muted)] transition-colors focus-ring"
           >
             {otherLabel}
           </Link>
           <Link href="/login" className="hidden sm:inline-block text-sm text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] px-3 py-1.5 transition-colors focus-ring rounded-md">
             Sign in
           </Link>
-          <CTAButton href="#waitlist" size="sm">
-            Get early access
-          </CTAButton>
+          <a
+            href="#waitlist"
+            className="group inline-flex items-center gap-2 rounded-full font-medium press lift focus-ring px-3 py-1.5 text-[13px] sm:text-sm bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)]"
+            style={{ boxShadow: "var(--shadow-cta)" }}
+          >
+            <span className="sm:hidden">Get access</span>
+            <span className="hidden sm:inline">Get early access</span>
+            <span className="btn-icon"><ArrowRight /></span>
+          </a>
         </div>
       </div>
     </header>
@@ -139,11 +145,11 @@ function Hero() {
             <span>First customer: G FUEL</span>
           </span>
         </div>
-        <h1 className="text-center max-w-4xl mx-auto text-balance">
-          <span className="block h-display text-5xl md:text-7xl text-[var(--color-fg)]">
+        <h1 className="text-center max-w-4xl mx-auto text-balance px-1">
+          <span className="block h-display text-[36px] sm:text-5xl md:text-7xl text-[var(--color-fg)]">
             Stop losing IG-sourced sales
           </span>
-          <span className="block mt-1 h-editorial text-5xl md:text-7xl text-[var(--color-accent)]">
+          <span className="block mt-1 h-editorial text-[36px] sm:text-5xl md:text-7xl text-[var(--color-accent)]">
             to the in-app browser.
           </span>
         </h1>
@@ -285,7 +291,7 @@ function PhoneCol({
           {inner}
         </PhoneFrame>
       </div>
-      <ul className="mt-5 w-full max-w-[220px] space-y-1.5">
+      <ul className="mt-4 w-full max-w-[150px] sm:max-w-[200px] md:max-w-[220px] space-y-1.5">
         {captions.map((c) => (
           <CaptionRow key={c.label} {...c} />
         ))}
@@ -308,10 +314,10 @@ function Sticker({
       ? "bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] text-[var(--color-success)] border-[color-mix(in_srgb,var(--color-success)_28%,transparent)]"
       : "bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)] text-[var(--color-danger)] border-[color-mix(in_srgb,var(--color-danger)_28%,transparent)]";
   return (
-    <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium ${tone}`}>
-      <span className="opacity-90">{label}</span>
-      <span className="opacity-50">·</span>
-      <span className="font-mono tnum">{stat}</span>
+    <div className={`inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-0 rounded-full border px-2.5 py-1 text-[10px] sm:text-[11px] font-medium max-w-full ${tone}`}>
+      <span className="opacity-90 whitespace-nowrap">{label}</span>
+      <span className="opacity-50 hidden sm:inline">·</span>
+      <span className="font-mono tnum whitespace-nowrap">{stat}</span>
     </div>
   );
 }
@@ -376,7 +382,7 @@ function Cross() {
 function PhoneFrame({ children, highlight }: { children: React.ReactNode; highlight?: boolean }) {
   return (
     <div
-      className={`relative mx-auto w-[212px] sm:w-[228px] aspect-[9/19] rounded-[34px] p-[5px] elevated ${
+      className={`relative mx-auto w-[150px] sm:w-[200px] md:w-[228px] aspect-[9/19] rounded-[34px] p-[5px] elevated ${
         highlight
           ? "bg-gradient-to-b from-[#1c1d28] to-[#0a0a14] ring-1 ring-[var(--color-accent)]/30"
           : "bg-gradient-to-b from-[#1c1d28] to-[#0a0a14] ring-1 ring-black/40"
@@ -658,8 +664,8 @@ function Problem() {
         <div>
           <SectionLabel>The IG tax</SectionLabel>
           <h2 className="mt-3 text-balance">
-            <span className="block h-display text-3xl md:text-[44px]">Your IG ads work.</span>
-            <span className="block mt-1.5 h-editorial text-3xl md:text-[44px] text-[var(--color-accent)]">
+            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Your IG ads work.</span>
+            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">
               The in-app browser kills the sale.
             </span>
           </h2>
@@ -718,8 +724,8 @@ function HowItWorks() {
         <div className="text-center max-w-2xl mx-auto">
           <SectionLabel>How it works</SectionLabel>
           <h2 className="mt-3 text-balance">
-            <span className="block h-display text-3xl md:text-[44px]">One snippet.</span>
-            <span className="block mt-1.5 h-editorial text-3xl md:text-[44px] text-[var(--color-accent)]">
+            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">One snippet.</span>
+            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">
               Three layers of recovery.
             </span>
           </h2>
@@ -768,8 +774,8 @@ function DashboardPreview() {
           <div className="md:col-span-5">
             <SectionLabel>Your dashboard</SectionLabel>
             <h2 className="mt-3 text-balance">
-              <span className="block h-display text-3xl md:text-[44px]">Watch the lift land</span>
-              <span className="block mt-1.5 h-editorial text-3xl md:text-[44px] text-[var(--color-accent)]">in real time.</span>
+              <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Watch the lift land</span>
+              <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">in real time.</span>
             </h2>
             <p className="mt-6 text-[var(--color-fg-dim)] leading-relaxed">
               Every escape, every fallback, every IG-sourced session — bucketed and graphed.
@@ -919,8 +925,8 @@ function Features() {
         <div className="text-center max-w-2xl mx-auto">
           <SectionLabel>Features</SectionLabel>
           <h2 className="mt-3 text-balance">
-            <span className="block h-display text-3xl md:text-[44px]">More than a one-line script.</span>
-            <span className="block mt-1.5 h-editorial text-3xl md:text-[44px] text-[var(--color-accent)] italic">
+            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">More than a one-line script.</span>
+            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)] italic">
               An entire test infrastructure.
             </span>
           </h2>
@@ -1026,12 +1032,12 @@ function SnippetPreview() {
           <div>
             <SectionLabel>Install</SectionLabel>
             <h2 className="mt-3 text-balance">
-              <span className="block h-display text-3xl md:text-[44px]">One</span>
+              <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">One</span>
               <span className="mt-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-2">
-                <code className="font-mono text-xl md:text-2xl bg-[var(--color-card)] px-2.5 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-fg)] whitespace-nowrap">
+                <code className="font-mono text-base sm:text-xl md:text-2xl bg-[var(--color-card)] px-2 sm:px-2.5 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-fg)] whitespace-nowrap">
                   &lt;script&gt;
                 </code>
-                <span className="h-editorial text-3xl md:text-[44px] text-[var(--color-accent)]">tag.</span>
+                <span className="h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">tag.</span>
               </span>
             </h2>
             <p className="mt-5 text-[var(--color-fg-dim)] leading-relaxed">
@@ -1072,8 +1078,8 @@ function ABCallout() {
           <div className="md:col-span-5">
             <SectionLabel>A/B by default</SectionLabel>
             <h2 className="mt-3 text-balance">
-              <span className="block h-display text-3xl md:text-[44px]">Run the test</span>
-              <span className="block mt-1.5 h-editorial text-3xl md:text-[44px] text-[var(--color-accent)]">on your own traffic.</span>
+              <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Run the test</span>
+              <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">on your own traffic.</span>
             </h2>
             <p className="mt-5 text-[var(--color-fg-dim)] leading-relaxed">
               Every install starts with a 50/50 split. After 7-14 days you have a defensible number — your CVR lift, in your data, with your customers.
@@ -1181,14 +1187,14 @@ function Pricing() {
         <div className="text-center max-w-2xl mx-auto">
           <SectionLabel>Pricing</SectionLabel>
           <h2 className="mt-3 text-balance">
-            <span className="block h-display text-3xl md:text-[44px]">Pays for itself</span>
-            <span className="block mt-1.5 h-editorial text-3xl md:text-[44px] text-[var(--color-accent)]">on a single extra sale.</span>
+            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Pays for itself</span>
+            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">on a single extra sale.</span>
           </h2>
           <p className="mt-3 text-[var(--color-fg-dim)]">
             Most stores recover the entire monthly cost in the first 24 hours.
           </p>
         </div>
-        <div className="mt-14 grid md:grid-cols-3 gap-4 items-stretch">
+        <div className="mt-14 grid md:grid-cols-3 gap-7 md:gap-4 items-stretch">
           {tiers.map((t) => (
             <PricingCard key={t.name} tier={t} />
           ))}
@@ -1288,7 +1294,7 @@ function FAQ() {
         <div className="text-center">
           <SectionLabel>FAQ</SectionLabel>
           <h2 className="mt-3 text-balance">
-            <span className="block h-display text-3xl md:text-[44px]">Short answers.</span>
+            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Short answers.</span>
           </h2>
         </div>
         <div className="mt-10 divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
