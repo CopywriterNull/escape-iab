@@ -3,11 +3,13 @@ import {
   getCurrentMerchant,
   getRollups,
   getIabBreakdown,
+  getSourceBreakdown,
   totalize,
   zTestTwoProp,
   sampleSizePerBucket,
   type DailyRollup,
   type IabKind,
+  type SourceRow,
 } from "@/lib/db";
 
 const IAB_LABELS: Record<IabKind, string> = {
@@ -35,9 +37,10 @@ export default async function DashboardOverview() {
     );
   }
 
-  const [rollups, iab] = await Promise.all([
+  const [rollups, iab, sources] = await Promise.all([
     getRollups(merchant.id, 14),
     getIabBreakdown(merchant.id, 14),
+    getSourceBreakdown(merchant.id, 14, 10),
   ]);
   const totals = totalize(rollups);
   const totalImpressions = totals.impressions.a + totals.impressions.b;
@@ -96,6 +99,8 @@ export default async function DashboardOverview() {
         ) : null}
       </div>
 
+      <SourcesCard sources={sources} />
+
       <div className="grid md:grid-cols-2 gap-4">
         <div className="card p-6">
           <h2 className="font-semibold">Daily impressions vs escapes</h2>
@@ -136,6 +141,75 @@ export default async function DashboardOverview() {
             </ul>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SourcesCard({ sources }: { sources: SourceRow[] }) {
+  if (sources.length === 0) {
+    return (
+      <div className="card p-6">
+        <h2 className="font-semibold">Top traffic sources</h2>
+        <p className="mt-3 text-sm text-[var(--color-fg-dim)]">
+          Once impressions arrive with UTM params, you&apos;ll see source breakdown here.
+        </p>
+      </div>
+    );
+  }
+  const max = Math.max(...sources.map((s) => s.total));
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">Top traffic sources</h2>
+        <span className="text-[11px] text-[var(--color-fg-muted)] font-mono">last 14 days</span>
+      </div>
+      <div className="mt-4 rounded-xl border border-[var(--color-border)] overflow-hidden">
+        <div className="grid grid-cols-12 px-4 py-2 text-[11px] uppercase tracking-wider text-[var(--color-fg-muted)] bg-[var(--color-bg-elev)]">
+          <div className="col-span-4">Source</div>
+          <div className="col-span-3 text-right">Sessions</div>
+          <div className="col-span-2 text-right">A / B</div>
+          <div className="col-span-1 text-right">Buys</div>
+          <div className="col-span-2 text-right">Revenue</div>
+        </div>
+        {sources.map((s) => {
+          const cvr = s.total > 0 ? (100 * s.purchases) / s.total : 0;
+          return (
+            <div
+              key={s.utm_source}
+              className="grid grid-cols-12 px-4 py-3 text-sm border-t border-[var(--color-border)]"
+            >
+              <div className="col-span-4 flex items-center gap-2">
+                <span className="font-medium truncate">{s.utm_source}</span>
+                {cvr > 0 ? (
+                  <span className="text-[10px] font-mono text-[var(--color-fg-muted)]">
+                    {cvr.toFixed(2)}% CVR
+                  </span>
+                ) : null}
+              </div>
+              <div className="col-span-3 flex items-center gap-2">
+                <span className="flex-1 h-1.5 rounded-full bg-[var(--color-bg-elev)] overflow-hidden">
+                  <span
+                    className="block h-full bg-[var(--color-accent)]"
+                    style={{ width: `${(100 * s.total) / max}%` }}
+                  />
+                </span>
+                <span className="font-mono text-[12px] text-[var(--color-fg-dim)] w-14 text-right">
+                  {s.total.toLocaleString()}
+                </span>
+              </div>
+              <div className="col-span-2 text-right font-mono text-[12px] text-[var(--color-fg-dim)]">
+                {s.bucket_a.toLocaleString()} / {s.bucket_b.toLocaleString()}
+              </div>
+              <div className="col-span-1 text-right font-mono text-[12px] text-[var(--color-fg-dim)]">
+                {s.purchases.toLocaleString()}
+              </div>
+              <div className="col-span-2 text-right font-mono text-[12px] text-[var(--color-fg)]">
+                ${(s.revenue_cents / 100).toFixed(2)}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

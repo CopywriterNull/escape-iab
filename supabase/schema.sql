@@ -40,6 +40,12 @@ create table if not exists public.escape_events (
   referrer text,
   user_agent text,
   ip_hash text,
+  utm_source text,
+  utm_medium text,
+  utm_campaign text,
+  utm_content text,
+  utm_term text,
+  fbclid text,
   created_at timestamptz not null default now()
 );
 create index if not exists escape_events_merchant_created_idx on public.escape_events(merchant_id, created_at desc);
@@ -51,6 +57,8 @@ create index if not exists escape_events_merchant_sy_idx
 create unique index if not exists escape_events_purchase_dedup
   on public.escape_events(merchant_id, order_id)
   where event_type = 'purchase' and order_id is not null;
+create index if not exists escape_events_merchant_utm_idx
+  on public.escape_events(merchant_id, utm_source);
 
 -- ============================================================================
 -- daily_rollups: pre-aggregated counts per merchant/day for fast dashboard.

@@ -78,6 +78,14 @@ export async function POST(req: NextRequest) {
       : null;
   const url = typeof body.u === "string" ? body.u.slice(0, 1024) : null;
   const referrer = typeof body.r === "string" ? body.r.slice(0, 1024) : null;
+  const trim = (v: unknown, n = 256): string | null =>
+    typeof v === "string" && v.length > 0 ? v.slice(0, n) : null;
+  const utm_source = trim(body.us);
+  const utm_medium = trim(body.um);
+  const utm_campaign = trim(body.uc);
+  const utm_content = trim(body.uct);
+  const utm_term = trim(body.ut);
+  const fbclid = trim(body.fc, 512);
 
   if (!UUID_RE.test(merchantId) || !ALLOWED_EVENTS.has(eventType)) {
     return new Response(JSON.stringify({ ok: false, error: "bad_input" }), {
@@ -108,6 +116,12 @@ export async function POST(req: NextRequest) {
       referrer,
       user_agent: userAgent,
       ip_hash: ipHash,
+      utm_source,
+      utm_medium,
+      utm_campaign,
+      utm_content,
+      utm_term,
+      fbclid,
     });
 
     const today = new Date().toISOString().slice(0, 10);

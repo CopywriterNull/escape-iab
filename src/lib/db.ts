@@ -67,6 +67,68 @@ export async function getRollups(
   return (data as DailyRollup[]) ?? [];
 }
 
+export type SourceRow = {
+  utm_source: string;
+  total: number;
+  bucket_a: number;
+  bucket_b: number;
+  purchases: number;
+  revenue_cents: number;
+};
+
+export async function getSourceBreakdown(
+  merchantId: string,
+  days = 14,
+  limit = 10,
+): Promise<SourceRow[]> {
+  const supabase = await getSupabaseServer();
+  if (!supabase) return [];
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const { data } = await supabase
+    .from("escape_events")
+    .select("event_type, bucket, utm_source, url, value_cents")
+    .eq("merchant_id", merchantId)
+    .gte("created_at", since)
+    .limit(20000);
+
+  const map = new Map<string, SourceRow>();
+  for (const row of (data ?? []) as {
+    event_type: string;
+    bucket: "a" | "b";
+    utm_source: string | null;
+    url: string | null;
+    value_cents: number | null;
+  }[]) {
+    let src = row.utm_source;
+    if (!src && row.url) {
+      const m = row.url.match(/[?&]utm_source=([^&#]+)/i);
+      if (m) src = decodeURIComponent(m[1]).slice(0, 64);
+    }
+    if (!src) src = "(direct)";
+    const cur =
+      map.get(src) ?? {
+        utm_source: src,
+        total: 0,
+        bucket_a: 0,
+        bucket_b: 0,
+        purchases: 0,
+        revenue_cents: 0,
+      };
+    if (row.event_type === "impression") {
+      cur.total += 1;
+      if (row.bucket === "b") cur.bucket_b += 1;
+      else cur.bucket_a += 1;
+    } else if (row.event_type === "purchase") {
+      cur.purchases += 1;
+      cur.revenue_cents += row.value_cents ?? 0;
+    }
+    map.set(src, cur);
+  }
+  return Array.from(map.values())
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit);
+}
+
 export async function getIabBreakdown(
   merchantId: string,
   days = 14,

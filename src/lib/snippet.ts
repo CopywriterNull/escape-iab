@@ -47,9 +47,11 @@ try{
   if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
   var sy=null;
   try{sy=(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){}
+  var qsP=new URLSearchParams(location.search);
+  var us=qsP.get("utm_source")||null,um=qsP.get("utm_medium")||null,uc=qsP.get("utm_campaign")||null,uct=qsP.get("utm_content")||null,ut=qsP.get("utm_term")||null,fc=qsP.get("fbclid")||null;
   function beacon(t,extra){
     try{
-      var p={m:M,v:V,t:t,b:bk,k:kind,sy:sy,ig:kind==="instagram"?1:0,u:location.href,r:document.referrer||"",ts:Date.now()};
+      var p={m:M,v:V,t:t,b:bk,k:kind,sy:sy,ig:kind==="instagram"?1:0,u:location.href,r:document.referrer||"",us:us,um:um,uc:uc,uct:uct,ut:ut,fc:fc,ts:Date.now()};
       if(extra)for(var key in extra)p[key]=extra[key];
       var body=JSON.stringify(p);
       var sent=false;
