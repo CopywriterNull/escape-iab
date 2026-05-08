@@ -91,40 +91,44 @@ export async function getTestFunnel(
   const supabase = await getSupabaseServer();
   if (!supabase) return empty;
   const since = new Date(Date.now() - days * 86400_000).toISOString();
-  const { data } = await supabase
-    .from("escape_events")
-    .select("event_type, bucket, value_cents")
-    .eq("merchant_id", merchantId)
-    .eq("in_test", true)
-    .gte("created_at", since)
-    .limit(50000);
-
+  // Aggregate server-side via RPC to avoid the PostgREST 1000-row cap.
+  const { data, error } = await supabase.rpc("eh_test_funnel", {
+    p_merchant_id: merchantId,
+    p_since: since,
+  });
+  if (error || !Array.isArray(data)) return empty;
   const out: Funnel = empty;
-  for (const r of (data ?? []) as {
+  for (const r of data as {
     event_type: string;
     bucket: "a" | "b";
-    value_cents: number | null;
+    cnt: number | string;
+    revenue_cents: number | string;
   }[]) {
     const b = r.bucket === "b" ? "b" : "a";
+    const cnt = typeof r.cnt === "string" ? parseInt(r.cnt, 10) : r.cnt;
+    const rev =
+      typeof r.revenue_cents === "string"
+        ? parseInt(r.revenue_cents, 10)
+        : r.revenue_cents;
     switch (r.event_type) {
       case "impression":
-        out.impressions[b] += 1;
+        out.impressions[b] = cnt;
         break;
       case "escape_attempt":
-        out.escape_attempts[b] += 1;
+        out.escape_attempts[b] = cnt;
         break;
       case "product_viewed":
-        out.product_viewed[b] += 1;
+        out.product_viewed[b] = cnt;
         break;
       case "add_to_cart":
-        out.add_to_cart[b] += 1;
+        out.add_to_cart[b] = cnt;
         break;
       case "checkout_started":
-        out.checkout_started[b] += 1;
+        out.checkout_started[b] = cnt;
         break;
       case "purchase":
-        out.purchases[b] += 1;
-        out.revenue_cents[b] += r.value_cents ?? 0;
+        out.purchases[b] = cnt;
+        out.revenue_cents[b] = rev;
         break;
     }
   }

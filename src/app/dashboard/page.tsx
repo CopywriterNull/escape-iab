@@ -11,6 +11,11 @@ import {
   type SourceRow,
 } from "@/lib/db";
 
+// Force fresh data on every request — the dashboard reads Supabase directly,
+// no caching. Otherwise Next.js may serve a cached render with stale counts.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function DashboardOverview() {
   const merchant = await getCurrentMerchant();
   if (!merchant) {
