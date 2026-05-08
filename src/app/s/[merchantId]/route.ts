@@ -1,4 +1,5 @@
 import { buildSnippet, CURRENT_VERSION } from "@/lib/snippet";
+import { obfuscateSnippet } from "@/lib/obfuscate";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { type NextRequest } from "next/server";
 
@@ -51,13 +52,14 @@ export async function GET(
   }
 
   const ingestUrl = `${originFrom(req)}/api/track`;
-  const body = buildSnippet({
+  const raw = buildSnippet({
     merchantId,
     ingestUrl,
     version: CURRENT_VERSION,
     abEnabled,
     fallbackButton,
   });
+  const body = await obfuscateSnippet(raw);
 
   return new Response(body, {
     status: 200,
