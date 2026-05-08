@@ -1,11 +1,11 @@
 // Generates the JavaScript merchants paste into Shopify admin →
 // Settings → Customer events → Add custom pixel.
 //
-// Runs in a sandboxed iframe. No DOM access, but it gets `analytics.subscribe`
-// for standard events. We subscribe to `checkout_completed` and beacon
-// the order details + Shopify visitor `clientId` to our /api/track/purchase
-// endpoint. Backend joins on clientId to recover the bucket from the original
-// impression.
+// Shopify Custom Pixels run in a heavily sandboxed Web Worker. POST + body +
+// content-type negotiation is fragile in there — many CSP / sandbox configs
+// silently drop the request. GET with query params is the most permissive form
+// and works everywhere a pixel can call out at all. Backend accepts both GET
+// and POST on /api/track/purchase.
 
 type PixelOpts = {
   merchantId: string;
@@ -25,28 +25,24 @@ analytics.subscribe("checkout_completed", function (event) {
     var c = d.checkout || {};
     var price = c.totalPrice || {};
     var order = c.order || {};
-    var body = JSON.stringify({
-      m: ${merchantId},
-      sy: event.clientId || null,
-      v: typeof price.amount === "number" ? price.amount : parseFloat(price.amount || "0"),
-      cy: price.currencyCode || null,
-      oid: (order.id != null ? String(order.id) : (c.token || c.checkoutToken || null)),
-      ts: Date.now()
-    });
-    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-      try {
-        var bl = new Blob([body], { type: "text/plain;charset=UTF-8" });
-        var ok = navigator.sendBeacon(${ingestUrl}, bl);
-        if (ok) return;
-      } catch (e) {}
-    }
-    fetch(${ingestUrl}, {
-      method: "POST",
-      headers: { "content-type": "text/plain;charset=UTF-8" },
-      body: body,
-      keepalive: true,
+    var amount = typeof price.amount === "number"
+      ? price.amount
+      : parseFloat(price.amount || "0");
+    var oid = (order && order.id != null)
+      ? String(order.id)
+      : (c.token || c.checkoutToken || "");
+    var qs =
+      "m=" + encodeURIComponent(${merchantId}) +
+      "&sy=" + encodeURIComponent(event.clientId || "") +
+      "&v=" + encodeURIComponent(amount || "") +
+      "&cy=" + encodeURIComponent(price.currencyCode || "") +
+      "&oid=" + encodeURIComponent(oid) +
+      "&ts=" + Date.now();
+    fetch(${ingestUrl} + "?" + qs, {
+      method: "GET",
       mode: "cors",
-      credentials: "omit"
+      credentials: "omit",
+      keepalive: true
     }).catch(function () {});
   } catch (e) {}
 });`;

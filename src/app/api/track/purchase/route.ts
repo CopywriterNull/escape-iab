@@ -20,6 +20,22 @@ export async function OPTIONS(req: NextRequest) {
   });
 }
 
+// GET path for Shopify Custom Pixel beacons. Query-param form lets us bypass
+// preflight/content-type hassles in the pixel sandbox.
+export async function GET(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  const url = new URL(req.url);
+  const body = {
+    m: url.searchParams.get("m") ?? "",
+    sy: url.searchParams.get("sy") ?? null,
+    v: url.searchParams.get("v") ?? null,
+    cy: url.searchParams.get("cy") ?? null,
+    oid: url.searchParams.get("oid") ?? null,
+    ts: url.searchParams.get("ts") ?? null,
+  };
+  return processPurchase(body as Record<string, unknown>, origin);
+}
+
 // Window for joining a purchase to a prior impression by Shopify clientId.
 // 30 days matches the eh_b cookie max-age and Shopify's _shopify_y persistence.
 const JOIN_WINDOW_DAYS = 30;
@@ -35,7 +51,13 @@ export async function POST(req: NextRequest) {
       headers: { "content-type": "application/json", ...corsHeaders(origin) },
     });
   }
+  return processPurchase(body, origin);
+}
 
+async function processPurchase(
+  body: Record<string, unknown>,
+  origin: string | null,
+) {
   const merchantId = String(body.m ?? "");
   const sy = typeof body.sy === "string" && body.sy.length > 0 ? body.sy : null;
   const orderId = typeof body.oid === "string" && body.oid.length > 0 ? body.oid : null;
