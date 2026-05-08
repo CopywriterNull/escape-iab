@@ -1027,11 +1027,11 @@ function SnippetPreview() {
             <SectionLabel>Install</SectionLabel>
             <h2 className="mt-3 text-balance">
               <span className="block h-display text-3xl md:text-[44px]">One</span>
-              <span className="block mt-1.5 h-editorial text-3xl md:text-[44px] text-[var(--color-accent)]">
-                <code className="font-mono not-italic text-[0.85em] bg-[var(--color-card)] px-2.5 py-0.5 rounded border border-[var(--color-border)] mr-2 text-[var(--color-fg)]">
+              <span className="mt-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-2">
+                <code className="font-mono text-xl md:text-2xl bg-[var(--color-card)] px-2.5 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-fg)] whitespace-nowrap">
                   &lt;script&gt;
                 </code>
-                tag.
+                <span className="h-editorial text-3xl md:text-[44px] text-[var(--color-accent)]">tag.</span>
               </span>
             </h2>
             <p className="mt-5 text-[var(--color-fg-dim)] leading-relaxed">
