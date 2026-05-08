@@ -14,8 +14,8 @@
 // (Exception: non-IG IABs get a single iab_detected beacon for analytics
 // segmentation, but they're not in the bucketed test.)
 
-export type SnippetVersion = "v3";
-export const CURRENT_VERSION: SnippetVersion = "v3";
+export type SnippetVersion = "v4";
+export const CURRENT_VERSION: SnippetVersion = "v4";
 
 type SnippetOpts = {
   merchantId: string;
@@ -61,8 +61,8 @@ try{
   var postEscape=qsP.get("opened_external_browser")==="true";
   var inTest=((kind==="instagram")&&isPaidAd)||postEscape;
 
-  var sy=null;
-  try{sy=(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){}
+  function readSy(){try{return(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){return null;}}
+  var sy=readSy();
 
   function beacon(t,extra){
     try{
@@ -73,6 +73,20 @@ try{
       if(navigator.sendBeacon){try{var bl=new Blob([body],{type:"text/plain;charset=UTF-8"});sent=navigator.sendBeacon(I,bl);}catch(e){}}
       if(!sent){try{fetch(I,{method:"POST",headers:{"content-type":"text/plain;charset=UTF-8"},body:body,keepalive:true,mode:"cors",credentials:"omit"}).catch(function(){});}catch(e){}}
     }catch(e){}
+  }
+
+  // Wait up to maxMs for _shopify_y cookie to appear (set by Shopify's
+  // Web Pixels Manager). Critical for attribution: if we beacon impression
+  // before the cookie exists, sy=null and the funnel pixel can't join back.
+  function waitForSy(maxMs,cb){
+    var start=Date.now();
+    function tick(){
+      var v=readSy();
+      if(v){sy=v;cb();return;}
+      if(Date.now()-start>=maxMs){cb();return;}
+      setTimeout(tick,40);
+    }
+    tick();
   }
 
   var bk=null;
@@ -92,11 +106,16 @@ try{
   if(postEscape){bk="a";try{document.cookie="eh_b=a;path=/;max-age=2592000;samesite=Lax";}catch(e){}}
   else if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
 
-  beacon("impression");
+  // Post-escape Safari side: no escape urgency. Wait up to 1.5s for sy cookie
+  // before beaconing the impression so the funnel pixel can join back.
+  if(postEscape){
+    waitForSy(1500,function(){beacon("impression");});
+    return;
+  }
 
-  // Post-escape: don't re-attempt redirect; we just want the impression for
-  // attribution. Funnel events from Safari will join to this row.
-  if(postEscape)return;
+  // IAB side: beacon impression with whatever sy we have (likely null on first
+  // pageview), then proceed with escape logic. Don't delay escape.
+  beacon("impression");
 
   var attempted=false;
   try{attempted=sessionStorage.getItem("eh_a")==="1";}catch(e){}
