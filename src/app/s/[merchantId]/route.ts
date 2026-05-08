@@ -17,7 +17,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ merchantId: string }> },
 ) {
-  const { merchantId } = await params;
+  const { merchantId: rawId } = await params;
+  const merchantId = rawId.replace(/\.js$/i, "");
   const isValidShape = UUID_RE.test(merchantId);
 
   // Resolve merchant settings if DB available; else fall back to defaults.
