@@ -2,27 +2,14 @@ import Link from "next/link";
 import {
   getCurrentMerchant,
   getRollups,
-  getIabBreakdown,
   getSourceBreakdown,
-  totalize,
+  getTestFunnel,
   zTestTwoProp,
   sampleSizePerBucket,
   type DailyRollup,
-  type IabKind,
+  type Funnel,
   type SourceRow,
 } from "@/lib/db";
-
-const IAB_LABELS: Record<IabKind, string> = {
-  instagram: "Instagram",
-  facebook: "Facebook",
-  messenger: "Messenger",
-  tiktok: "TikTok",
-  snapchat: "Snapchat",
-  pinterest: "Pinterest",
-  line: "LINE",
-  wechat: "WeChat",
-  webview: "WebView",
-};
 
 export default async function DashboardOverview() {
   const merchant = await getCurrentMerchant();
@@ -37,110 +24,366 @@ export default async function DashboardOverview() {
     );
   }
 
-  const [rollups, iab, sources] = await Promise.all([
+  const [funnel, rollups, sources] = await Promise.all([
+    getTestFunnel(merchant.id, 14),
     getRollups(merchant.id, 14),
-    getIabBreakdown(merchant.id, 14),
     getSourceBreakdown(merchant.id, 14, 10),
   ]);
-  const totals = totalize(rollups);
-  const totalImpressions = totals.impressions.a + totals.impressions.b;
-  const totalEscapes = totals.escape_attempts.a + totals.escape_attempts.b;
-  const escapeRateA =
-    totals.impressions.a > 0
-      ? (100 * totals.escape_attempts.a) / totals.impressions.a
+
+  const escapeRate =
+    funnel.impressions.a > 0
+      ? (100 * funnel.escape_attempts.a) / funnel.impressions.a
       : 0;
-  const totalIabSum = Object.values(iab).reduce((s, n) => s + n, 0);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {merchant.name ?? "Your store"}
-          </h1>
-          <p className="text-sm text-[var(--color-fg-muted)]">
-            Last 14 days · {merchant.domain ?? "no domain set"}
-          </p>
-        </div>
-        <Link
-          href="/dashboard/install"
-          className="text-sm font-medium px-3.5 py-1.5 rounded-lg bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] hover:opacity-90"
-        >
-          Get install snippet
-        </Link>
-      </div>
+      <Header merchant={merchant} />
+      <Definitions />
+      <TopMetrics funnel={funnel} escapeRate={escapeRate} />
+      <FunnelTable funnel={funnel} />
+      <RevenueLift funnel={funnel} />
+      <SourcesCard sources={sources} />
+      <DailyChartCard rollups={rollups} />
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat label="Impressions" value={totalImpressions.toLocaleString()} sub="all bucketed sessions" />
-        <Stat label="Escape attempts" value={totalEscapes.toLocaleString()} sub="auto-redirect fired" />
-        <Stat label="Bucket A escape rate" value={`${escapeRateA.toFixed(1)}%`} sub="of A impressions" />
+function Header({
+  merchant,
+}: {
+  merchant: { name: string | null; domain: string | null; ab_enabled: boolean };
+}) {
+  return (
+    <div className="flex items-end justify-between flex-wrap gap-3">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {merchant.name ?? "Your store"}
+        </h1>
+        <p className="text-sm text-[var(--color-fg-muted)]">
+          Last 14 days · {merchant.domain ?? "no domain set"} ·{" "}
+          {merchant.ab_enabled ? "A/B on (50/50)" : "A/B off (100% bucket A)"}
+        </p>
+      </div>
+      <Link
+        href="/dashboard/install"
+        className="text-sm font-medium px-3.5 py-1.5 rounded-lg bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] hover:opacity-90"
+      >
+        Get install snippet
+      </Link>
+    </div>
+  );
+}
+
+function Definitions() {
+  return (
+    <div className="card p-6 text-sm">
+      <h2 className="font-semibold">How this dashboard works</h2>
+      <p className="mt-3 text-[var(--color-fg-dim)] leading-relaxed">
+        We measure the <strong>conversion lift</strong> of escaping
+        Instagram&apos;s in-app browser, restricted to the population that
+        actually benefits from the escape: <strong>visitors who landed on your
+        store from a paid Meta ad while inside the Instagram app</strong>.
+        Visitors from any other source (organic, email, Google ads, direct,
+        Safari, etc.) are excluded — they would never have been in the IAB in
+        the first place, so escaping them is irrelevant.
+      </p>
+      <ul className="mt-4 space-y-2 text-[var(--color-fg-dim)]">
+        <li>
+          <strong className="text-[var(--color-fg)]">Test population:</strong>{" "}
+          IG IAB visitors with <code className="font-mono text-[12px]">fbclid</code> in the URL,
+          OR <code className="font-mono text-[12px]">utm_source=facebook|instagram</code> with
+          <code className="font-mono text-[12px]"> utm_medium=paid|cpc|ad</code>. They&apos;re bucketed 50/50.
+        </li>
+        <li>
+          <strong className="text-[var(--color-fg)]">Bucket A (test):</strong>{" "}
+          We auto-redirect them out of the IAB into Safari/Chrome via{" "}
+          <code className="font-mono text-[12px]">instagram://extbrowser</code>. Apple Pay, Shop Pay
+          autofill, and saved sessions all work normally there.
+        </li>
+        <li>
+          <strong className="text-[var(--color-fg)]">Bucket B (control):</strong>{" "}
+          They stay in Instagram&apos;s IAB. A small fraction will manually tap
+          the three-dot menu to open in Safari — that&apos;s noise that makes
+          our measured lift slightly conservative (real impact is at least
+          what we report).
+        </li>
+        <li>
+          <strong className="text-[var(--color-fg)]">Impression:</strong> One
+          test-population landing on your store. Counted once per visitor per
+          page load.
+        </li>
+        <li>
+          <strong className="text-[var(--color-fg)]">Escape attempt:</strong>{" "}
+          We fired the redirect for a Bucket A visitor.
+        </li>
+        <li>
+          <strong className="text-[var(--color-fg)]">Escape rate:</strong>{" "}
+          escape_attempts / impressions in Bucket A. Should approach 100%
+          unless visitors are hitting the loop guard (already escaped this
+          session).
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+function TopMetrics({
+  funnel,
+  escapeRate,
+}: {
+  funnel: Funnel;
+  escapeRate: number;
+}) {
+  const totalImpressions = funnel.impressions.a + funnel.impressions.b;
+  const totalEscapes = funnel.escape_attempts.a;
+  const totalRevenue =
+    (funnel.revenue_cents.a + funnel.revenue_cents.b) / 100;
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <Stat
+        label="Impressions (in test)"
+        value={totalImpressions.toLocaleString()}
+        sub="paid IG ad clicks in IAB"
+      />
+      <Stat
+        label="Escape attempts"
+        value={totalEscapes.toLocaleString()}
+        sub={`${funnel.impressions.a.toLocaleString()} bucket A impressions`}
+      />
+      <Stat
+        label="Escape rate"
+        value={`${escapeRate.toFixed(1)}%`}
+        sub="of bucket A successfully redirected"
+      />
+      <Stat
+        label="Revenue (both buckets)"
+        value={`$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        sub={`${(funnel.purchases.a + funnel.purchases.b).toLocaleString()} purchases`}
+      />
+    </div>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="card p-4">
+      <div className="text-[11px] text-[var(--color-fg-muted)]">{label}</div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight">{value}</div>
+      {sub ? (
+        <div className="mt-1 text-[11px] text-[var(--color-fg-muted)]">{sub}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function FunnelTable({ funnel }: { funnel: Funnel }) {
+  type Row = {
+    label: string;
+    a: number;
+    b: number;
+    description: string;
+  };
+  const rows: Row[] = [
+    {
+      label: "Impressions",
+      a: funnel.impressions.a,
+      b: funnel.impressions.b,
+      description: "Test-population landings",
+    },
+    {
+      label: "Product viewed",
+      a: funnel.product_viewed.a,
+      b: funnel.product_viewed.b,
+      description: "Visited a /products/ page",
+    },
+    {
+      label: "Add to cart",
+      a: funnel.add_to_cart.a,
+      b: funnel.add_to_cart.b,
+      description: "Added something to cart",
+    },
+    {
+      label: "Checkout started",
+      a: funnel.checkout_started.a,
+      b: funnel.checkout_started.b,
+      description: "Reached the checkout page",
+    },
+    {
+      label: "Purchase",
+      a: funnel.purchases.a,
+      b: funnel.purchases.b,
+      description: "Completed checkout",
+    },
+  ];
+
+  const baseA = funnel.impressions.a;
+  const baseB = funnel.impressions.b;
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-semibold">Funnel · A vs B</h2>
+        <span className="text-[11px] text-[var(--color-fg-muted)] font-mono">
+          conversion rate computed off impressions
+        </span>
+      </div>
+      <div className="mt-4 rounded-xl border border-[var(--color-border)] overflow-hidden">
+        <div className="grid grid-cols-12 px-4 py-2 text-[11px] uppercase tracking-wider text-[var(--color-fg-muted)] bg-[var(--color-bg-elev)]">
+          <div className="col-span-3">Stage</div>
+          <div className="col-span-3 text-right">A · escape</div>
+          <div className="col-span-3 text-right">B · control</div>
+          <div className="col-span-2 text-right">Lift</div>
+          <div className="col-span-1 text-right">p</div>
+        </div>
+        {rows.map((row, i) => {
+          const cvrA = baseA > 0 ? row.a / baseA : 0;
+          const cvrB = baseB > 0 ? row.b / baseB : 0;
+          const z =
+            i === 0
+              ? null
+              : zTestTwoProp(row.a, baseA, row.b, baseB);
+          const liftStr =
+            z?.liftRel != null
+              ? `${z.liftRel > 0 ? "+" : ""}${(z.liftRel * 100).toFixed(0)}%`
+              : "—";
+          const pStr =
+            z?.pValue != null
+              ? z.pValue < 0.001
+                ? "<.001"
+                : z.pValue.toFixed(3)
+              : "—";
+          const sig = z?.significant === true;
+          return (
+            <div
+              key={row.label}
+              className="grid grid-cols-12 px-4 py-3 text-sm border-t border-[var(--color-border)] items-center"
+            >
+              <div className="col-span-3">
+                <div className="font-medium">{row.label}</div>
+                <div className="text-[11px] text-[var(--color-fg-muted)]">
+                  {row.description}
+                </div>
+              </div>
+              <div className="col-span-3 text-right">
+                <div className="font-mono">{row.a.toLocaleString()}</div>
+                {i > 0 ? (
+                  <div className="text-[11px] text-[var(--color-fg-muted)] font-mono">
+                    {(cvrA * 100).toFixed(2)}%
+                  </div>
+                ) : null}
+              </div>
+              <div className="col-span-3 text-right">
+                <div className="font-mono">{row.b.toLocaleString()}</div>
+                {i > 0 ? (
+                  <div className="text-[11px] text-[var(--color-fg-muted)] font-mono">
+                    {(cvrB * 100).toFixed(2)}%
+                  </div>
+                ) : null}
+              </div>
+              <div
+                className={`col-span-2 text-right font-mono font-semibold ${
+                  z?.liftRel != null && z.liftRel > 0
+                    ? "text-[var(--color-success)]"
+                    : z?.liftRel != null && z.liftRel < 0
+                      ? "text-[var(--color-danger)]"
+                      : ""
+                }`}
+              >
+                {liftStr}
+              </div>
+              <div
+                className={`col-span-1 text-right font-mono text-[12px] ${
+                  sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"
+                }`}
+              >
+                {pStr}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {funnel.impressions.a + funnel.impressions.b === 0 ? (
+        <p className="mt-3 text-[11px] text-[var(--color-fg-muted)]">
+          No test-population impressions yet. Once paid IG/FB ad traffic hits
+          your store, the funnel populates.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function RevenueLift({ funnel }: { funnel: Funnel }) {
+  const baseA = funnel.impressions.a;
+  const baseB = funnel.impressions.b;
+  const revA = funnel.revenue_cents.a / 100;
+  const revB = funnel.revenue_cents.b / 100;
+  const rpsA = baseA > 0 ? revA / baseA : 0;
+  const rpsB = baseB > 0 ? revB / baseB : 0;
+  const liftRel = rpsB > 0 ? (rpsA - rpsB) / rpsB : null;
+
+  const pCvr = baseB > 0 ? funnel.purchases.b / baseB : 0.02;
+  const needed = sampleSizePerBucket(pCvr, 0.3);
+  const have = Math.min(baseA, baseB);
+  const progressPct = needed > 0 ? Math.min(100, (have / needed) * 100) : 0;
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="font-semibold">Revenue impact</h2>
+        <span className="text-[11px] text-[var(--color-fg-muted)] font-mono">
+          revenue per impression
+        </span>
+      </div>
+      <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat
-          label="Fallback shown"
-          value={(totals.fallback_shown.a + totals.fallback_shown.b).toLocaleString()}
-          sub={`${(totals.fallback_clicked.a + totals.fallback_clicked.b).toLocaleString()} clicked`}
+          label="Revenue · A"
+          value={`$${revA.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          sub={`$${rpsA.toFixed(2)} per impression`}
+        />
+        <Stat
+          label="Revenue · B"
+          value={`$${revB.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          sub={`$${rpsB.toFixed(2)} per impression`}
+        />
+        <Stat
+          label="Revenue / impression lift"
+          value={
+            liftRel != null
+              ? `${liftRel > 0 ? "+" : ""}${(liftRel * 100).toFixed(1)}%`
+              : "—"
+          }
+          sub={liftRel != null ? "A vs B" : "need both buckets > 0"}
+        />
+        <Stat
+          label="Estimated monthly recovery"
+          value={
+            liftRel != null && liftRel > 0
+              ? `$${((rpsA - rpsB) * (baseA + baseB) * 30 / 14).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+              : "—"
+          }
+          sub="if escape applied to all test traffic"
         />
       </div>
-
-      <RevenueLift totals={totals} />
-
-
-      <div className="card p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">A/B comparison</h2>
-          <span className="text-[11px] text-[var(--color-fg-muted)] font-mono">
-            {merchant.ab_enabled ? "A/B on · 50/50" : "A/B off · 100% bucket A"}
+      <div className="mt-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elev)] p-4">
+        <div className="flex items-center justify-between text-[11px] text-[var(--color-fg-muted)]">
+          <span>Sample size · 30% MDE @ 95% confidence, 80% power</span>
+          <span className="font-mono">
+            {have.toLocaleString()} / {Number.isFinite(needed) ? needed.toLocaleString() : "—"}{" "}
+            per bucket
           </span>
         </div>
-        <ABTable totals={totals} />
-        {!merchant.ab_enabled ? (
-          <p className="mt-3 text-[11px] text-[var(--color-fg-muted)]">
-            Enable A/B testing in <Link href="/dashboard/settings" className="underline">Settings</Link> to start collecting a control bucket.
-          </p>
-        ) : null}
-      </div>
-
-      <SourcesCard sources={sources} />
-
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="card p-6">
-          <h2 className="font-semibold">Daily impressions vs escapes</h2>
-          <DailyChart rollups={rollups} />
+        <div className="mt-2 h-2 rounded-full bg-[var(--color-border)] overflow-hidden">
+          <div
+            className="h-full bg-[var(--color-accent)]"
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
-        <div className="card p-6">
-          <h2 className="font-semibold">In-app browser breakdown</h2>
-          {totalIabSum === 0 ? (
-            <p className="mt-3 text-sm text-[var(--color-fg-dim)]">
-              Nothing yet. Install the snippet and traffic from in-app browsers will appear here.
-            </p>
-          ) : (
-            <ul className="mt-4 space-y-2">
-              {(Object.keys(IAB_LABELS) as IabKind[])
-                .map((k) => ({ k, n: iab[k] }))
-                .filter((r) => r.n > 0)
-                .sort((a, b) => b.n - a.n)
-                .map(({ k, n }) => (
-                  <li key={k} className="flex items-center gap-3">
-                    <span className="w-24 text-sm">{IAB_LABELS[k]}</span>
-                    <span className="flex-1 h-2 rounded-full bg-[var(--color-bg-elev)] overflow-hidden">
-                      <span
-                        className="block h-full"
-                        style={{
-                          width: `${(100 * n) / totalIabSum}%`,
-                          background:
-                            k === "instagram"
-                              ? "var(--color-accent)"
-                              : "var(--color-fg-muted)",
-                        }}
-                      />
-                    </span>
-                    <span className="text-sm font-mono text-[var(--color-fg-dim)] w-16 text-right">
-                      {n.toLocaleString()}
-                    </span>
-                  </li>
-                ))}
-            </ul>
-          )}
-        </div>
+        <p className="mt-2 text-[11px] text-[var(--color-fg-muted)]">
+          {progressPct >= 100
+            ? "Enough data to detect a 30% lift with 95% confidence."
+            : "Keep traffic flowing. Don&apos;t stop the test early — peeking inflates false positives."}
+        </p>
       </div>
     </div>
   );
@@ -152,7 +395,7 @@ function SourcesCard({ sources }: { sources: SourceRow[] }) {
       <div className="card p-6">
         <h2 className="font-semibold">Top traffic sources</h2>
         <p className="mt-3 text-sm text-[var(--color-fg-dim)]">
-          Once impressions arrive with UTM params, you&apos;ll see source breakdown here.
+          Once impressions arrive with UTM params, source breakdown will populate here.
         </p>
       </div>
     );
@@ -162,7 +405,9 @@ function SourcesCard({ sources }: { sources: SourceRow[] }) {
     <div className="card p-6">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">Top traffic sources</h2>
-        <span className="text-[11px] text-[var(--color-fg-muted)] font-mono">last 14 days</span>
+        <span className="text-[11px] text-[var(--color-fg-muted)] font-mono">
+          all traffic, last 14 days
+        </span>
       </div>
       <div className="mt-4 rounded-xl border border-[var(--color-border)] overflow-hidden">
         <div className="grid grid-cols-12 px-4 py-2 text-[11px] uppercase tracking-wider text-[var(--color-fg-muted)] bg-[var(--color-bg-elev)]">
@@ -204,7 +449,7 @@ function SourcesCard({ sources }: { sources: SourceRow[] }) {
               <div className="col-span-1 text-right font-mono text-[12px] text-[var(--color-fg-dim)]">
                 {s.purchases.toLocaleString()}
               </div>
-              <div className="col-span-2 text-right font-mono text-[12px] text-[var(--color-fg)]">
+              <div className="col-span-2 text-right font-mono text-[12px]">
                 ${(s.revenue_cents / 100).toFixed(2)}
               </div>
             </div>
@@ -215,206 +460,11 @@ function SourcesCard({ sources }: { sources: SourceRow[] }) {
   );
 }
 
-function RevenueLift({ totals }: { totals: ReturnType<typeof totalize> }) {
-  const z = zTestTwoProp(
-    totals.purchases.a,
-    totals.impressions.a,
-    totals.purchases.b,
-    totals.impressions.b,
-  );
-  const cvrA = totals.impressions.a > 0 ? (100 * totals.purchases.a) / totals.impressions.a : 0;
-  const cvrB = totals.impressions.b > 0 ? (100 * totals.purchases.b) / totals.impressions.b : 0;
-  const revenueA = totals.revenue_cents.a / 100;
-  const revenueB = totals.revenue_cents.b / 100;
-  const rpsA = totals.impressions.a > 0 ? revenueA / totals.impressions.a : 0;
-  const rpsB = totals.impressions.b > 0 ? revenueB / totals.impressions.b : 0;
-  const rpsLift = rpsB > 0 ? (rpsA - rpsB) / rpsB : null;
-
-  // Sample size: assume baseline ~bucket B CVR (or default 2% if no data yet),
-  // 30% MDE for low-volume default.
-  const baseline = cvrB > 0 ? cvrB / 100 : 0.02;
-  const needed = sampleSizePerBucket(baseline, 0.3);
-  const haveA = totals.impressions.a;
-  const haveB = totals.impressions.b;
-  const havePerBucket = Math.min(haveA, haveB);
-  const progressPct = needed > 0 ? Math.min(100, (havePerBucket / needed) * 100) : 0;
-
-  const noData = totals.purchases.a + totals.purchases.b === 0;
-
+function DailyChartCard({ rollups }: { rollups: DailyRollup[] }) {
   return (
     <div className="card p-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="font-semibold">Revenue lift</h2>
-        {noData ? (
-          <span className="text-[11px] text-[var(--color-fg-muted)] font-mono">
-            no purchases tracked yet · install the Shopify pixel
-          </span>
-        ) : z?.significant ? (
-          <span className="text-[11px] font-semibold rounded-full px-2 py-0.5 text-[var(--color-success)] bg-[color-mix(in_srgb,var(--color-success)_12%,transparent)] border border-[color-mix(in_srgb,var(--color-success)_28%,transparent)]">
-            statistically significant · p = {z.pValue.toFixed(3)}
-          </span>
-        ) : (
-          <span className="text-[11px] font-mono text-[var(--color-fg-muted)]">
-            {z ? `p = ${z.pValue.toFixed(3)} · need more data` : "—"}
-          </span>
-        )}
-      </div>
-
-      <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <RevTile
-          label="CVR · A (escape)"
-          value={`${cvrA.toFixed(2)}%`}
-          sub={`${totals.purchases.a.toLocaleString()} purchases / ${totals.impressions.a.toLocaleString()}`}
-          accent
-        />
-        <RevTile
-          label="CVR · B (control)"
-          value={`${cvrB.toFixed(2)}%`}
-          sub={`${totals.purchases.b.toLocaleString()} purchases / ${totals.impressions.b.toLocaleString()}`}
-        />
-        <RevTile
-          label="Lift"
-          value={
-            z?.liftRel != null
-              ? `${z.liftRel > 0 ? "+" : ""}${(z.liftRel * 100).toFixed(1)}%`
-              : "—"
-          }
-          sub={z?.liftRel != null ? "relative CVR change" : "need both buckets > 0"}
-          positive={z?.liftRel != null && z.liftRel > 0}
-        />
-        <RevTile
-          label="Revenue / session lift"
-          value={rpsLift != null ? `${rpsLift > 0 ? "+" : ""}${(rpsLift * 100).toFixed(1)}%` : "—"}
-          sub={`A: $${rpsA.toFixed(2)} · B: $${rpsB.toFixed(2)}`}
-          positive={rpsLift != null && rpsLift > 0}
-        />
-      </div>
-
-      <div className="mt-5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elev)] p-4">
-        <div className="flex items-center justify-between text-[11px] text-[var(--color-fg-muted)]">
-          <span>Sample size · 30% MDE @ 95% confidence, 80% power</span>
-          <span className="font-mono">
-            {havePerBucket.toLocaleString()} / {Number.isFinite(needed) ? needed.toLocaleString() : "—"} per bucket
-          </span>
-        </div>
-        <div className="mt-2 h-2 rounded-full bg-[var(--color-border)] overflow-hidden">
-          <div
-            className="h-full bg-[var(--color-accent)]"
-            style={{ width: `${progressPct}%` }}
-          />
-        </div>
-        <p className="mt-2 text-[11px] text-[var(--color-fg-muted)]">
-          {progressPct >= 100
-            ? "Enough data to detect a 30% relative lift. Smaller MDEs need more sessions."
-            : "Keep traffic flowing; we'll declare a winner once you cross the threshold."}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function RevTile({
-  label,
-  value,
-  sub,
-  accent,
-  positive,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: boolean;
-  positive?: boolean;
-}) {
-  return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elev)] p-3.5">
-      <div className="text-[11px] text-[var(--color-fg-muted)]">{label}</div>
-      <div
-        className={`mt-1 text-2xl font-semibold tracking-tight ${
-          accent ? "text-[var(--color-accent)]" : positive ? "text-[var(--color-success)]" : ""
-        }`}
-      >
-        {value}
-      </div>
-      {sub ? <div className="mt-1 text-[11px] text-[var(--color-fg-muted)]">{sub}</div> : null}
-    </div>
-  );
-}
-
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="card p-4">
-      <div className="text-[11px] text-[var(--color-fg-muted)]">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight">{value}</div>
-      {sub ? <div className="mt-1 text-[11px] text-[var(--color-fg-muted)]">{sub}</div> : null}
-    </div>
-  );
-}
-
-function ABTable({ totals }: { totals: ReturnType<typeof totalize> }) {
-  const escA = totals.impressions.a > 0
-    ? (100 * totals.escape_attempts.a) / totals.impressions.a
-    : 0;
-  const skipA = totals.impressions.a > 0
-    ? (100 * totals.escape_skipped.a) / totals.impressions.a
-    : 0;
-  return (
-    <div className="mt-4 rounded-xl border border-[var(--color-border)] overflow-hidden">
-      <div className="grid grid-cols-5 px-4 py-2 text-[11px] uppercase tracking-wider text-[var(--color-fg-muted)] bg-[var(--color-bg-elev)]">
-        <div>Bucket</div>
-        <div className="text-right">Impressions</div>
-        <div className="text-right">Escape attempts</div>
-        <div className="text-right">Escape rate</div>
-        <div className="text-right">Fallback clicked</div>
-      </div>
-      <Row
-        bucket="A · escape"
-        accent="text-[var(--color-accent)]"
-        impressions={totals.impressions.a}
-        escapes={totals.escape_attempts.a}
-        rate={`${escA.toFixed(1)}%`}
-        fbc={totals.fallback_clicked.a}
-      />
-      <Row
-        bucket="B · control"
-        accent="text-[var(--color-fg-muted)]"
-        impressions={totals.impressions.b}
-        escapes={totals.escape_attempts.b}
-        rate="—"
-        fbc={totals.fallback_clicked.b}
-      />
-      <div className="grid grid-cols-5 px-4 py-3 text-sm text-[var(--color-fg-dim)] border-t border-[var(--color-border)]">
-        <div className="col-span-2">Skipped (loop guard)</div>
-        <div className="text-right font-mono">{totals.escape_skipped.a.toLocaleString()}</div>
-        <div className="text-right font-mono">{`${skipA.toFixed(1)}%`}</div>
-        <div className="text-right font-mono">{totals.escape_skipped.b.toLocaleString()}</div>
-      </div>
-    </div>
-  );
-}
-
-function Row({
-  bucket,
-  accent,
-  impressions,
-  escapes,
-  rate,
-  fbc,
-}: {
-  bucket: string;
-  accent: string;
-  impressions: number;
-  escapes: number;
-  rate: string;
-  fbc: number;
-}) {
-  return (
-    <div className="grid grid-cols-5 px-4 py-3 text-sm border-b border-[var(--color-border)] last:border-b-0">
-      <div className={`font-medium ${accent}`}>{bucket}</div>
-      <div className="text-right font-mono text-[var(--color-fg-dim)]">{impressions.toLocaleString()}</div>
-      <div className="text-right font-mono text-[var(--color-fg-dim)]">{escapes.toLocaleString()}</div>
-      <div className="text-right font-mono text-[var(--color-fg)]">{rate}</div>
-      <div className="text-right font-mono text-[var(--color-fg-dim)]">{fbc.toLocaleString()}</div>
+      <h2 className="font-semibold">Daily impressions vs escapes</h2>
+      <DailyChart rollups={rollups} />
     </div>
   );
 }
@@ -427,7 +477,6 @@ function DailyChart({ rollups }: { rollups: DailyRollup[] }) {
       </p>
     );
   }
-  // Aggregate by day across both buckets.
   const byDay = new Map<
     string,
     { day: string; impressions: number; escapes: number }
@@ -450,10 +499,28 @@ function DailyChart({ rollups }: { rollups: DailyRollup[] }) {
     <div className="mt-4">
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[140px]">
         {[40, 70, 100].map((yy) => (
-          <line key={yy} x1="20" x2={w - 20} y1={yy} y2={yy} stroke="var(--color-border)" strokeDasharray="2 4" />
+          <line
+            key={yy}
+            x1="20"
+            x2={w - 20}
+            y1={yy}
+            y2={yy}
+            stroke="var(--color-border)"
+            strokeDasharray="2 4"
+          />
         ))}
-        <path d={linePath("impressions")} fill="none" stroke="var(--color-fg-muted)" strokeWidth="2" />
-        <path d={linePath("escapes")} fill="none" stroke="var(--color-accent)" strokeWidth="2.5" />
+        <path
+          d={linePath("impressions")}
+          fill="none"
+          stroke="var(--color-fg-muted)"
+          strokeWidth="2"
+        />
+        <path
+          d={linePath("escapes")}
+          fill="none"
+          stroke="var(--color-accent)"
+          strokeWidth="2.5"
+        />
       </svg>
       <div className="mt-2 flex items-center gap-4 text-[11px] text-[var(--color-fg-dim)]">
         <span className="inline-flex items-center gap-1.5">

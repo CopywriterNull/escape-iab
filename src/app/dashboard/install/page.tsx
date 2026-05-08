@@ -18,7 +18,7 @@ export default async function InstallPage() {
   const liquid = `{% comment %} EscapeHatch — IG IAB redirect {% endcomment %}\n${html}`;
   const pixelJs = buildShopifyPixel({
     merchantId: merchant.id,
-    ingestUrl: `${origin}/api/track/purchase`,
+    ingestUrl: `${origin}/api/track/funnel`,
   });
 
   return (

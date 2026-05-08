@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
   const utm_content = trim(body.uct);
   const utm_term = trim(body.ut);
   const fbclid = trim(body.fc, 512);
+  const inTest = body.it === 1 || body.it === true;
 
   if (!UUID_RE.test(merchantId) || !ALLOWED_EVENTS.has(eventType)) {
     return new Response(JSON.stringify({ ok: false, error: "bad_input" }), {
@@ -111,6 +112,7 @@ export async function POST(req: NextRequest) {
       bucket,
       is_ig: Boolean(isIg),
       iab_kind: iabKind,
+      in_test: inTest,
       shopify_client_id: shopifyClientId,
       url,
       referrer,

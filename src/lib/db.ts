@@ -21,6 +21,9 @@ export type DailyRollup = {
   escape_skipped: number;
   fallback_shown: number;
   fallback_clicked: number;
+  product_viewed: number;
+  add_to_cart: number;
+  checkout_started: number;
   purchases: number;
   revenue_cents: number;
 };
@@ -49,6 +52,83 @@ export async function getCurrentMerchant(): Promise<Merchant | null> {
     .eq("user_id", user.id)
     .maybeSingle();
   return (data as Merchant | null) ?? null;
+}
+
+// Funnel computed directly from escape_events, restricted to the test
+// population (in_test=true). Authoritative for the dashboard A/B comparison;
+// rollups are for time-series charts only.
+export type FunnelStage =
+  | "impression"
+  | "escape_attempt"
+  | "product_viewed"
+  | "add_to_cart"
+  | "checkout_started"
+  | "purchase";
+
+export type Funnel = {
+  impressions: { a: number; b: number };
+  escape_attempts: { a: number; b: number };
+  product_viewed: { a: number; b: number };
+  add_to_cart: { a: number; b: number };
+  checkout_started: { a: number; b: number };
+  purchases: { a: number; b: number };
+  revenue_cents: { a: number; b: number };
+};
+
+export async function getTestFunnel(
+  merchantId: string,
+  days = 14,
+): Promise<Funnel> {
+  const empty: Funnel = {
+    impressions: { a: 0, b: 0 },
+    escape_attempts: { a: 0, b: 0 },
+    product_viewed: { a: 0, b: 0 },
+    add_to_cart: { a: 0, b: 0 },
+    checkout_started: { a: 0, b: 0 },
+    purchases: { a: 0, b: 0 },
+    revenue_cents: { a: 0, b: 0 },
+  };
+  const supabase = await getSupabaseServer();
+  if (!supabase) return empty;
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const { data } = await supabase
+    .from("escape_events")
+    .select("event_type, bucket, value_cents")
+    .eq("merchant_id", merchantId)
+    .eq("in_test", true)
+    .gte("created_at", since)
+    .limit(50000);
+
+  const out: Funnel = empty;
+  for (const r of (data ?? []) as {
+    event_type: string;
+    bucket: "a" | "b";
+    value_cents: number | null;
+  }[]) {
+    const b = r.bucket === "b" ? "b" : "a";
+    switch (r.event_type) {
+      case "impression":
+        out.impressions[b] += 1;
+        break;
+      case "escape_attempt":
+        out.escape_attempts[b] += 1;
+        break;
+      case "product_viewed":
+        out.product_viewed[b] += 1;
+        break;
+      case "add_to_cart":
+        out.add_to_cart[b] += 1;
+        break;
+      case "checkout_started":
+        out.checkout_started[b] += 1;
+        break;
+      case "purchase":
+        out.purchases[b] += 1;
+        out.revenue_cents[b] += r.value_cents ?? 0;
+        break;
+    }
+  }
+  return out;
 }
 
 export async function getRollups(
@@ -167,6 +247,9 @@ export type Totals = {
   escape_skipped: { a: number; b: number };
   fallback_shown: { a: number; b: number };
   fallback_clicked: { a: number; b: number };
+  product_viewed: { a: number; b: number };
+  add_to_cart: { a: number; b: number };
+  checkout_started: { a: number; b: number };
   purchases: { a: number; b: number };
   revenue_cents: { a: number; b: number };
 };
@@ -180,6 +263,9 @@ export function totalize(rows: DailyRollup[]): Totals {
     escape_skipped: { ...init },
     fallback_shown: { ...init },
     fallback_clicked: { ...init },
+    product_viewed: { ...init },
+    add_to_cart: { ...init },
+    checkout_started: { ...init },
     purchases: { ...init },
     revenue_cents: { ...init },
   };
@@ -191,6 +277,9 @@ export function totalize(rows: DailyRollup[]): Totals {
     out.escape_skipped[b] += r.escape_skipped ?? 0;
     out.fallback_shown[b] += r.fallback_shown ?? 0;
     out.fallback_clicked[b] += r.fallback_clicked ?? 0;
+    out.product_viewed[b] += r.product_viewed ?? 0;
+    out.add_to_cart[b] += r.add_to_cart ?? 0;
+    out.checkout_started[b] += r.checkout_started ?? 0;
     out.purchases[b] += r.purchases ?? 0;
     out.revenue_cents[b] += r.revenue_cents ?? 0;
   }

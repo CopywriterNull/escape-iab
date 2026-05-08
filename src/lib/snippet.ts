@@ -1,16 +1,21 @@
-// Generates the storefront-side JavaScript snippet that:
-// - rejects desktop UAs early
-// - detects in-app browser kind (instagram | facebook | messenger | tiktok | snapchat | pinterest | line | wechat | webview)
-// - assigns A/B bucket via cookie (a = escape, b = control)
-// - on Instagram, fires instagram://extbrowser/?url=<stamped-url> with sessionStorage + URL-param loop guard
-// - on every other detected IAB, beacons iab_detected so the dashboard can segment by source
-// - posts impression / iab_detected / escape_attempt / escape_skipped / fallback_shown / fallback_clicked
+// Generates the storefront-side JavaScript snippet.
 //
-// All URLs / event names / scheme literals are base64-encoded so a casual reader of theme.liquid
-// can't reverse-engineer the technique by reading the output.
+// Test population: visitors who landed via a paid Meta ad (Facebook or
+// Instagram) inside the Instagram in-app browser. Detected by:
+//   - UA matches /Instagram/  (we're inside IG's WebView), AND
+//   - URL contains fbclid OR utm_source ∈ {facebook, instagram, fb, ig, meta}
+//     with utm_medium ∈ {paid, cpc, ad}
+//
+// Inside the test population, we 50/50 bucket (cookie eh_b):
+//   - Bucket A: redirect to Safari/Chrome via instagram://extbrowser
+//   - Bucket B: stay in IAB (control)
+//
+// Outside the test population, we exit silently — no bucketing, no events.
+// (Exception: non-IG IABs get a single iab_detected beacon for analytics
+// segmentation, but they're not in the bucketed test.)
 
-export type SnippetVersion = "v1";
-export const CURRENT_VERSION: SnippetVersion = "v1";
+export type SnippetVersion = "v2";
+export const CURRENT_VERSION: SnippetVersion = "v2";
 
 type SnippetOpts = {
   merchantId: string;
@@ -42,16 +47,20 @@ try{
   else if(/Line\\//i.test(u))kind="line";
   else if(/MicroMessenger/i.test(u))kind="wechat";
   else if(/(?:; wv\\)|; wv;|WebView)/i.test(u))kind="webview";
-  var bk=null;
-  try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
-  if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
-  var sy=null;
-  try{sy=(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){}
+
   var qsP=new URLSearchParams(location.search);
   var us=qsP.get("utm_source")||null,um=qsP.get("utm_medium")||null,uc=qsP.get("utm_campaign")||null,uct=qsP.get("utm_content")||null,ut=qsP.get("utm_term")||null,fc=qsP.get("fbclid")||null;
+  var paidSrc=us&&/^(facebook|instagram|fb|ig|meta)$/i.test(us);
+  var paidMed=um&&/^(paid|cpc|ad)$/i.test(um);
+  var isPaidAd=!!fc||(paidSrc&&paidMed);
+  var inTest=(kind==="instagram")&&isPaidAd;
+
+  var sy=null;
+  try{sy=(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){}
+
   function beacon(t,extra){
     try{
-      var p={m:M,v:V,t:t,b:bk,k:kind,sy:sy,ig:kind==="instagram"?1:0,u:location.href,r:document.referrer||"",us:us,um:um,uc:uc,uct:uct,ut:ut,fc:fc,ts:Date.now()};
+      var p={m:M,v:V,t:t,b:bk||"",k:kind,sy:sy,ig:kind==="instagram"?1:0,it:inTest?1:0,u:location.href,r:document.referrer||"",us:us,um:um,uc:uc,uct:uct,ut:ut,fc:fc,ts:Date.now()};
       if(extra)for(var key in extra)p[key]=extra[key];
       var body=JSON.stringify(p);
       var sent=false;
@@ -59,21 +68,37 @@ try{
       if(!sent){try{fetch(I,{method:"POST",headers:{"content-type":"text/plain;charset=UTF-8"},body:body,keepalive:true,mode:"cors",credentials:"omit"}).catch(function(){});}catch(e){}}
     }catch(e){}
   }
+
+  var bk=null;
+  // Only bucket + impression for the test population. Non-test traffic exits silently
+  // (or beacons iab_detected for non-IG IAB analytics).
+  if(!inTest){
+    if(kind&&kind!=="instagram"){
+      try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
+      beacon("iab_detected");
+    }
+    return;
+  }
+
+  try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
+  if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
+
   beacon("impression");
-  if(!kind)return;
-  if(kind!=="instagram"){beacon("iab_detected");return;}
-  var qs=new URLSearchParams(location.search);
-  var guarded=qs.get("opened_external_browser")==="true";
+
+  var qsLG=new URLSearchParams(location.search);
+  var guarded=qsLG.get("opened_external_browser")==="true";
   var attempted=false;
   try{attempted=sessionStorage.getItem("eh_a")==="1";}catch(e){}
   if(guarded||attempted){beacon("escape_skipped",{r:guarded?"u":"s"});return;}
   if(AB&&bk==="b")return;
+
   var dest=location.href;
   try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");dest=nu.toString();}catch(e){}
   var s=atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==")+encodeURIComponent(dest);
   try{sessionStorage.setItem("eh_a","1");}catch(e){}
   beacon("escape_attempt");
   setTimeout(function(){try{location.replace(s);}catch(e){location.href=s;}},60);
+
   if(FB){
     document.addEventListener("DOMContentLoaded",function(){
       setTimeout(function(){
