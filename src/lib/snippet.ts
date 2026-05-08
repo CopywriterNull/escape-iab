@@ -14,8 +14,8 @@
 // (Exception: non-IG IABs get a single iab_detected beacon for analytics
 // segmentation, but they're not in the bucketed test.)
 
-export type SnippetVersion = "v4";
-export const CURRENT_VERSION: SnippetVersion = "v4";
+export type SnippetVersion = "v5";
+export const CURRENT_VERSION: SnippetVersion = "v5";
 
 type SnippetOpts = {
   merchantId: string;
@@ -44,9 +44,34 @@ try{
   else if(/TikTok|musical_ly/i.test(u))kind="tiktok";
   else if(/Snapchat/i.test(u))kind="snapchat";
   else if(/Pinterest/i.test(u))kind="pinterest";
+  else if(/Discord/i.test(u))kind="discord";
   else if(/Line\\//i.test(u))kind="line";
   else if(/MicroMessenger/i.test(u))kind="wechat";
   else if(/(?:; wv\\)|; wv;|WebView)/i.test(u))kind="webview";
+
+  // Discord: fire-and-forget escape. No bucketing, no analytics, no test
+  // population pollution. Just try to bounce the visitor to a real browser.
+  // Android: intent:// hands off to Chrome.
+  // iOS: x-safari-https:// (broken on iOS 17.4+ but harmless when ignored).
+  // sessionStorage guard prevents redirect loops if the OS rejects the scheme.
+  if(kind==="discord"){
+    var dcDone=false;
+    try{dcDone=sessionStorage.getItem("eh_dc")==="1";}catch(e){}
+    if(dcDone)return;
+    try{sessionStorage.setItem("eh_dc","1");}catch(e){}
+    try{
+      if(/Android/i.test(u)){
+        var iu="intent://"+location.host+location.pathname+location.search+
+          "#Intent;scheme="+location.protocol.replace(":","")+
+          ";package=com.android.chrome;S.browser_fallback_url="+
+          encodeURIComponent(location.href)+";end";
+        location.replace(iu);
+      } else if(/iPhone|iPad|iPod/i.test(u)){
+        location.replace(location.href.replace(/^https?:/,"x-safari-https:"));
+      }
+    }catch(e){}
+    return;
+  }
 
   var qsP=new URLSearchParams(location.search);
   var us=qsP.get("utm_source")||null,um=qsP.get("utm_medium")||null,uc=qsP.get("utm_campaign")||null,uct=qsP.get("utm_content")||null,ut=qsP.get("utm_term")||null,fc=qsP.get("fbclid")||null;
