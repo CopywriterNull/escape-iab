@@ -43,7 +43,7 @@ export default async function DashboardOverview() {
   return (
     <div className="space-y-8">
       <Header merchant={merchant} />
-      <HeroKPI funnel={funnel} escapeRate={escapeRate} />
+      <HeroKPI funnel={funnel} escapeRate={escapeRate} rollups={rollups} />
       <AttributionGapBanner
         unattributed={unattributed}
         attributedPurchases={funnel.purchases.a + funnel.purchases.b}
@@ -55,10 +55,22 @@ export default async function DashboardOverview() {
           <SourcesCard sources={sources} />
         </div>
         <div className="lg:col-span-5">
-          <DailyChartCard rollups={rollups} />
+          <RevenueLiftCard rollups={rollups} />
         </div>
       </div>
       <Definitions />
+    </div>
+  );
+}
+
+function Eyebrow({ children, muted = false }: { children: React.ReactNode; muted?: boolean }) {
+  return (
+    <div
+      className="text-[10px] uppercase tracking-[0.22em] font-semibold inline-flex items-center gap-2"
+      style={{ color: muted ? "var(--color-fg-muted)" : "var(--color-accent)" }}
+    >
+      <span className="size-1 rounded-full bg-[var(--color-accent)]" />
+      {children}
     </div>
   );
 }
@@ -71,10 +83,8 @@ function Header({
   return (
     <div className="flex items-end justify-between flex-wrap gap-4">
       <div>
-        <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
-          Overview · last 14 days
-        </div>
-        <h1 className="mt-1.5 h-display text-4xl text-[var(--color-fg)]">
+        <Eyebrow>Overview · last 14 days</Eyebrow>
+        <h1 className="mt-3 h-display text-4xl text-[var(--color-fg)]">
           {merchant.name ?? "Your store"}
         </h1>
         <div className="mt-2 flex items-center gap-3 text-sm text-[var(--color-fg-dim)]">
@@ -96,13 +106,15 @@ function Header({
       </div>
       <Link
         href="/dashboard/install"
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-sm font-medium press lift focus-ring"
+        className="group inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-sm font-medium press lift focus-ring"
         style={{ boxShadow: "var(--shadow-cta)" }}
       >
-        Get install snippet
-        <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <span>Get install snippet</span>
+        <span className="btn-icon">
+          <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
       </Link>
     </div>
   );
@@ -111,9 +123,11 @@ function Header({
 function HeroKPI({
   funnel,
   escapeRate,
+  rollups,
 }: {
   funnel: Funnel;
   escapeRate: number;
+  rollups: DailyRollup[];
 }) {
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
@@ -145,51 +159,66 @@ function HeroKPI({
   const totalRevenue = revA + revB;
   const totalPurchases = funnel.purchases.a + funnel.purchases.b;
 
+  const series = buildDailySeries(rollups);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-      <div className="card-hi p-7 lg:col-span-7">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
-          Revenue per impression — A vs B
-        </div>
-        <div className={`mt-3 h-display text-6xl ${liftClass}`}>
-          {liftRel == null
-            ? "—"
-            : `${liftRel > 0 ? "+" : ""}${(liftRel * 100).toFixed(1)}%`}
-        </div>
-        <div className="mt-3 text-sm text-[var(--color-fg-dim)] max-w-prose leading-relaxed">
-          {liftRel == null
-            ? "Need impressions in both buckets to compute lift."
-            : liftRel > 0
-              ? `Bucket A (escape) is converting at $${rpsA.toFixed(2)} per impression vs $${rpsB.toFixed(2)} for control.`
-              : `Control is currently outperforming the test bucket. Wait for more data — early results are noisy.`}
-          {z?.pValue != null ? (
-            <>
-              {" "}
-              <span className="font-mono text-[12px] text-[var(--color-fg-muted)]">
-                p = {z.pValue < 0.001 ? "<.001" : z.pValue.toFixed(3)}
+      <div className="card-hi p-7 lg:col-span-7 relative overflow-hidden">
+        <div className="absolute inset-0 mesh-bg opacity-50 pointer-events-none" />
+        <div className="relative">
+          <Eyebrow muted>Revenue per impression — A vs B</Eyebrow>
+          <div className={`mt-3 h-display text-6xl tnum ${liftClass}`}>
+            {liftRel == null
+              ? "—"
+              : `${liftRel > 0 ? "+" : ""}${(liftRel * 100).toFixed(1)}%`}
+          </div>
+          <div className="mt-3 text-sm text-[var(--color-fg-dim)] max-w-prose leading-relaxed">
+            {liftRel == null
+              ? "Need impressions in both buckets to compute lift."
+              : liftRel > 0
+                ? `Bucket A (escape) is converting at $${rpsA.toFixed(2)} per impression vs $${rpsB.toFixed(2)} for control.`
+                : `Control is currently outperforming the test bucket. Wait for more data — early results are noisy.`}
+            {z?.pValue != null ? (
+              <>
+                {" "}
+                <span className="font-mono text-[12px] text-[var(--color-fg-muted)] tnum">
+                  p = {z.pValue < 0.001 ? "<.001" : z.pValue.toFixed(3)}
+                </span>
+              </>
+            ) : null}
+          </div>
+          {monthlyRecovery > 0 ? (
+            <div className="mt-6 inline-flex items-baseline gap-2 rounded-full border border-[var(--color-success)]/30 bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] px-3.5 py-1.5">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-[var(--color-success)] font-semibold">
+                Projected monthly
               </span>
-            </>
+              <span className="font-mono tnum text-[var(--color-success)] font-semibold">
+                ${monthlyRecovery.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </span>
+            </div>
           ) : null}
         </div>
-        {monthlyRecovery > 0 ? (
-          <div className="mt-6 inline-flex items-baseline gap-2 rounded-full border border-[var(--color-success)]/30 bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] px-3.5 py-1.5">
-            <span className="text-[11px] uppercase tracking-wider text-[var(--color-success)] font-medium">
-              Projected monthly
-            </span>
-            <span className="font-mono tnum text-[var(--color-success)] font-semibold">
-              ${monthlyRecovery.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            </span>
-          </div>
-        ) : null}
       </div>
 
       <div className="lg:col-span-5 grid grid-cols-2 gap-3">
-        <KPI label="Impressions" value={totalImpressions.toLocaleString()} sub="in test population" />
-        <KPI label="Escapes" value={totalEscapes.toLocaleString()} sub={`${escapeRate.toFixed(0)}% of bucket A`} />
+        <KPI
+          label="Impressions"
+          value={totalImpressions.toLocaleString()}
+          sub="in test population"
+          spark={series.impressions}
+        />
+        <KPI
+          label="Escapes"
+          value={totalEscapes.toLocaleString()}
+          sub={`${escapeRate.toFixed(0)}% of bucket A`}
+          spark={series.escapes}
+        />
         <KPI
           label="Revenue"
           value={`$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
           sub={`${totalPurchases.toLocaleString()} purchases`}
+          spark={series.revenue}
+          color="var(--color-success)"
         />
         <KPI
           label="A vs B split"
@@ -232,7 +261,7 @@ function AttributionGapBanner({
             className={`size-10 rounded-xl grid place-items-center shrink-0 ${
               showWarning
                 ? "bg-[var(--color-danger)]/15 text-[var(--color-danger)]"
-                : "bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+                : "bg-[var(--color-accent)]/12 text-[var(--color-accent)]"
             }`}
           >
             <svg viewBox="0 0 16 16" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -241,10 +270,8 @@ function AttributionGapBanner({
             </svg>
           </span>
           <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
-              All purchases (pixel-recorded)
-            </div>
-            <div className="mt-0.5 flex items-baseline gap-3">
+            <Eyebrow muted>All purchases (pixel-recorded)</Eyebrow>
+            <div className="mt-1 flex items-baseline gap-3">
               <span className="h-section text-2xl tnum">
                 {totalPurchases.toLocaleString()} purchases · ${totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </span>
@@ -280,18 +307,98 @@ function AttributionGapBanner({
   );
 }
 
-function KPI({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function KPI({
+  label,
+  value,
+  sub,
+  spark,
+  color = "var(--color-accent)",
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  spark?: number[];
+  color?: string;
+}) {
   return (
-    <div className="card p-4 lift">
-      <div className="text-[11px] uppercase tracking-wider text-[var(--color-fg-muted)] font-medium">
+    <div className="card p-4 lift relative overflow-hidden">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-semibold">
         {label}
       </div>
       <div className="mt-2 h-section text-2xl tnum">{value}</div>
-      {sub ? (
-        <div className="mt-1 text-[11px] text-[var(--color-fg-muted)]">{sub}</div>
-      ) : null}
+      <div className="mt-1 flex items-end justify-between gap-2">
+        {sub ? (
+          <div className="text-[11px] text-[var(--color-fg-muted)] leading-tight">{sub}</div>
+        ) : <span />}
+        {spark && spark.length > 1 ? (
+          <Sparkline data={spark} color={color} />
+        ) : null}
+      </div>
     </div>
   );
+}
+
+function Sparkline({
+  data,
+  color = "var(--color-accent)",
+  width = 64,
+  height = 22,
+}: {
+  data: number[];
+  color?: string;
+  width?: number;
+  height?: number;
+}) {
+  if (data.length < 2) return null;
+  const max = Math.max(1, ...data);
+  const step = data.length > 1 ? width / (data.length - 1) : width;
+  const path = data
+    .map((v, i) => {
+      const x = i * step;
+      const y = height - 2 - ((height - 4) * v) / max;
+      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const fillPath = `${path} L ${width.toFixed(1)} ${height} L 0 ${height} Z`;
+  const lastV = data[data.length - 1];
+  const lastY = height - 2 - ((height - 4) * lastV) / max;
+  const id = `sg-${color.replace(/[^a-z0-9]/gi, "")}`;
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} className="shrink-0">
+      <defs>
+        <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={fillPath} fill={`url(#${id})`} />
+      <path d={path} fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={(data.length - 1) * step} cy={lastY} r="1.8" fill={color} />
+    </svg>
+  );
+}
+
+type DailySeries = {
+  impressions: number[];
+  escapes: number[];
+  revenue: number[];
+};
+
+function buildDailySeries(rollups: DailyRollup[]): DailySeries {
+  const map = new Map<string, { imp: number; esc: number; rev: number }>();
+  for (const r of rollups) {
+    const cur = map.get(r.day) ?? { imp: 0, esc: 0, rev: 0 };
+    cur.imp += r.impressions ?? 0;
+    cur.esc += r.escape_attempts ?? 0;
+    cur.rev += (r.revenue_cents ?? 0) / 100;
+    map.set(r.day, cur);
+  }
+  const days = Array.from(map.entries()).sort(([a], [b]) => (a < b ? -1 : 1));
+  return {
+    impressions: days.map(([, v]) => v.imp),
+    escapes: days.map(([, v]) => v.esc),
+    revenue: days.map(([, v]) => v.rev),
+  };
 }
 
 function FunnelTable({ funnel }: { funnel: Funnel }) {
@@ -346,10 +453,8 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
     <div className="card-hi p-7">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
-            Funnel
-          </div>
-          <h2 className="mt-1 h-section text-2xl">Bucket A vs Bucket B</h2>
+          <Eyebrow>Funnel</Eyebrow>
+          <h2 className="mt-2 h-section text-2xl">Bucket A vs Bucket B</h2>
         </div>
         <div className="inline-flex items-center gap-4 text-[11px] text-[var(--color-fg-dim)] font-mono tnum">
           <span className="inline-flex items-center gap-1.5">
@@ -362,7 +467,7 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
       </div>
 
       <div className="mt-6 -mx-2">
-        <div className="grid grid-cols-12 px-3 pb-2 text-[10px] uppercase tracking-[0.15em] text-[var(--color-fg-muted)] font-medium border-b border-[var(--color-border)]">
+        <div className="grid grid-cols-12 px-3 pb-2 text-[10px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-semibold border-b border-[var(--color-border)]">
           <div className="col-span-3">Stage</div>
           <div className="col-span-3 text-right">A</div>
           <div className="col-span-3 text-right">B</div>
@@ -410,14 +515,14 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
               <div className="col-span-3 text-right">
                 <div className="font-mono tnum text-sm">{row.a.toLocaleString()}</div>
                 {i > 0 ? (
-                  <div className="mt-1 flex items-center justify-end gap-2">
-                    <span className="h-1 w-12 rounded-full bg-[var(--color-bg-elev)] overflow-hidden">
+                  <div className="mt-1.5 flex items-center justify-end gap-2">
+                    <span className="h-1.5 w-20 rounded-full bg-[var(--color-bg-elev)] overflow-hidden">
                       <span
                         className="block h-full bg-[var(--color-accent)]"
                         style={{ width: `${(100 * aShare) / maxShare}%` }}
                       />
                     </span>
-                    <span className="text-[11px] text-[var(--color-fg-muted)] font-mono tnum">
+                    <span className="text-[11px] text-[var(--color-fg-muted)] font-mono tnum w-12 text-right">
                       {(cvrA * 100).toFixed(2)}%
                     </span>
                   </div>
@@ -426,14 +531,14 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
               <div className="col-span-3 text-right">
                 <div className="font-mono tnum text-sm">{row.b.toLocaleString()}</div>
                 {i > 0 ? (
-                  <div className="mt-1 flex items-center justify-end gap-2">
-                    <span className="h-1 w-12 rounded-full bg-[var(--color-bg-elev)] overflow-hidden">
+                  <div className="mt-1.5 flex items-center justify-end gap-2">
+                    <span className="h-1.5 w-20 rounded-full bg-[var(--color-bg-elev)] overflow-hidden">
                       <span
                         className="block h-full bg-[var(--color-fg-muted)]"
                         style={{ width: `${(100 * bShare) / maxShare}%` }}
                       />
                     </span>
-                    <span className="text-[11px] text-[var(--color-fg-muted)] font-mono tnum">
+                    <span className="text-[11px] text-[var(--color-fg-muted)] font-mono tnum w-12 text-right">
                       {(cvrB * 100).toFixed(2)}%
                     </span>
                   </div>
@@ -469,31 +574,44 @@ function SampleSizeWidget({ funnel }: { funnel: Funnel }) {
   const have = Math.min(baseA, baseB);
   const progressPct = needed > 0 ? Math.min(100, (have / needed) * 100) : 0;
 
+  const dailyRate = baseA / 14;
+  const remaining = Math.max(0, needed - have);
+  const etaDays =
+    dailyRate > 0 && Number.isFinite(needed)
+      ? Math.ceil(remaining / dailyRate)
+      : null;
+
   return (
-    <div className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
-      <div className="flex items-center justify-between text-[11px] text-[var(--color-fg-muted)]">
-        <span className="uppercase tracking-wider font-medium">
+    <div className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
+      <div className="flex items-baseline justify-between flex-wrap gap-2 text-[11px]">
+        <span className="uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
           Sample size · 30% MDE @ 95% confidence
         </span>
         <span className="font-mono tnum text-[var(--color-fg-dim)]">
           {have.toLocaleString()} / {Number.isFinite(needed) ? needed.toLocaleString() : "—"}
         </span>
       </div>
-      <div className="mt-2.5 h-1.5 rounded-full bg-[var(--color-border)] overflow-hidden">
+      <div className="mt-3 h-2 rounded-full bg-[var(--color-border)] overflow-hidden">
         <div
           className="h-full rounded-full transition-[width] duration-500"
           style={{
             width: `${progressPct}%`,
-            background:
-              "linear-gradient(90deg, var(--color-accent) 0%, var(--color-accent-2) 100%)",
+            background: "var(--color-accent)",
           }}
         />
       </div>
-      <p className="mt-2 text-[11px] text-[var(--color-fg-muted)]">
-        {progressPct >= 100
-          ? "Enough data to detect a 30% lift with 95% confidence."
-          : "Keep traffic flowing. Don’t stop the test early — peeking inflates false-positive rate."}
-      </p>
+      <div className="mt-3 flex items-center justify-between text-[12px] text-[var(--color-fg-dim)]">
+        <span>
+          {progressPct >= 100
+            ? "Enough data to detect a 30% lift with 95% confidence."
+            : "Don't stop the test early — peeking inflates false-positive rate."}
+        </span>
+        {etaDays != null && progressPct < 100 ? (
+          <span className="font-mono tnum text-[var(--color-fg)]">
+            ETA {etaDays}d at current pace
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -513,13 +631,15 @@ function EmptyState() {
       <div className="mt-6 flex items-center justify-center gap-2">
         <Link
           href="/dashboard/install"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-sm font-medium press lift focus-ring"
+          className="group inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-sm font-medium press lift focus-ring"
           style={{ boxShadow: "var(--shadow-cta)" }}
         >
-          Verify install
-          <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <span>Verify install</span>
+          <span className="btn-icon">
+            <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
         </Link>
       </div>
     </div>
@@ -530,10 +650,8 @@ function SourcesCard({ sources }: { sources: SourceRow[] }) {
   if (sources.length === 0) {
     return (
       <div className="card p-7 h-full">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
-          Top traffic sources
-        </div>
-        <h2 className="mt-1 h-section text-xl">Where visitors come from</h2>
+        <Eyebrow>Top traffic sources</Eyebrow>
+        <h2 className="mt-2 h-section text-xl">Where visitors come from</h2>
         <p className="mt-4 text-sm text-[var(--color-fg-dim)]">
           Once impressions arrive with UTM params, source breakdown will populate here.
         </p>
@@ -545,16 +663,14 @@ function SourcesCard({ sources }: { sources: SourceRow[] }) {
     <div className="card p-7 h-full">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
-            Top traffic sources
-          </div>
-          <h2 className="mt-1 h-section text-xl">Where visitors come from</h2>
+          <Eyebrow>Top traffic sources</Eyebrow>
+          <h2 className="mt-2 h-section text-xl">Where visitors come from</h2>
         </div>
         <span className="text-[11px] text-[var(--color-fg-muted)] font-mono">
           all traffic · 14d
         </span>
       </div>
-      <div className="mt-5 space-y-2.5">
+      <div className="mt-5 space-y-3">
         {sources.map((s) => {
           const cvr = s.total > 0 ? (100 * s.purchases) / s.total : 0;
           const widthPct = (100 * s.total) / max;
@@ -571,8 +687,7 @@ function SourcesCard({ sources }: { sources: SourceRow[] }) {
                   className="h-full rounded-full transition-[width] duration-500"
                   style={{
                     width: `${widthPct}%`,
-                    background:
-                      "linear-gradient(90deg, var(--color-accent) 0%, var(--color-accent-2) 100%)",
+                    background: "var(--color-accent)",
                   }}
                 />
               </div>
@@ -590,93 +705,109 @@ function SourcesCard({ sources }: { sources: SourceRow[] }) {
   );
 }
 
-function DailyChartCard({ rollups }: { rollups: DailyRollup[] }) {
+function RevenueLiftCard({ rollups }: { rollups: DailyRollup[] }) {
+  const series = buildBucketedRevPerImpression(rollups);
   return (
     <div className="card p-7 h-full">
-      <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
-        Daily volume
-      </div>
-      <h2 className="mt-1 h-section text-xl">Impressions vs escapes</h2>
-      <DailyChart rollups={rollups} />
+      <Eyebrow>Revenue per impression</Eyebrow>
+      <h2 className="mt-2 h-section text-xl">Lift over time · A vs B</h2>
+      {series.days.length === 0 ? (
+        <p className="mt-5 text-sm text-[var(--color-fg-dim)]">
+          Once revenue events arrive, you&apos;ll see the daily lift trend here.
+        </p>
+      ) : (
+        <RevPerImpressionChart series={series} />
+      )}
     </div>
   );
 }
 
-function DailyChart({ rollups }: { rollups: DailyRollup[] }) {
-  if (rollups.length === 0) {
-    return (
-      <p className="mt-5 text-sm text-[var(--color-fg-dim)]">
-        Once events arrive, you&apos;ll see a 14-day trend here.
-      </p>
-    );
-  }
-  const byDay = new Map<
+type BucketedSeries = {
+  days: string[];
+  rpsA: number[];
+  rpsB: number[];
+};
+
+function buildBucketedRevPerImpression(rollups: DailyRollup[]): BucketedSeries {
+  const map = new Map<
     string,
-    { day: string; impressions: number; escapes: number }
+    { aRev: number; aImp: number; bRev: number; bImp: number }
   >();
   for (const r of rollups) {
-    const cur = byDay.get(r.day) ?? { day: r.day, impressions: 0, escapes: 0 };
-    cur.impressions += r.impressions ?? 0;
-    cur.escapes += r.escape_attempts ?? 0;
-    byDay.set(r.day, cur);
+    const cur = map.get(r.day) ?? { aRev: 0, aImp: 0, bRev: 0, bImp: 0 };
+    if (r.bucket === "b") {
+      cur.bRev += (r.revenue_cents ?? 0) / 100;
+      cur.bImp += r.impressions ?? 0;
+    } else {
+      cur.aRev += (r.revenue_cents ?? 0) / 100;
+      cur.aImp += r.impressions ?? 0;
+    }
+    map.set(r.day, cur);
   }
-  const days = Array.from(byDay.values()).sort((a, b) => (a.day < b.day ? -1 : 1));
-  const maxV = Math.max(1, ...days.flatMap((d) => [d.impressions, d.escapes]));
+  const ordered = Array.from(map.entries()).sort(([a], [b]) => (a < b ? -1 : 1));
+  return {
+    days: ordered.map(([d]) => d),
+    rpsA: ordered.map(([, v]) => (v.aImp > 0 ? v.aRev / v.aImp : 0)),
+    rpsB: ordered.map(([, v]) => (v.bImp > 0 ? v.bRev / v.bImp : 0)),
+  };
+}
+
+function RevPerImpressionChart({ series }: { series: BucketedSeries }) {
   const w = 560;
   const h = 160;
-  const x = (i: number) => 16 + (i * (w - 32)) / Math.max(1, days.length - 1);
-  const y = (v: number) => h - 18 - ((h - 32) * v) / maxV;
-  const linePath = (key: "impressions" | "escapes") =>
-    days.map((d, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(d[key])}`).join(" ");
-  const areaPath = (() => {
-    const pts = days
-      .map((d, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(d.escapes)}`)
-      .join(" ");
-    return `${pts} L ${x(days.length - 1)} ${h - 18} L ${x(0)} ${h - 18} Z`;
-  })();
+  const n = series.days.length;
+  const max = Math.max(0.01, ...series.rpsA, ...series.rpsB);
+  const x = (i: number) => 16 + (i * (w - 32)) / Math.max(1, n - 1);
+  const y = (v: number) => h - 22 - ((h - 38) * v) / max;
+  const path = (vals: number[]) =>
+    vals.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
+  const fillA = `${path(series.rpsA)} L ${x(n - 1)} ${h - 22} L ${x(0)} ${h - 22} Z`;
   return (
     <div className="mt-4">
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[160px]">
         <defs>
-          <linearGradient id="dailyA" x1="0" x2="0" y1="0" y2="1">
+          <linearGradient id="liftA" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.35" />
             <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
           </linearGradient>
         </defs>
         {[40, 80, 120].map((yy) => (
-          <line
-            key={yy}
-            x1="16"
-            x2={w - 16}
-            y1={yy}
-            y2={yy}
-            stroke="var(--color-border)"
-            strokeDasharray="2 4"
-          />
+          <line key={yy} x1="16" x2={w - 16} y1={yy} y2={yy} stroke="var(--color-border)" strokeDasharray="2 4" />
         ))}
-        <path d={areaPath} fill="url(#dailyA)" />
+        <path d={fillA} fill="url(#liftA)" />
         <path
-          d={linePath("impressions")}
+          d={path(series.rpsB)}
           fill="none"
           stroke="var(--color-fg-muted)"
           strokeWidth="2"
-          strokeDasharray="3 3"
+          strokeDasharray="3 4"
+          strokeLinecap="round"
         />
         <path
-          d={linePath("escapes")}
+          d={path(series.rpsA)}
           fill="none"
           stroke="var(--color-accent)"
           strokeWidth="2.5"
           strokeLinecap="round"
+          strokeLinejoin="round"
         />
+        {n > 0 ? (
+          <>
+            <circle cx={x(n - 1)} cy={y(series.rpsA[n - 1])} r="4" fill="var(--color-accent)" />
+            <circle cx={x(n - 1)} cy={y(series.rpsA[n - 1])} r="8" fill="var(--color-accent)" opacity="0.18" />
+          </>
+        ) : null}
       </svg>
-      <div className="mt-2 flex items-center gap-4 text-[11px] text-[var(--color-fg-dim)]">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-[var(--color-fg-muted)]" /> Impressions
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-[var(--color-accent)]" /> Escape attempts
-        </span>
+      <div className="mt-2 flex items-center justify-between gap-4 text-[11px] text-[var(--color-fg-dim)]">
+        <div className="flex items-center gap-4">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-[var(--color-accent)]" /> A · escape
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-[var(--color-fg-muted)]" /> B · control
+          </span>
+        </div>
+        <span className="font-mono text-[var(--color-fg-muted)] tnum">$/impression</span>
       </div>
     </div>
   );
@@ -687,12 +818,14 @@ function Definitions() {
     <details className="card p-7 group">
       <summary className="flex items-center justify-between cursor-pointer list-none">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
-            Methodology
-          </div>
-          <h2 className="mt-1 h-section text-xl">How this dashboard works</h2>
+          <Eyebrow muted>Methodology</Eyebrow>
+          <h2 className="mt-2 h-section text-xl">How this dashboard works</h2>
         </div>
-        <span className="text-[var(--color-fg-dim)] group-open:rotate-45 transition-transform">+</span>
+        <span className="size-8 rounded-full grid place-items-center border border-[var(--color-border)] text-[var(--color-fg-dim)] group-open:rotate-45 group-open:bg-[var(--color-accent)] group-open:text-white group-open:border-transparent transition-all duration-200">
+          <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <path d="M6 2v8M2 6h8" strokeLinecap="round" />
+          </svg>
+        </span>
       </summary>
       <div className="mt-5 grid md:grid-cols-2 gap-x-10 gap-y-4 text-sm text-[var(--color-fg-dim)]">
         <p className="md:col-span-2 leading-relaxed">

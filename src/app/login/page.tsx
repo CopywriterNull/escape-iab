@@ -19,11 +19,11 @@ export default async function LoginPage({
       <div className="absolute inset-0 dotgrid opacity-30 pointer-events-none [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_70%)]" />
       <div className="relative w-full max-w-sm card-hi p-8">
         <Link href="/" className="inline-flex items-center gap-2.5 font-semibold tracking-tight focus-ring rounded-md">
-          <span aria-hidden className="brand-grad inline-flex size-7 items-center justify-center rounded-lg shadow-[0_0_24px_-4px_rgba(79,124,255,0.5)]">
-            <svg viewBox="0 0 24 24" className="size-3.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.4">
-              <path d="M14 4h6v6" strokeLinecap="round" />
-              <path d="M20 4l-8 8" strokeLinecap="round" />
-              <path d="M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5" strokeLinecap="round" />
+          <span aria-hidden className="inline-flex size-7 items-center justify-center rounded-lg" style={{ background: "var(--color-accent)" }}>
+            <svg viewBox="0 0 24 24" className="size-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 14a8 8 0 1 0 8-8" />
+              <path d="M14 4h6v6" />
+              <path d="M20 4l-8 8" />
             </svg>
           </span>
           {brand.name}
