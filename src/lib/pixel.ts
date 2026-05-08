@@ -35,17 +35,18 @@ analytics.subscribe("checkout_completed", function (event) {
     });
     if (typeof navigator !== "undefined" && navigator.sendBeacon) {
       try {
-        var bl = new Blob([body], { type: "application/json" });
+        var bl = new Blob([body], { type: "text/plain;charset=UTF-8" });
         var ok = navigator.sendBeacon(${ingestUrl}, bl);
         if (ok) return;
       } catch (e) {}
     }
     fetch(${ingestUrl}, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "text/plain;charset=UTF-8" },
       body: body,
       keepalive: true,
-      mode: "cors"
+      mode: "cors",
+      credentials: "omit"
     }).catch(function () {});
   } catch (e) {}
 });`;
