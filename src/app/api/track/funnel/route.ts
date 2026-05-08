@@ -128,6 +128,23 @@ async function processFunnel(
     .maybeSingle();
 
   if (!imp) {
+    // No matching impression by clientId. Don't drop the event — record it as
+    // unattributed so the dashboard can show TRUE purchase volume from the
+    // pixel even when our cookie chain breaks (Shopify checkout subdomain,
+    // cookie wipe, multi-day journey, etc). bucket="a" arbitrary; in_test=false
+    // makes the funnel RPC ignore these rows for A/B math.
+    if (eventType === "purchase") {
+      await admin.from("escape_events").insert({
+        merchant_id: merchantId,
+        event_type: "purchase",
+        bucket: "a",
+        in_test: false,
+        shopify_client_id: sy,
+        order_id: orderId,
+        value_cents: valueCents,
+        currency,
+      });
+    }
     return json(
       { ok: true, joined: false, reason: "no_impression" },
       200,

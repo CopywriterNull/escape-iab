@@ -290,6 +290,36 @@ export function totalize(rows: DailyRollup[]): Totals {
   return out;
 }
 
+// All-time unattributed purchases — pixel beacons we received but couldn't
+// join to a test-population impression (different clientId, expired cookie,
+// Shopify checkout subdomain, multi-day journey, etc). This is the gap between
+// "purchases the merchant got from IG" and "purchases we attributed to A/B".
+export async function getUnattributedPurchaseStats(
+  merchantId: string,
+  days = 14,
+): Promise<{ count: number; revenue_cents: number }> {
+  const supabase = await getSupabaseServer();
+  if (!supabase) return { count: 0, revenue_cents: 0 };
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const { data } = await supabase
+    .from("escape_events")
+    .select("order_id, value_cents")
+    .eq("merchant_id", merchantId)
+    .eq("event_type", "purchase")
+    .eq("in_test", false)
+    .gte("created_at", since)
+    .limit(5000);
+  const seen = new Set<string>();
+  let revenue = 0;
+  for (const r of (data ?? []) as { order_id: string | null; value_cents: number | null }[]) {
+    const k = r.order_id || `null-${revenue}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    revenue += r.value_cents ?? 0;
+  }
+  return { count: seen.size, revenue_cents: revenue };
+}
+
 // Two-proportion z-test. Returns null if either bucket has zero impressions.
 export type ZTestResult = {
   pA: number; // CVR in bucket A (0..1)

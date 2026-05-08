@@ -4,6 +4,7 @@ import {
   getRollups,
   getSourceBreakdown,
   getTestFunnel,
+  getUnattributedPurchaseStats,
   zTestTwoProp,
   sampleSizePerBucket,
   type DailyRollup,
@@ -27,10 +28,11 @@ export default async function DashboardOverview() {
     );
   }
 
-  const [funnel, rollups, sources] = await Promise.all([
+  const [funnel, rollups, sources, unattributed] = await Promise.all([
     getTestFunnel(merchant.id, 14),
     getRollups(merchant.id, 14),
     getSourceBreakdown(merchant.id, 14, 10),
+    getUnattributedPurchaseStats(merchant.id, 14),
   ]);
 
   const escapeRate =
@@ -42,6 +44,11 @@ export default async function DashboardOverview() {
     <div className="space-y-8">
       <Header merchant={merchant} />
       <HeroKPI funnel={funnel} escapeRate={escapeRate} />
+      <AttributionGapBanner
+        unattributed={unattributed}
+        attributedPurchases={funnel.purchases.a + funnel.purchases.b}
+        attributedRevenueCents={funnel.revenue_cents.a + funnel.revenue_cents.b}
+      />
       <FunnelTable funnel={funnel} />
       <div className="grid lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7">
@@ -194,6 +201,81 @@ function HeroKPI({
           sub="should hover ~50/50"
         />
       </div>
+    </div>
+  );
+}
+
+function AttributionGapBanner({
+  unattributed,
+  attributedPurchases,
+  attributedRevenueCents,
+}: {
+  unattributed: { count: number; revenue_cents: number };
+  attributedPurchases: number;
+  attributedRevenueCents: number;
+}) {
+  if (unattributed.count === 0 && attributedPurchases === 0) return null;
+  const totalPurchases = unattributed.count + attributedPurchases;
+  const totalRevenue =
+    (unattributed.revenue_cents + attributedRevenueCents) / 100;
+  const attribPct =
+    totalPurchases > 0
+      ? Math.round((100 * attributedPurchases) / totalPurchases)
+      : 0;
+  const showWarning = unattributed.count > attributedPurchases * 2;
+
+  return (
+    <div className={`card-hi p-6 ${showWarning ? "border-[var(--color-danger)]/30" : ""}`}>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <span
+            className={`size-10 rounded-xl grid place-items-center shrink-0 ${
+              showWarning
+                ? "bg-[var(--color-danger)]/15 text-[var(--color-danger)]"
+                : "bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+            }`}
+          >
+            <svg viewBox="0 0 16 16" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M8 2v4M8 10v4M2 8h4M10 8h4" strokeLinecap="round" />
+              <circle cx="8" cy="8" r="2" />
+            </svg>
+          </span>
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
+              All purchases (pixel-recorded)
+            </div>
+            <div className="mt-0.5 flex items-baseline gap-3">
+              <span className="h-section text-2xl tnum">
+                {totalPurchases.toLocaleString()} purchases · ${totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-6 text-sm">
+          <div className="text-right">
+            <div className="text-[11px] text-[var(--color-fg-muted)]">Attributed to A/B</div>
+            <div className="font-mono tnum text-[var(--color-fg)] font-medium">
+              {attributedPurchases} ({attribPct}%)
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[11px] text-[var(--color-fg-muted)]">Unattributed</div>
+            <div className={`font-mono tnum font-medium ${showWarning ? "text-[var(--color-danger)]" : "text-[var(--color-fg-dim)]"}`}>
+              {unattributed.count} (${(unattributed.revenue_cents / 100).toFixed(0)})
+            </div>
+          </div>
+        </div>
+      </div>
+      {showWarning ? (
+        <p className="mt-4 text-[11px] text-[var(--color-fg-dim)] leading-relaxed border-t border-[var(--color-border-soft)] pt-3">
+          Most purchases aren&apos;t joining to a test impression. Likely cause:
+          Shopify checkout uses a different cookie context (Shop Pay subdomain
+          or new checkout extensibility) so <code className="font-mono text-[10px]">event.clientId</code> at
+          <code className="font-mono text-[10px]"> checkout_completed</code> doesn&apos;t match the storefront
+          <code className="font-mono text-[10px]"> _shopify_y</code>. Multi-key join (fbclid / cart_token) and
+          server-side order webhook are the proper fixes — see NOTES.md.
+        </p>
+      ) : null}
     </div>
   );
 }
