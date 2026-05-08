@@ -1,147 +1,201 @@
 # EscapeHatch — project notes
 
-A 1-page lander + working A/B-testing backend for a SaaS that escapes Instagram's in-app browser, redirecting visitors to their real browser (Safari / Chrome) before checkout breaks.
+A SaaS that escapes Instagram's in-app browser, redirecting IG-sourced visitors to their real browser (Safari / Chrome) before checkout breaks. Currently running on G FUEL (gfuel.com) as the first real test.
 
-Repo: `https://github.com/CopywriterNull/escape-iab`
+- **Repo:** `https://github.com/CopywriterNull/escape-iab`
+- **Prod:** `https://escape-iab.vercel.app` (Vercel project: `copywriternulls-projects/escape-iab`)
+- **Supabase:** `kfzhbkvbxzlsiqcgaoiw.supabase.co`
+- **First merchant (G FUEL):** `8b6e80c0-88fd-4c9e-acab-39e21e6d7154`
 
 ## Stack
 
-- **Next.js 16.2.6** (App Router, Turbopack, React 19)
-- **Tailwind v4** (configured via `@theme inline` in `src/app/globals.css` — no `tailwind.config.*`)
+- **Next.js 16.2.6** App Router + Turbopack + React 19
+- **Tailwind v4** via `@theme inline` in `src/app/globals.css` (no tailwind.config)
 - **TypeScript 5**
-- **Supabase** (`@supabase/ssr` + `@supabase/supabase-js`) — magic-link auth, Postgres + RLS, env-gated.
+- **Supabase** (`@supabase/ssr`) — magic-link auth, Postgres + RLS
+- **Geist** font family (Sans + Mono)
+- **Terser** for snippet minification + hex-escape obfuscation
 
-`AGENTS.md`: Next 16 has breaking changes. Read `node_modules/next/dist/docs/01-app/...` before assuming APIs. `params` is `Promise<{...}>`; `middleware.ts` is deprecated → use `proxy.ts`.
+`AGENTS.md` rule: Next 16 has breaking API changes. `params: Promise<...>`, `middleware.ts` deprecated → `proxy.ts`. Read `node_modules/next/dist/docs/01-app/...` before assuming APIs.
 
-## Status
+## Snippet contract (current: v5)
 
-**Shipped (working end-to-end when env vars are set)**
+The storefront snippet (`src/lib/snippet.ts`) runs on every pageview. Logic:
 
-- 1-page lander with `/` (dark) and `/light` variants — sticky nav with theme toggle, hero with iPhone-frame mockups (broken-vs-working checkout), problem stats, how-it-works, dashboard preview with SVG line chart, features, snippet preview, A/B callout, pricing, FAQ.
-- **Storefront snippet** (`src/lib/snippet.ts`) — multi-IAB detection, mobile-only guard, sessionStorage + URL-param loop guard, A/B bucketing via cookie, `instagram://extbrowser/?url=...` escape with stamped `opened_external_browser=true&source_browser=instagram_in_app` params, link.me-style 2s fallback button (base64-obfuscated), telemetry beacons via `sendBeacon`. ~1.6 KB.
-- **Snippet endpoint** `/s/[merchantId].js` — edge-cached `s-maxage=300` so we can ship patches fast. Returns 404 with comment body if merchant unknown.
-- **Telemetry ingest** `/api/track` — validates merchant UUID + event type, hashes IP with `IP_HASH_SALT`, writes event + calls `eh_increment_rollup` RPC. CORS open. No-op (logs in dev) if `SUPABASE_SERVICE_ROLE_KEY` unset.
-- **Auth** — `/login` magic-link form via Supabase OTP, `/auth/callback` exchanges code for session and auto-creates a `merchants` row, `signOut` server action, `proxy.ts` refreshes the session on every request.
-- **Dashboard** at `/dashboard` (auth-gated):
-  - Overview — totals (impressions, escape attempts, escape rate on bucket A, fallback shown/clicked), A/B comparison table with skipped-via-loop-guard row, daily impressions vs escapes line chart, IAB-kind breakdown bar chart.
-  - `/dashboard/install` — merchant ID, copy-pasteable HTML + Liquid snippets, top-of-`<head>` placement guidance, verify-it's-working checklist.
-  - `/dashboard/settings` — store name, domain, A/B toggle, fallback-button toggle (saves via server action, revalidates dashboard).
-- **Database** — `supabase/schema.sql` (full DDL with RLS) + `supabase/migrations/0001_iab_kinds.sql` (idempotent migration to add multi-IAB columns to existing installs).
+1. **Mobile-only guard.** Desktop UAs exit immediately.
+2. **IAB kind detection** — Instagram, Facebook, Messenger, TikTok, Snapchat, Pinterest, **Discord**, Line, WeChat, generic WebView.
+3. **Discord** is fire-and-forget escape (no bucketing, no analytics):
+   - Android → `intent://` to Chrome
+   - iOS → `x-safari-https://` (works on iOS ≤17.3, silently no-ops on ≥17.4)
+   - sessionStorage `eh_dc` guards loops
+4. **Test population gate.** `inTest = (kind=instagram AND paid_ad_click) OR postEscape`. paid_ad_click = `fbclid` present OR (utm_source ∈ {facebook,instagram,fb,ig,meta} AND utm_medium ∈ {paid,cpc,ad}). Non-test traffic exits silently (or beacons `iab_detected` for non-IG IABs only).
+5. **Bucket** via `eh_b` cookie (30-day, 50/50 random; postEscape forces `a`).
+6. **IAB side:** beacon `impression` immediately (sy may be null), then escape if bucket A.
+7. **Safari post-escape side:** wait up to **1500ms** for `_shopify_y` cookie before beaconing impression — this is the attribution bridge between IAB and Safari cookie jars.
+8. Loop guard via sessionStorage `eh_a` + URL param `opened_external_browser=true`.
+9. Optional 2s delayed fallback button for IG.
 
-**Not yet built**
+The snippet response is hex-escape obfuscated and terser-minified. Curl returns ~2.7KB of `\x..` gibberish with no readable English (no "instagram", "extbrowser", etc.).
 
-- Stripe billing — pricing tiers exist on the lander but no checkout / webhook / plan enforcement.
-- Shopify App Embed manifest (`extension.toml`) — the 1-click install UX advantage we pitch on the lander.
-- Multi-storefront support (one merchant = many sites). Schema only has 1 merchant per user today.
-- CSP-nonce variant of the snippet.
-- Real waitlist backend (currently a Formspree placeholder).
-- OG image (`src/app/opengraph-image.tsx`) and favicon (`src/app/icon.tsx`).
-- Webhooks out (Klaviyo / Triple Whale / Northbeam) — pitched on the lander, not yet wired.
+## Pixel contract
 
-## Routes
+`src/lib/pixel.ts` generates the Shopify Custom Pixel JS the merchant pastes into Customer Events. Subscribes to:
 
-| Route | Type | Notes |
-| --- | --- | --- |
-| `/` | static | dark lander |
-| `/light` | static | light variant of the same lander |
-| `/login` | dynamic | magic-link form (server action) |
-| `/auth/callback` | route | exchanges OTP code, auto-creates merchant |
-| `/dashboard` | dynamic | overview metrics + A/B comparison + chart |
-| `/dashboard/install` | dynamic | snippet code + merchant ID |
-| `/dashboard/settings` | dynamic | A/B + fallback toggles |
-| `/api/track` | route | telemetry ingest (POST JSON) |
-| `/s/[merchantId]` | route | serves the storefront JS |
+- `product_viewed`
+- `product_added_to_cart`
+- `checkout_started`
+- `checkout_completed`
 
-## Snippet contract
+Each event sends a **GET** to `/api/track/funnel` with `event.clientId` + value/currency/order_id. GET avoids preflight/sandbox blocks. Uses both `fetch()` and `new Image()` for redundancy (de-duped server-side via `count(distinct shopify_client_id)`).
 
-The script POSTs JSON beacons to `/api/track` with the shape:
+## Backend routes
 
-```ts
-{ m: merchantId, v: "v1", t: eventType, b: "a"|"b", k: iabKind|null, ig: 0|1, u: pageUrl, r: referrer, ts: epochMs, ...extra }
+| Route | Purpose |
+| --- | --- |
+| `/s/[merchantId]` | serves the obfuscated snippet, edge-cached `s-maxage=300` |
+| `/api/track` | impression / iab_detected / escape_attempt / escape_skipped / fallback_shown / fallback_clicked |
+| `/api/track/funnel` | product_viewed / add_to_cart / checkout_started / purchase (joins to bucket via shopify_client_id) |
+| `/api/track/purchase` | legacy purchase endpoint (still serving for backward compat) |
+| `/login` | Supabase magic-link |
+| `/auth/callback` | OTP code exchange + auto-create merchant row |
+| `/dashboard` | overview (funnel A vs B, lift, sources, daily chart) |
+| `/dashboard/install` | snippet + pixel install instructions with merchant ID baked in |
+| `/dashboard/settings` | name, domain, A/B toggle, fallback button toggle |
+
+## Data model
+
+- `merchants(id, user_id, name, domain, plan, ab_enabled, fallback_button)`
+- `escape_events(id, merchant_id, event_type, bucket, in_test, iab_kind, shopify_client_id, value_cents, currency, order_id, url, referrer, user_agent, ip_hash, utm_source, utm_medium, utm_campaign, utm_content, utm_term, fbclid, created_at)`
+- `daily_rollups` (aggregated per day per bucket)
+- `eh_test_funnel(merchant_id, since)` — RPC; returns aggregated funnel counts (avoids PostgREST's 1000-row cap). Funnel stages count distinct `shopify_client_id` to dedupe pixel double-fires + same-visitor multi-views. Purchases dedup by `order_id`.
+
+## Migrations applied (in order)
+
+1. `schema.sql` — initial
+2. `0001_iab_kinds.sql` — multi-IAB detection
+3. `0002_purchase_attribution.sql` — purchase columns + RPC signature change (user had to run constraint update separately)
+4. `0003_utm_tracking.sql` — utm_source/medium/campaign/content/term + fbclid columns
+5. `0004_funnel_events.sql` — product_viewed/add_to_cart/checkout_started + `in_test` column + rollup columns
+6. `0005_test_funnel_rpc.sql` — `eh_test_funnel` RPC
+7. `0006_unique_funnel_counts.sql` — dedupe via `count(distinct shopify_client_id)`. **First version had a column-alias bug** (couldn't find `cnt`); the corrected version (with `e.event_type::text as event_type` etc.) was the one ran successfully.
+
+## G FUEL install state
+
+- **Snippet:** in `theme.liquid` as first child of `<head>`, currently at `?v=5` (or higher — I told the user to bump to `?v=6` after the post-escape fix; verify with `curl gfuel.com | grep escape-iab`).
+- **Pixel:** in Shopify admin → Settings → Customer events → "Instagram Paid Social (Escape)" connected. Permission: Not required.
+- **Auth redirect URL added** in Supabase: `https://escape-iab.vercel.app/auth/callback`. Local needs `http://localhost:3000/auth/callback` added separately.
+
+## Env vars (production, set in Vercel)
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://kfzhbkvbxzlsiqcgaoiw.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_*  (Supabase's new key format)
+SUPABASE_SERVICE_ROLE_KEY=eyJ...  (legacy JWT format, service_role)
+IP_HASH_SALT=f477090394d90aa14d4bc043de964b6e
+NEXT_PUBLIC_SITE_URL=https://escape-iab.vercel.app
 ```
 
-Event types:
+Local dev: pull via `vercel env pull .env.local --environment production --yes`. Override `NEXT_PUBLIC_SITE_URL=http://localhost:3000` in `.env.local`.
 
-- `impression` — every pageview from a mobile UA
-- `iab_detected` — non-Instagram IAB seen (FB, Messenger, TikTok, Snap, Pinterest, Line, WeChat, generic WebView)
-- `escape_attempt` — we fired `instagram://extbrowser/?url=...`
-- `escape_skipped` — loop guard kicked in (sessionStorage `eh_a` or URL param `opened_external_browser=true`); `extra.r` is `"u"` (URL) or `"s"` (session)
-- `fallback_shown` — the 2s floating fallback button rendered
-- `fallback_clicked` — user manually tapped the fallback button
+## Recent redesign pass (commit f16ebd0)
 
-A/B bucketing is via the `eh_b` cookie (30 days). Bucket A escapes; bucket B is control (no escape). When `ab_enabled=false` everyone is treated as bucket A.
+Used the `redesign-existing-projects` skill from `Leonxlnx/taste-skill` (now installed at `~/.agents/skills/`). Applied:
 
-## Env vars (when activating backend)
+- Geist Sans + Mono replacing Inter
+- New utility classes: `.h-display` `.h-section` `.tnum` `.lift` `.press` `.focus-ring` `.link-grow` `.grain` `.card` `.card-hi`
+- Tinted shadows (`--shadow-card`, `--shadow-elev`, `--shadow-cta`) — never pure black
+- Subtle SVG noise overlay via `.grain` (4% opacity, mix-blend-mode overlay)
+- Dashboard rebuilt around a **HeroKPI** block (6xl revenue-lift % + 4 supporting tiles in 12-col asymmetric grid)
+- FunnelTable with per-stage progress bars next to numbers
+- Designed empty state with composed iconography
+- Methodology collapsed into expandable `<details>`
+- Sources card uses gradient progress bars + tabular nums
+- Active hover backgrounds on rows
+- All CTAs now use `lift + press + focus-ring + shadow-cta`
+
+Other taste-skill-related: `andrej-karpathy-skills:karpathy-guidelines` is finally available — that was the long-mentioned "Karpathy plugin." Use for any nontrivial code review pass.
+
+## Open issues / NOT verified
+
+- **First-pageview IAB impressions still have `shopify_client_id=null`** because Shopify's Web Pixels Manager sets `_shopify_y` after our snippet runs. Only the post-escape (Safari) side waits for the cookie. IAB-side null-sy impressions can't be joined to pixel events that fire on the same visit. Acceptable for now — most G FUEL conversions happen after the escape, so the Safari-side impression captures the join.
+- **Bucket A funnel events were not populating before the v5 fix.** After v5 deploy + `?v=5/6` cache bust, expected to populate. **Not yet verified with real fresh traffic.**
+- **Discord escape paths untested** in production. Android `intent://` should work; iOS `x-safari-https://` will fail silently on iOS 17.4+ (acceptable since Discord iOS browser supports Apple Pay anyway).
+- **`escape_skipped` rate** appears low — may indicate users hitting the loop guard, OR may be normal. Worth monitoring.
+
+## Files map
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-IP_HASH_SALT=                      # any random string for hashing IPs
-NEXT_PUBLIC_SITE_URL=              # production domain when assigned
+src/
+  lib/
+    snippet.ts            # storefront IIFE, version v5
+    pixel.ts              # Shopify Custom Pixel JS generator
+    obfuscate.ts          # terser + hex-escape post-process for snippet
+    db.ts                 # query helpers, totalize, zTestTwoProp, sampleSizePerBucket
+    branding.ts           # name/tagline/subhead constants
+    supabase/
+      server.ts           # SSR + service role
+      client.ts           # browser client
+  app/
+    layout.tsx            # Geist font setup, metadata
+    page.tsx              # / (dark lander)
+    light/page.tsx        # /light (light lander variant)
+    globals.css           # design tokens + utilities
+    proxy.ts              # session refresh (renamed from middleware.ts)
+    login/page.tsx
+    auth/callback/route.ts
+    dashboard/
+      layout.tsx          # auth gate, top nav
+      page.tsx            # overview funnel
+      install/page.tsx
+      settings/page.tsx
+    api/
+      track/route.ts                  # snippet beacons
+      track/funnel/route.ts           # pixel funnel events
+      track/purchase/route.ts         # legacy purchase
+    s/[merchantId]/route.ts           # serves obfuscated snippet
+    actions/
+      auth.ts             # signInWithMagicLink, signOut
+      merchant.ts         # updateMerchantSettings
+  components/
+    Lander.tsx            # dark+light shared lander
+supabase/
+  schema.sql              # canonical full schema
+  migrations/             # 0001..0006 in-place upgrades
+docs/
+  AB_TESTING_PLAN.md      # architecture/methodology doc
+  INSTALL_GFUEL.md        # G FUEL install walkthrough
+  gfuel-customer-events-pixel.js  # paste-in pixel for G FUEL with merchant ID baked in
 ```
 
-To activate the backend:
+## Pending TODOs (in priority order)
 
-1. Create a Supabase project.
-2. SQL editor → paste `supabase/schema.sql` (or `supabase/migrations/0001_iab_kinds.sql` if you applied the original schema before 2026-05-07).
-3. Paste keys into Vercel env, redeploy.
-4. In Supabase Auth settings: add `https://YOUR_DOMAIN/auth/callback` to redirect URLs.
-5. Sign up at `/login`, get the magic link, land on `/dashboard`.
+1. **Verify bucket A funnel data populates** after the v5 post-escape fix and migration 0006 dedup. Need 24h of fresh paid IG traffic.
+2. **Test Discord on Android** — confirm `intent://` actually escapes when a Discord-Android visitor lands.
+3. **Move escape-iab.vercel.app to a real domain** (`escapehatch.app` or chosen brand). Update `NEXT_PUBLIC_SITE_URL` env var, Supabase auth allow-list.
+4. **Stripe billing scaffold** — pricing tiers shown on lander, no checkout wired.
+5. **Shopify App Embed manifest** — currently merchants paste manually. App Embed = 1-click install.
+6. **Real waitlist endpoint** on lander (currently Formspree placeholder).
+7. **OG image** (`src/app/opengraph-image.tsx`) and favicon (`src/app/icon.tsx`) — both currently default Next.js.
+8. **CSP-nonce variant of the snippet** for stores with strict Content-Security-Policy.
+9. **Webhooks out** to Klaviyo / Triple Whale / Northbeam (Pro tier marketing promise).
+10. **Karpathy guidelines skill** — use it to review nontrivial code changes; not yet applied to any commit.
 
-## What we cherry-picked from the competitor doc (and what we skipped)
+## Significant commits (most recent first)
 
-The doc at `~/Downloads/instagram-in-app-browser-redirect-tech.md` was useful as a source of patterns we hadn't implemented yet. Decisions:
-
-**Adopted**
-
-- Mobile-only guard (`/Mobile|iPhone|iPod|iPad|Android/`) — skip desktop.
-- sessionStorage + URL-param loop guard (`opened_external_browser=true`) — prevents bouncing if IG fails to hand off.
-- `source_browser=instagram_in_app` query stamp — gives downstream analytics something to filter on.
-- Multi-IAB detection (FB / Messenger / TikTok / Snap / Pinterest / Line / WeChat / WebView) — beaconed as `iab_detected` events for dashboard segmentation. We don&apos;t auto-escape these (no equivalent published deep-link).
-
-**Rejected**
-
-- Bottom-of-`<body>` placement — wrong. Top of `<head>` is correct; bottom means user briefly sees the broken IAB.
-- 250ms delay before redirect — link.me fires immediately and so should we; longer delays mean more visible flash of the IAB. Keeping the option only as a future config knob if a customer asks.
-- Geo lookup via external service — bloat.
-- Shopify-specific Liquid `if request.page_type != 'checkout'` — conflates concerns. App Embed is the right path.
-
-**Already had**
-
-- A/B bucketing (50/50)
-- Per-event telemetry
-- Edge-cached snippet delivery
-- Per-merchant config (ab_enabled, fallback_button)
-- Base64-obfuscated fallback button
-
-## Conventions
-
-- Never `git add -A`. Stage specific files.
-- Use absolute paths in subshells: `/usr/bin/git`, `/Users/lennyhuynh/.nvm/versions/node/v22.14.0/bin/npm`.
-- `npm run build` after multi-file edits to catch cascading errors.
-
-## Open TODOs
-
-- Decide brand name + grab domain (placeholder: **EscapeHatch / escapehatch.app**). Rename in `src/lib/branding.ts` only.
-- Replace Formspree action on the lander with a real waitlist endpoint.
-- Wire OG image and favicon.
-- Add Stripe scaffolding once pricing is validated.
-- Build Shopify App Embed manifest — this is the lander&apos;s biggest install-UX promise.
-- Wire webhook out to Klaviyo / Triple Whale / Northbeam (Pro tier promise).
-- "Andrej Karpathy plugin" — user has referenced this multiple times across linkme + escape-iab sessions. Cannot find a matching skill or plugin in this environment. Asked once already; awaiting clarification.
-
-## Significant commits
-
-- `8b06fbc` — bootstrap + lander + scaffolded backend
-- `1efbd92` — `/light` theme variant + nav toggle
-- `4a82bff` — cleaner lander pass: dashboard preview section, SVG line chart, A/B table, less border noise
-- `43d7984` — denser hero phone mockups (notched iPhone, packed checkout, broken-vs-working payment rows with red hatch overlay)
-- (this commit) — multi-IAB detection in snippet, full A/B-testing dashboard backend (auth, layout, overview, install, settings, server actions, schema migration)
+- `f16ebd0` — full redesign: Geist + tabular nums + lift/press + grain + hero KPI block
+- `0d7604f` — Discord IAB escape (no analytics, fire-and-forget)
+- `7d3f1cd` — wait for `_shopify_y` before post-escape impression beacon (fixes bucket A attribution)
+- `19ba613` — post-escape Safari beacons impression for funnel attribution
+- `34218d2` — dashboard uses RPC aggregation (escape PostgREST 1000-row cap)
+- `70f75f1` — analytics rework: paid-IG-only test population + full funnel
+- `99b6435` — UTM + fbclid capture
+- `c53b9ce` — multi-IAB detection + A/B testing dashboard backend
+- `0680d30` — Shopify Customer Events purchase attribution + cyan palette
+- `8b06fbc` — bootstrap (lander + scaffolded backend)
 
 ## Things NOT to chase
 
-- Adding Stripe before there's a single paying-shaped customer asking to pay.
-- Replacing the Supabase scaffolding with another DB. RLS is correct; ship it.
-- Universal Links / Custom URL Schemes for non-IG IABs. There's no `tiktok://extbrowser` equivalent. The fallback overlay is the only realistic recovery path.
-- A 250ms redirect delay. The user sees the IAB during that window — defeats the purpose.
+- **Re-attempting iOS x-safari-https://** as a primary escape path. Broken on iOS 17.4+. We use it only as a Discord fallback, fail silently otherwise.
+- **Adding 250ms delay before IG redirect.** Rejected. Link.me fires immediately; user-visible IAB flash defeats the purpose.
+- **Shopify Web Pixel for the storefront snippet.** Pixel sandbox can't read `eh_b` or set escape redirects — must stay as theme App Embed / `<script>` tag.
+- **Universal Links / native iOS app.** Out of scope; this is a web product.
