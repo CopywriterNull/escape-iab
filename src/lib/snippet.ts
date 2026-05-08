@@ -52,8 +52,9 @@ try{
       var p={m:M,v:V,t:t,b:bk,k:kind,sy:sy,ig:kind==="instagram"?1:0,u:location.href,r:document.referrer||"",ts:Date.now()};
       if(extra)for(var key in extra)p[key]=extra[key];
       var body=JSON.stringify(p);
-      if(navigator.sendBeacon){var bl=new Blob([body],{type:"application/json"});navigator.sendBeacon(I,bl);}
-      else{var x=new XMLHttpRequest();x.open("POST",I,true);x.setAttribute("content-type","application/json");x.send(body);}
+      var sent=false;
+      if(navigator.sendBeacon){try{var bl=new Blob([body],{type:"text/plain;charset=UTF-8"});sent=navigator.sendBeacon(I,bl);}catch(e){}}
+      if(!sent){try{fetch(I,{method:"POST",headers:{"content-type":"text/plain;charset=UTF-8"},body:body,keepalive:true,mode:"cors",credentials:"omit"}).catch(function(){});}catch(e){}}
     }catch(e){}
   }
   beacon("impression");
@@ -70,7 +71,7 @@ try{
   var s=atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==")+encodeURIComponent(dest);
   try{sessionStorage.setItem("eh_a","1");}catch(e){}
   beacon("escape_attempt");
-  try{location.replace(s);}catch(e){location.href=s;}
+  setTimeout(function(){try{location.replace(s);}catch(e){location.href=s;}},60);
   if(FB){
     document.addEventListener("DOMContentLoaded",function(){
       setTimeout(function(){
