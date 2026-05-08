@@ -25,6 +25,17 @@ export async function OPTIONS(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const origin = req.headers.get("origin");
   const url = new URL(req.url);
+  const debug = url.searchParams.get("debug");
+  if (debug) {
+    // Diagnostic ping from the pixel — log it, don't try to write a purchase.
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[eh-pixel-debug]", Object.fromEntries(url.searchParams));
+    }
+    return new Response(JSON.stringify({ ok: true, debug }), {
+      status: 200,
+      headers: { "content-type": "application/json", ...corsHeaders(origin) },
+    });
+  }
   const body = {
     m: url.searchParams.get("m") ?? "",
     sy: url.searchParams.get("sy") ?? null,
