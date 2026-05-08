@@ -14,8 +14,8 @@
 // (Exception: non-IG IABs get a single iab_detected beacon for analytics
 // segmentation, but they're not in the bucketed test.)
 
-export type SnippetVersion = "v2";
-export const CURRENT_VERSION: SnippetVersion = "v2";
+export type SnippetVersion = "v3";
+export const CURRENT_VERSION: SnippetVersion = "v3";
 
 type SnippetOpts = {
   merchantId: string;
@@ -53,7 +53,13 @@ try{
   var paidSrc=us&&/^(facebook|instagram|fb|ig|meta)$/i.test(us);
   var paidMed=um&&/^(paid|cpc|ad)$/i.test(um);
   var isPaidAd=!!fc||(paidSrc&&paidMed);
-  var inTest=(kind==="instagram")&&isPaidAd;
+  // postEscape: the visitor just escaped from IAB to Safari/Chrome. We stamped
+  // opened_external_browser=true on the URL during the redirect. Safari has a
+  // fresh _shopify_y cookie (different from IAB's), so we must record the
+  // post-escape impression here too — otherwise pixel events fired on the
+  // Safari side can't join back to a bucket-A impression.
+  var postEscape=qsP.get("opened_external_browser")==="true";
+  var inTest=((kind==="instagram")&&isPaidAd)||postEscape;
 
   var sy=null;
   try{sy=(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){}
@@ -81,15 +87,20 @@ try{
   }
 
   try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
-  if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
+  // Post-escape Safari side: force bucket A (we know this visitor was escaped
+  // from bucket A in the IAB; we don't want to randomly re-bucket them).
+  if(postEscape){bk="a";try{document.cookie="eh_b=a;path=/;max-age=2592000;samesite=Lax";}catch(e){}}
+  else if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
 
   beacon("impression");
 
-  var qsLG=new URLSearchParams(location.search);
-  var guarded=qsLG.get("opened_external_browser")==="true";
+  // Post-escape: don't re-attempt redirect; we just want the impression for
+  // attribution. Funnel events from Safari will join to this row.
+  if(postEscape)return;
+
   var attempted=false;
   try{attempted=sessionStorage.getItem("eh_a")==="1";}catch(e){}
-  if(guarded||attempted){beacon("escape_skipped",{r:guarded?"u":"s"});return;}
+  if(attempted){beacon("escape_skipped",{r:"s"});return;}
   if(AB&&bk==="b")return;
 
   var dest=location.href;
