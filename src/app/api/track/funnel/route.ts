@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
       m: params.get("m") ?? "",
       e: params.get("e") ?? "",
       sy: params.get("sy") ?? null,
+      sid: params.get("sid") ?? null,
       v: params.get("v") ?? null,
       cy: params.get("cy") ?? null,
       oid: params.get("oid") ?? null,
@@ -82,6 +83,10 @@ async function processFunnel(
     typeof body.sy === "string" && body.sy.length > 0 && body.sy.length < 128
       ? body.sy
       : null;
+  const ehSid =
+    typeof body.sid === "string" && body.sid.length > 0 && body.sid.length < 64
+      ? body.sid
+      : null;
   const orderId =
     typeof body.oid === "string" && body.oid.length > 0
       ? body.oid.slice(0, 128)
@@ -102,7 +107,7 @@ async function processFunnel(
       ? Math.round(valueNum * 100)
       : null;
 
-  if (!UUID_RE.test(merchantId) || !ALLOWED_EVENTS.has(eventType) || !sy) {
+  if (!UUID_RE.test(merchantId) || !ALLOWED_EVENTS.has(eventType) || (!sy && !ehSid)) {
     return json({ ok: false, error: "bad_input" }, 400, origin);
   }
 
@@ -111,21 +116,38 @@ async function processFunnel(
     return json({ ok: true, joined: false, reason: "no_db" }, 200, origin);
   }
 
-  // Join: find the most recent in-test impression for this Shopify visitor.
-  // We require in_test=true so attribution is constrained to our paid-ad
-  // population (matches the snippet's bucketing rule).
+  // Multi-key join: shopify_client_id first (most precise), eh_sid as fallback
+  // (survives Shopify checkout cookie-jar break).
   const since = new Date(Date.now() - JOIN_WINDOW_DAYS * 86400_000).toISOString();
-  const { data: imp } = await admin
-    .from("escape_events")
-    .select("bucket")
-    .eq("merchant_id", merchantId)
-    .eq("shopify_client_id", sy)
-    .eq("event_type", "impression")
-    .eq("in_test", true)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let imp: { bucket: "a" | "b" } | null = null;
+  if (sy) {
+    const { data } = await admin
+      .from("escape_events")
+      .select("bucket")
+      .eq("merchant_id", merchantId)
+      .eq("shopify_client_id", sy)
+      .eq("event_type", "impression")
+      .eq("in_test", true)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    imp = data as { bucket: "a" | "b" } | null;
+  }
+  if (!imp && ehSid) {
+    const { data } = await admin
+      .from("escape_events")
+      .select("bucket")
+      .eq("merchant_id", merchantId)
+      .eq("eh_sid", ehSid)
+      .eq("event_type", "impression")
+      .eq("in_test", true)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    imp = data as { bucket: "a" | "b" } | null;
+  }
 
   if (!imp) {
     // No matching impression by clientId. Don't drop the event — record it as
@@ -140,6 +162,7 @@ async function processFunnel(
         bucket: "a",
         in_test: false,
         shopify_client_id: sy,
+        eh_sid: ehSid,
         order_id: orderId,
         value_cents: valueCents,
         currency,
@@ -160,6 +183,7 @@ async function processFunnel(
     bucket,
     in_test: true,
     shopify_client_id: sy,
+    eh_sid: ehSid,
     order_id: eventType === "purchase" ? orderId : null,
     value_cents: valueCents,
     currency,

@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
   const utm_content = trim(body.uct);
   const utm_term = trim(body.ut);
   const fbclid = trim(body.fc, 512);
+  const ehSid = trim(body.sid, 64);
   const inTest = body.it === 1 || body.it === true;
 
   if (!UUID_RE.test(merchantId) || !ALLOWED_EVENTS.has(eventType)) {
@@ -124,6 +125,7 @@ export async function POST(req: NextRequest) {
       utm_content,
       utm_term,
       fbclid,
+      eh_sid: ehSid,
     });
 
     const today = new Date().toISOString().slice(0, 10);

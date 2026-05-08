@@ -14,8 +14,8 @@
 // (Exception: non-IG IABs get a single iab_detected beacon for analytics
 // segmentation, but they're not in the bucketed test.)
 
-export type SnippetVersion = "v5";
-export const CURRENT_VERSION: SnippetVersion = "v5";
+export type SnippetVersion = "v6";
+export const CURRENT_VERSION: SnippetVersion = "v6";
 
 type SnippetOpts = {
   merchantId: string;
@@ -89,9 +89,23 @@ try{
   function readSy(){try{return(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){return null;}}
   var sy=readSy();
 
+  // eh_sid: our own persistent visitor ID. Survives the Shopify checkout
+  // cookie-jar break (Shop Pay subdomain, new checkout extensibility) where
+  // _shopify_y changes mid-flow. Carried via URL on escape, cookie for
+  // future visits, and Shopify cart attributes for pixel attribution.
+  function ehGen(){
+    try{if(crypto&&crypto.randomUUID)return crypto.randomUUID();}catch(e){}
+    var s="";for(var i=0;i<32;i++)s+=Math.floor(Math.random()*16).toString(16);
+    return s.slice(0,8)+"-"+s.slice(8,12)+"-4"+s.slice(13,16)+"-a"+s.slice(17,20)+"-"+s.slice(20,32);
+  }
+  var sid=qsP.get("eh_sid")||null;
+  if(!sid){try{sid=(document.cookie.match(/(?:^|; )eh_sid=([^;]+)/)||[])[1]||null;}catch(e){}}
+  if(!sid)sid=ehGen();
+  try{document.cookie="eh_sid="+sid+";path=/;max-age=2592000;samesite=Lax";}catch(e){}
+
   function beacon(t,extra){
     try{
-      var p={m:M,v:V,t:t,b:bk||"",k:kind,sy:sy,ig:kind==="instagram"?1:0,it:inTest?1:0,u:location.href,r:document.referrer||"",us:us,um:um,uc:uc,uct:uct,ut:ut,fc:fc,ts:Date.now()};
+      var p={m:M,v:V,t:t,b:bk||"",k:kind,sy:sy,sid:sid,ig:kind==="instagram"?1:0,it:inTest?1:0,u:location.href,r:document.referrer||"",us:us,um:um,uc:uc,uct:uct,ut:ut,fc:fc,ts:Date.now()};
       if(extra)for(var key in extra)p[key]=extra[key];
       var body=JSON.stringify(p);
       var sent=false;
@@ -131,16 +145,22 @@ try{
   if(postEscape){bk="a";try{document.cookie="eh_b=a;path=/;max-age=2592000;samesite=Lax";}catch(e){}}
   else if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
 
+  // Write eh_sid to Shopify cart attributes — survives Shop Pay / new checkout
+  // cookie-jar break. Pixel reads it back from event.data.cart.attributes.
+  // Same-origin POST; no-op silently on non-Shopify sites.
+  function writeCartAttr(){try{fetch("/cart/update.json",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({attributes:{eh_sid:sid}}),credentials:"same-origin",keepalive:true}).catch(function(){});}catch(e){}}
+
   // Post-escape Safari side: no escape urgency. Wait up to 1.5s for sy cookie
   // before beaconing the impression so the funnel pixel can join back.
   if(postEscape){
-    waitForSy(1500,function(){beacon("impression");});
+    waitForSy(1500,function(){beacon("impression");writeCartAttr();});
     return;
   }
 
   // IAB side: beacon impression with whatever sy we have (likely null on first
   // pageview), then proceed with escape logic. Don't delay escape.
   beacon("impression");
+  writeCartAttr();
 
   var attempted=false;
   try{attempted=sessionStorage.getItem("eh_a")==="1";}catch(e){}
@@ -148,7 +168,7 @@ try{
   if(AB&&bk==="b")return;
 
   var dest=location.href;
-  try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");dest=nu.toString();}catch(e){}
+  try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");nu.searchParams.set("eh_sid",sid);dest=nu.toString();}catch(e){}
   var s=atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==")+encodeURIComponent(dest);
   try{sessionStorage.setItem("eh_a","1");}catch(e){}
   beacon("escape_attempt");

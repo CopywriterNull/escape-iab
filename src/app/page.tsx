@@ -1,5 +1,5 @@
 import { Lander } from "@/components/Lander";
 
 export default function Home() {
-  return <Lander theme="dark" />;
+  return <Lander theme="light" />;
 }

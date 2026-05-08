@@ -40,6 +40,25 @@ function ehSy(event) {
   return "";
 }
 
+function ehSid(event) {
+  try {
+    var d = (event && event.data) || {};
+    var sources = [d.cart && d.cart.attributes, d.checkout && d.checkout.attributes];
+    for (var i = 0; i < sources.length; i++) {
+      var attrs = sources[i];
+      if (!attrs) continue;
+      if (Array.isArray(attrs)) {
+        for (var j = 0; j < attrs.length; j++) {
+          if (attrs[j] && attrs[j].key === "eh_sid" && attrs[j].value) return attrs[j].value;
+        }
+      } else if (typeof attrs === "object" && attrs.eh_sid) {
+        return attrs.eh_sid;
+      }
+    }
+  } catch (e) {}
+  return "";
+}
+
 analytics.subscribe("product_viewed", function (event) {
   try {
     var d = (event && event.data) || {};
@@ -53,6 +72,7 @@ analytics.subscribe("product_viewed", function (event) {
     if (p && p.id != null) pid = String(p.id);
     ehSend("product_viewed", {
       sy: ehSy(event),
+      sid: ehSid(event),
       v: amount || "",
       cy: price.currencyCode || "",
       pid: pid
@@ -71,6 +91,7 @@ analytics.subscribe("product_added_to_cart", function (event) {
     else if (price.amount) amount = parseFloat(price.amount);
     ehSend("add_to_cart", {
       sy: ehSy(event),
+      sid: ehSid(event),
       v: amount || "",
       cy: price.currencyCode || ""
     });
@@ -87,6 +108,7 @@ analytics.subscribe("checkout_started", function (event) {
     else if (price.amount) amount = parseFloat(price.amount);
     ehSend("checkout_started", {
       sy: ehSy(event),
+      sid: ehSid(event),
       v: amount || "",
       cy: price.currencyCode || ""
     });
@@ -108,6 +130,7 @@ analytics.subscribe("checkout_completed", function (event) {
     else if (c.checkoutToken) oid = c.checkoutToken;
     ehSend("purchase", {
       sy: ehSy(event),
+      sid: ehSid(event),
       v: amount || "",
       cy: price.currencyCode || "",
       oid: oid
