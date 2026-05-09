@@ -2,6 +2,10 @@ import Link from "next/link";
 import { signInWithMagicLink } from "@/app/actions/auth";
 import { brand } from "@/lib/branding";
 import { supabaseConfigured } from "@/lib/supabase/server";
+import { SubmitButton } from "./submit-button";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type SearchParams = Promise<{ error?: string; sent?: string; email?: string }>;
 
@@ -83,13 +87,7 @@ export default async function LoginPage({
                     : decodeURIComponent(error)}
               </div>
             ) : null}
-            <button
-              type="submit"
-              className="w-full px-4 py-2.5 rounded-lg bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-sm font-medium press lift focus-ring"
-              style={{ boxShadow: "var(--shadow-cta)" }}
-            >
-              Send magic link
-            </button>
+            <SubmitButton>Send magic link</SubmitButton>
           </form>
         )}
 
