@@ -9,6 +9,7 @@ const ALLOWED_EVENTS = new Set([
   "escape_skipped",
   "fallback_shown",
   "fallback_clicked",
+  "cart_check",
 ]);
 const ALLOWED_KINDS = new Set([
   "instagram",

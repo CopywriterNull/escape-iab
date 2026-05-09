@@ -14,8 +14,8 @@
 // (Exception: non-IG IABs get a single iab_detected beacon for analytics
 // segmentation, but they're not in the bucketed test.)
 
-export type SnippetVersion = "v6";
-export const CURRENT_VERSION: SnippetVersion = "v6";
+export type SnippetVersion = "v7";
+export const CURRENT_VERSION: SnippetVersion = "v7";
 
 type SnippetOpts = {
   merchantId: string;
@@ -148,7 +148,28 @@ try{
   // Write eh_sid to Shopify cart attributes — survives Shop Pay / new checkout
   // cookie-jar break. Pixel reads it back from event.data.cart.attributes.
   // Same-origin POST; no-op silently on non-Shopify sites.
-  function writeCartAttr(){try{fetch("/cart/update.json",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({attributes:{eh_sid:sid}}),credentials:"same-origin",keepalive:true}).catch(function(){});}catch(e){}}
+  // Then: read /cart.json to verify the attribute landed, beacon cart_check.
+  // This is diagnostic — tells us whether the Shopify cart attribute pipeline
+  // is actually working before we decide to depend on it for attribution.
+  function writeCartAttr(){
+    try{
+      fetch("/cart/update.json",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({attributes:{eh_sid:sid}}),credentials:"same-origin"})
+        .then(function(){return fetch("/cart.json",{credentials:"same-origin"});})
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(c){
+          var ok=0;
+          try{
+            if(c&&c.attributes){
+              var a=c.attributes;
+              if(Array.isArray(a)){for(var i=0;i<a.length;i++){if(a[i]&&a[i].name==="eh_sid"&&a[i].value===sid){ok=1;break;}}}
+              else if(typeof a==="object"&&a.eh_sid===sid){ok=1;}
+            }
+          }catch(e){}
+          beacon("cart_check",{ck:ok});
+        })
+        .catch(function(){beacon("cart_check",{ck:0});});
+    }catch(e){}
+  }
 
   // Post-escape Safari side: no escape urgency. Wait up to 1.5s for sy cookie
   // before beaconing the impression so the funnel pixel can join back.
@@ -168,7 +189,7 @@ try{
   if(AB&&bk==="b")return;
 
   var dest=location.href;
-  try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");nu.searchParams.set("eh_sid",sid);dest=nu.toString();}catch(e){}
+  try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");nu.searchParams.set("eh_sid",sid);nu.searchParams.set("eh_escape","1");dest=nu.toString();}catch(e){}
   var s=atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==")+encodeURIComponent(dest);
   try{sessionStorage.setItem("eh_a","1");}catch(e){}
   beacon("escape_attempt");
