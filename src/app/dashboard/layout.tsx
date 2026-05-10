@@ -35,7 +35,7 @@ export default async function DashboardLayout({
   const merchant = await getCurrentMerchant();
 
   return (
-    <div data-theme="backend" className="min-h-dvh flex flex-col bg-[var(--color-bg)] text-[var(--color-fg)]">
+    <div className="min-h-dvh flex flex-col bg-[var(--color-bg)] text-[var(--color-fg)]">
       <header className="border-b border-[var(--color-border)] bg-[var(--color-bg)]/90 backdrop-blur sticky top-0 z-30">
         <div className="mx-auto max-w-7xl px-5 h-12 flex items-center justify-between gap-5">
           <div className="flex items-center gap-5">
