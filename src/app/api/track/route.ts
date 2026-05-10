@@ -89,6 +89,10 @@ export async function POST(req: NextRequest) {
   const fbclid = trim(body.fc, 512);
   const ehSid = trim(body.sid, 64);
   const inTest = body.it === 1 || body.it === true;
+  // For cart_check events, encode ck=0|1 in value_cents so we can query later
+  // without a schema change. Hack but harmless — value_cents is otherwise
+  // unused for non-purchase events.
+  const ck = body.ck === 1 || body.ck === true ? 1 : 0;
 
   if (!UUID_RE.test(merchantId) || !ALLOWED_EVENTS.has(eventType)) {
     return new Response(JSON.stringify({ ok: false, error: "bad_input" }), {
@@ -127,6 +131,8 @@ export async function POST(req: NextRequest) {
       utm_term,
       fbclid,
       eh_sid: ehSid,
+      // cart_check: stash ck (0|1) in value_cents
+      value_cents: eventType === "cart_check" ? ck : null,
     });
 
     const today = new Date().toISOString().slice(0, 10);
