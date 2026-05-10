@@ -35,19 +35,23 @@ export default async function DashboardLayout({
   const merchant = await getCurrentMerchant();
 
   return (
-    <div className="min-h-dvh flex bg-[var(--color-bg)] text-[var(--color-fg)]">
+    <div className="terminal min-h-dvh flex bg-[var(--color-bg)] text-[var(--color-fg)] terminal-bg">
       {/* Sidebar */}
       <aside className="hidden md:flex w-[240px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-elev)]/40 sticky top-0 h-dvh">
         <div className="px-4 h-14 flex items-center gap-2.5 border-b border-[var(--color-border)]">
-          <Link href="/dashboard" className="flex items-center gap-2 font-semibold tracking-tight focus-ring rounded-md text-[14px]">
-            <span aria-hidden className="inline-flex size-6 items-center justify-center rounded-md bg-[var(--color-accent)]">
-              <svg viewBox="0 0 24 24" className="size-3.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+          <Link href="/dashboard" className="flex items-center gap-2 focus-ring rounded-md">
+            <span aria-hidden className="inline-flex size-5 items-center justify-center rounded-sm bg-[var(--color-accent)]">
+              <svg viewBox="0 0 24 24" className="size-3 text-white" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 4h6v6" />
                 <path d="M20 4l-8 8" />
                 <path d="M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5" />
               </svg>
             </span>
-            <span>{brand.name}</span>
+            <span className="text-[12.5px] uppercase tracking-[0.08em] font-semibold">
+              {brand.name.toUpperCase()}
+            </span>
+            <span className="text-[var(--color-fg-muted)]">/</span>
+            <span className="text-[11.5px] uppercase tracking-[0.08em] text-[var(--color-fg-muted)]">PROD</span>
           </Link>
         </div>
 

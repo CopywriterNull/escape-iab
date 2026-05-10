@@ -137,17 +137,18 @@ function Page({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between flex-wrap gap-3 pb-2 border-b border-[var(--color-border)]">
+    <div className="space-y-4">
+      <div className="flex items-end justify-between flex-wrap gap-3 pb-3 border-b border-[var(--color-border)]">
         <div>
-          <h1 className="text-[20px] font-semibold tracking-tight leading-tight">
+          <div className="eyebrow mb-1.5">Overview</div>
+          <h1 className="display text-[28px] font-medium leading-[1.05]">
             {title}
           </h1>
-          {subtitle ? <div className="mt-1">{subtitle}</div> : null}
+          {subtitle ? <div className="mt-2">{subtitle}</div> : null}
         </div>
         {action}
       </div>
-      <div className="space-y-4">{children}</div>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }
@@ -167,17 +168,21 @@ function Card({
 }) {
   return (
     <section
-      className={`bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg ${className}`}
+      className={`bg-[var(--color-card)] border border-[var(--color-border)] rounded ${className}`}
     >
       {title || action ? (
-        <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-soft)]">
+        <header className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--color-border-soft)]">
           {title ? (
-            <h2 className="text-[13.5px] font-semibold tracking-tight">{title}</h2>
+            typeof title === "string" ? (
+              <h2 className="eyebrow">{title}</h2>
+            ) : (
+              <h2>{title}</h2>
+            )
           ) : null}
           {action}
         </header>
       ) : null}
-      {padded ? <div className="px-4 py-3.5">{children}</div> : children}
+      {padded ? <div className="px-4 py-3">{children}</div> : children}
     </section>
   );
 }
@@ -199,11 +204,7 @@ function MutedText({ children }: { children: React.ReactNode }) {
 }
 
 function MonoLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--color-fg-muted)] font-medium font-mono">
-      {children}
-    </div>
-  );
+  return <div className="eyebrow">{children}</div>;
 }
 
 /* -------- Banner — Polaris-style attribution gap notice -------- */
@@ -315,13 +316,13 @@ function KPI({
   valueClass?: string;
 }) {
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-4 py-3">
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded px-4 py-3">
       <MonoLabel>{label}</MonoLabel>
-      <div className={`mt-1.5 text-[22px] font-semibold tracking-tight tnum ${valueClass}`}>
+      <div className={`mt-1.5 display text-[24px] font-medium tnum ${valueClass}`}>
         {value}
       </div>
       {sub ? (
-        <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] font-mono tnum">
+        <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] tnum">
           {sub}
         </div>
       ) : null}
@@ -565,37 +566,33 @@ function ActivityCard({ rows }: { rows: ActivityRow[] }) {
 }
 
 function ActivityRow({ row }: { row: ActivityRow }) {
-  const dot =
+  const eventPill =
     row.event_type === "purchase"
-      ? "bg-[var(--color-success)]"
+      ? { cls: "pill pill-success", label: "PURCHASE" }
       : row.event_type === "escape_attempt"
-        ? "bg-[var(--color-accent)]"
-        : "bg-[var(--color-fg-muted)]";
-  const label =
-    row.event_type === "purchase"
-      ? "Purchase"
-      : row.event_type === "checkout_started"
-        ? "Checkout started"
-        : row.event_type === "add_to_cart"
-          ? "Added to cart"
-          : row.event_type === "escape_attempt"
-            ? "Escape fired"
-            : row.event_type;
+        ? { cls: "pill pill-info", label: "ESCAPE" }
+        : row.event_type === "checkout_started"
+          ? { cls: "pill pill-warn", label: "CHECKOUT" }
+          : row.event_type === "add_to_cart"
+            ? { cls: "pill pill-muted", label: "ATC" }
+            : { cls: "pill pill-muted", label: row.event_type.toUpperCase() };
   const value = row.value_cents != null ? `$${(row.value_cents / 100).toFixed(2)}` : "";
   const ts = formatRelative(row.created_at);
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-2 hover:bg-[var(--color-bg-elev)]/50 transition-colors">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span className={`size-1.5 rounded-full ${dot}`} />
-        <span className="text-[12.5px] font-medium tracking-tight">{label}</span>
-        <span className="kbd">bucket {row.bucket}</span>
-        {row.utm_source ? <span className="kbd">{row.utm_source}</span> : null}
-        {!row.in_test ? <span className="kbd">unattributed</span> : null}
+    <div className="grid grid-cols-12 items-center gap-3 px-4 py-2 hover:bg-[var(--color-bg-elev)]/50 transition-colors text-[12.5px]">
+      <div className="col-span-2 flex items-center gap-2 min-w-0">
+        <span className={eventPill.cls}>{eventPill.label}</span>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
-        {value ? <span className="font-mono tnum text-[12px]">{value}</span> : null}
-        <span className="font-mono text-[11px] text-[var(--color-fg-muted)] tnum">{ts}</span>
+      <div className="col-span-3 flex items-center gap-2 min-w-0">
+        <span className="pill pill-muted">BUCKET&nbsp;{row.bucket.toUpperCase()}</span>
+        {!row.in_test ? <span className="pill pill-warn">UNATTR</span> : null}
       </div>
+      <div className="col-span-3 text-[12px] text-[var(--color-fg-dim)] tnum truncate">
+        {row.utm_source ? `utm: ${row.utm_source}` : ""}
+        {row.iab_kind && row.iab_kind !== "instagram" ? ` · ${row.iab_kind}` : ""}
+      </div>
+      <div className="col-span-2 text-right tnum">{value}</div>
+      <div className="col-span-2 text-right text-[11.5px] text-[var(--color-fg-muted)] tnum">{ts} ago</div>
     </div>
   );
 }

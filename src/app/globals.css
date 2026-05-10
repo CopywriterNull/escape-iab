@@ -324,6 +324,110 @@ body {
   color: var(--color-fg-dim);
 }
 
+/* -----------------------------------------------------------------
+   Brutalist-mono "terminal" aesthetic — Revamp/Cursor/Warp style.
+   All-mono, all-caps labels, hairlines, status pills, dot grid.
+   ----------------------------------------------------------------- */
+
+.terminal {
+  font-family: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  font-feature-settings: "ss01", "cv11";
+  font-size: 13px;
+  letter-spacing: -0.005em;
+}
+.terminal .display {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-style: normal;
+  letter-spacing: -0.012em;
+}
+.terminal-bg {
+  background-image:
+    radial-gradient(var(--color-dot) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-bg) 0%, var(--color-bg) 100%);
+  background-size: 24px 24px, 100% 100%;
+}
+
+.eyebrow {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-fg-muted);
+  font-weight: 500;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  line-height: 1.5;
+}
+.pill-success {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+  border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+}
+.pill-info {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+.pill-warn {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.10);
+  border-color: rgba(245, 158, 11, 0.30);
+}
+.pill-danger {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
+}
+.pill-muted {
+  color: var(--color-fg-muted);
+  background: var(--color-bg-elev);
+  border-color: var(--color-border);
+}
+
+.terminal .hairline {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.step-row:last-child { border-bottom: none; }
+.step-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-success);
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+}
+.step-icon::after {
+  content: "";
+  width: 6px;
+  height: 3px;
+  border-left: 1.5px solid var(--color-success);
+  border-bottom: 1.5px solid var(--color-success);
+  transform: rotate(-45deg) translate(0.5px, -0.5px);
+}
+
 /* Scroll-entry — IntersectionObserver-driven; defaults hide nicely if JS off. */
 .reveal { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: no-preference) {
