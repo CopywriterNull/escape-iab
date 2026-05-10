@@ -33,26 +33,56 @@ function verifyHmac(rawBody: string, hmacHeader: string | null, secret: string) 
   }
 }
 
-function extractEhSid(url: string | null): string | null {
+function paramFromUrl(url: string | null, name: string, max: number): string | null {
   if (!url) return null;
   try {
-    const u = new URL(url);
-    const v = u.searchParams.get("eh_sid");
-    return v && v.length > 0 && v.length < 64 ? v : null;
+    // Shopify sometimes sends path-only like "/cart/c/...?key=..." — make absolute.
+    const abs = url.startsWith("http") ? url : `https://example.com${url}`;
+    const u = new URL(abs);
+    const v = u.searchParams.get(name);
+    return v && v.length > 0 && v.length < max ? v : null;
   } catch {
     return null;
   }
 }
 
-function extractFbclid(url: string | null): string | null {
-  if (!url) return null;
+function valueFromAttrs(attrs: unknown, key: string): string | null {
+  if (!attrs) return null;
   try {
-    const u = new URL(url);
-    const v = u.searchParams.get("fbclid");
-    return v && v.length > 0 && v.length < 512 ? v : null;
-  } catch {
-    return null;
+    if (Array.isArray(attrs)) {
+      for (const a of attrs as { name?: string; key?: string; value?: string }[]) {
+        const k = a?.name ?? a?.key;
+        if (k === key && typeof a.value === "string" && a.value) return a.value;
+      }
+    } else if (typeof attrs === "object") {
+      const v = (attrs as Record<string, unknown>)[key];
+      if (typeof v === "string" && v) return v;
+    }
+  } catch {}
+  return null;
+}
+
+// Look across every place Shopify might carry our markers.
+function findKey(order: Record<string, unknown>, key: string, max: number): string | null {
+  // 1. URL params on landing_site / referring_site
+  const ls = typeof order.landing_site === "string" ? order.landing_site : null;
+  const rs = typeof order.referring_site === "string" ? order.referring_site : null;
+  let v = paramFromUrl(ls, key, max) ?? paramFromUrl(rs, key, max);
+  if (v) return v;
+  // 2. note_attributes — array of {name, value}. Shopify carries
+  //    cart.attributes here for most order paths.
+  v = valueFromAttrs(order.note_attributes, key);
+  if (v) return v;
+  // 3. attributes — newer checkout API.
+  v = valueFromAttrs(order.attributes, key);
+  if (v) return v;
+  // 4. checkout.attributes / checkout.note_attributes nested.
+  const checkout = order.checkout as Record<string, unknown> | undefined;
+  if (checkout) {
+    v = valueFromAttrs(checkout.attributes, key) ?? valueFromAttrs(checkout.note_attributes, key);
+    if (v) return v;
   }
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -94,8 +124,8 @@ export async function POST(req: NextRequest) {
   const currency = typeof order.currency === "string" ? order.currency.slice(0, 8) : null;
   const landingSite = typeof order.landing_site === "string" ? order.landing_site : null;
   const referringSite = typeof order.referring_site === "string" ? order.referring_site : null;
-  const ehSid = extractEhSid(landingSite) ?? extractEhSid(referringSite);
-  const fbclid = extractFbclid(landingSite) ?? extractFbclid(referringSite);
+  const ehSid = findKey(order, "eh_sid", 64);
+  const fbclid = findKey(order, "fbclid", 512);
 
   const admin = getSupabaseAdmin();
   if (!admin) {
