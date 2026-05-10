@@ -16,6 +16,19 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const RANGES: { key: string; label: string; days: number }[] = [
+  { key: "1d", label: "24h", days: 1 },
+  { key: "7d", label: "7d", days: 7 },
+  { key: "14d", label: "14d", days: 14 },
+  { key: "30d", label: "30d", days: 30 },
+  { key: "90d", label: "90d", days: 90 },
+];
+
+function parseRange(v: string | undefined): { key: string; days: number; label: string } {
+  const found = RANGES.find((r) => r.key === v);
+  return found ?? RANGES[2]; // default 14d
+}
+
 type ActivityRow = {
   event_type: string;
   bucket: "a" | "b";
@@ -26,35 +39,50 @@ type ActivityRow = {
   created_at: string;
 };
 
-async function getRecentActivity(merchantId: string, limit = 14): Promise<ActivityRow[]> {
+async function getRecentActivity(
+  merchantId: string,
+  days: number,
+  limit = 14,
+): Promise<ActivityRow[]> {
   const supabase = await getSupabaseServer();
   if (!supabase) return [];
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
   const { data } = await supabase
     .from("escape_events")
     .select("event_type,bucket,in_test,value_cents,utm_source,iab_kind,created_at")
     .eq("merchant_id", merchantId)
     .in("event_type", ["purchase", "checkout_started", "add_to_cart", "escape_attempt"])
+    .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(limit);
   return (data ?? []) as ActivityRow[];
 }
 
-export default async function DashboardOverview() {
+type SearchParams = Promise<{ range?: string }>;
+
+export default async function DashboardOverview({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const sp = await searchParams;
+  const range = parseRange(sp.range);
+
   const merchant = await getCurrentMerchant();
   if (!merchant) {
     return (
-      <Page title="Overview">
+      <Page title="Overview" range={range}>
         <Card><CardBody><MutedText>Provisioning merchant record…</MutedText></CardBody></Card>
       </Page>
     );
   }
 
   const [funnel, rollups, sources, unattributed, activity] = await Promise.all([
-    getTestFunnel(merchant.id, 14),
-    getRollups(merchant.id, 14),
-    getSourceBreakdown(merchant.id, 14, 8),
-    getUnattributedPurchaseStats(merchant.id, 14),
-    getRecentActivity(merchant.id, 12),
+    getTestFunnel(merchant.id, range.days),
+    getRollups(merchant.id, range.days),
+    getSourceBreakdown(merchant.id, range.days, 8),
+    getUnattributedPurchaseStats(merchant.id, range.days),
+    getRecentActivity(merchant.id, range.days, 12),
   ]);
 
   const escapeRate =
@@ -76,9 +104,10 @@ export default async function DashboardOverview() {
   return (
     <Page
       title={merchant.name ?? "Your store"}
+      range={range}
       subtitle={
         <span className="font-mono text-[12px] text-[var(--color-fg-muted)]">
-          {merchant.domain ?? "—"} · last 14d ·{" "}
+          {merchant.domain ?? "—"} · last {range.label} ·{" "}
           {merchant.ab_enabled ? "A/B 50/50" : "A/B off"}
         </span>
       }
@@ -110,10 +139,10 @@ export default async function DashboardOverview() {
 
       <Layout>
         <LayoutCol size="primary">
-          <SourcesCard sources={sources} />
+          <SourcesCard sources={sources} rangeLabel={range.label} />
         </LayoutCol>
         <LayoutCol size="secondary">
-          <ChartCard rollups={rollups} />
+          <ChartCard rollups={rollups} rangeLabel={range.label} />
           <SampleSizeCard funnel={funnel} />
         </LayoutCol>
       </Layout>
@@ -129,11 +158,13 @@ function Page({
   title,
   subtitle,
   action,
+  range,
   children,
 }: {
   title: string;
   subtitle?: React.ReactNode;
   action?: React.ReactNode;
+  range?: { key: string; label: string; days: number };
   children: React.ReactNode;
 }) {
   return (
@@ -148,9 +179,36 @@ function Page({
           </h1>
           {subtitle ? <div className="mt-2">{subtitle}</div> : null}
         </div>
-        {action}
+        <div className="flex items-center gap-3 flex-wrap">
+          {range ? <RangeSelector active={range.key} /> : null}
+          {action}
+        </div>
       </div>
       <div className="space-y-4">{children}</div>
+    </div>
+  );
+}
+
+function RangeSelector({ active }: { active: string }) {
+  return (
+    <div className="inline-flex items-center rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-0.5 text-[12px]">
+      {RANGES.map((r) => {
+        const isActive = r.key === active;
+        return (
+          <Link
+            key={r.key}
+            href={`/dashboard?range=${r.key}`}
+            className={`px-2.5 py-1 rounded-sm font-mono tnum transition-colors focus-ring ${
+              isActive
+                ? "bg-[var(--color-bg-elev)] text-[var(--color-fg)] font-medium"
+                : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+            }`}
+            aria-current={isActive ? "page" : undefined}
+          >
+            {r.label}
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -422,16 +480,16 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
 
 /* -------- Sources card — ResourceItem-style rows -------- */
 
-function SourcesCard({ sources }: { sources: SourceRow[] }) {
+function SourcesCard({ sources, rangeLabel = "14d" }: { sources: SourceRow[]; rangeLabel?: string }) {
   if (sources.length === 0) {
     return (
-      <Card title="Top sources" action={<MonoLabel>14d</MonoLabel>}>
+      <Card title="Top sources" action={<MonoLabel>{rangeLabel}</MonoLabel>}>
         <MutedText>No source data yet.</MutedText>
       </Card>
     );
   }
   return (
-    <Card title="Top sources" action={<MonoLabel>14d</MonoLabel>}>
+    <Card title="Top sources" action={<MonoLabel>{rangeLabel}</MonoLabel>}>
       <div className="-mx-4 -my-3.5">
         {sources.map((s) => {
           const cvr = s.total > 0 ? (100 * s.purchases) / s.total : 0;
@@ -460,9 +518,9 @@ function SourcesCard({ sources }: { sources: SourceRow[] }) {
 
 /* -------- Daily chart -------- */
 
-function ChartCard({ rollups }: { rollups: DailyRollup[] }) {
+function ChartCard({ rollups, rangeLabel = "14d" }: { rollups: DailyRollup[]; rangeLabel?: string }) {
   return (
-    <Card title="Impressions vs escapes" action={<MonoLabel>14d</MonoLabel>}>
+    <Card title="Impressions vs escapes" action={<MonoLabel>{rangeLabel}</MonoLabel>}>
       <DailyChart rollups={rollups} />
     </Card>
   );
