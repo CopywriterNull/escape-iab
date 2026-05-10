@@ -137,18 +137,20 @@ function Page({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-end justify-between flex-wrap gap-3 pb-3 border-b border-[var(--color-border)]">
+    <div className="space-y-6">
+      <div className="flex items-end justify-between flex-wrap gap-3 pb-4 border-b border-[var(--color-border)]">
         <div>
-          <div className="eyebrow mb-1.5">Overview</div>
-          <h1 className="display text-[28px] font-medium leading-[1.05]">
+          <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-accent)]">
+            Overview
+          </div>
+          <h1 className="mt-2 h-display text-[32px] tracking-tight">
             {title}
           </h1>
           {subtitle ? <div className="mt-2">{subtitle}</div> : null}
         </div>
         {action}
       </div>
-      <div className="space-y-3">{children}</div>
+      <div className="space-y-4">{children}</div>
     </div>
   );
 }
@@ -171,10 +173,10 @@ function Card({
       className={`bg-[var(--color-card)] border border-[var(--color-border)] rounded ${className}`}
     >
       {title || action ? (
-        <header className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--color-border-soft)]">
+        <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-soft)]">
           {title ? (
             typeof title === "string" ? (
-              <h2 className="eyebrow">{title}</h2>
+              <h2 className="h-section text-[14px]">{title}</h2>
             ) : (
               <h2>{title}</h2>
             )
@@ -204,7 +206,11 @@ function MutedText({ children }: { children: React.ReactNode }) {
 }
 
 function MonoLabel({ children }: { children: React.ReactNode }) {
-  return <div className="eyebrow">{children}</div>;
+  return (
+    <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+      {children}
+    </div>
+  );
 }
 
 /* -------- Banner — Polaris-style attribution gap notice -------- */
@@ -318,11 +324,11 @@ function KPI({
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded px-4 py-3">
       <MonoLabel>{label}</MonoLabel>
-      <div className={`mt-1.5 display text-[24px] font-medium tnum ${valueClass}`}>
+      <div className={`mt-2 h-section text-[26px] tnum ${valueClass}`}>
         {value}
       </div>
       {sub ? (
-        <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] tnum">
+        <div className="mt-1 text-[11.5px] text-[var(--color-fg-muted)] tnum">
           {sub}
         </div>
       ) : null}
