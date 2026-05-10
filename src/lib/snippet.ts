@@ -145,31 +145,34 @@ try{
   if(postEscape){bk="a";try{document.cookie="eh_b=a;path=/;max-age=2592000;samesite=Lax";}catch(e){}}
   else if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
 
-  // Write eh_sid to Shopify cart attributes — survives Shop Pay / new checkout
-  // cookie-jar break. Pixel reads it back from event.data.cart.attributes.
-  // Same-origin POST; no-op silently on non-Shopify sites.
-  // Then: read /cart.json to verify the attribute landed, beacon cart_check.
-  // This is diagnostic — tells us whether the Shopify cart attribute pipeline
-  // is actually working before we decide to depend on it for attribution.
-  function writeCartAttr(){
+  // Touch the Shopify cart: write eh_sid attribute AND capture cart_token.
+  // cart_token is the ONLY identifier that survives every Shopify checkout flow
+  // (Shop Pay, Apple Pay, returning customers, subscriptions). It's the
+  // primary join key for purchase attribution. The webhook reads
+  // order.cart_token and joins to the impression with the same value.
+  // The eh_sid attribute is a secondary join key in case cart_token rotates.
+  function touchCart(){
     try{
       fetch("/cart/update.json",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({attributes:{eh_sid:sid}}),credentials:"same-origin"})
         .then(function(){return fetch("/cart.json",{credentials:"same-origin"});})
         .then(function(r){return r.ok?r.json():null;})
         .then(function(c){
+          if(!c)return;
           var ok=0;
           try{
-            if(c&&c.attributes){
+            if(c.attributes){
               var a=c.attributes;
               if(Array.isArray(a)){for(var i=0;i<a.length;i++){if(a[i]&&a[i].name==="eh_sid"&&a[i].value===sid){ok=1;break;}}}
               else if(typeof a==="object"&&a.eh_sid===sid){ok=1;}
             }
           }catch(e){}
-          beacon("cart_check",{ck:ok});
+          var ct=c.token||null;
+          beacon("cart_check",{ck:ok,ct:ct});
         })
         .catch(function(){beacon("cart_check",{ck:0});});
     }catch(e){}
   }
+  function writeCartAttr(){touchCart();}
 
   // Post-escape Safari side: no escape urgency. Wait up to 1.5s for sy cookie
   // before beaconing the impression so the funnel pixel can join back.

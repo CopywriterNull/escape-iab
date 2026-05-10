@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
   // without a schema change. Hack but harmless — value_cents is otherwise
   // unused for non-purchase events.
   const ck = body.ck === 1 || body.ck === true ? 1 : 0;
+  const cartToken = trim(body.ct, 64);
 
   if (!UUID_RE.test(merchantId) || !ALLOWED_EVENTS.has(eventType)) {
     return new Response(JSON.stringify({ ok: false, error: "bad_input" }), {
@@ -131,6 +132,7 @@ export async function POST(req: NextRequest) {
       utm_term,
       fbclid,
       eh_sid: ehSid,
+      cart_token: cartToken,
       // cart_check: stash ck (0|1) in value_cents
       value_cents: eventType === "cart_check" ? ck : null,
     });

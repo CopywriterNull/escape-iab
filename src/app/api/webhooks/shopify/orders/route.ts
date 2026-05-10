@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
   const currency = typeof order.currency === "string" ? order.currency.slice(0, 8) : null;
   const landingSite = typeof order.landing_site === "string" ? order.landing_site : null;
   const referringSite = typeof order.referring_site === "string" ? order.referring_site : null;
+  const cartToken = typeof order.cart_token === "string" ? order.cart_token : null;
   const ehSid = findKey(order, "eh_sid", 64);
   const fbclid = findKey(order, "fbclid", 512);
 
@@ -135,11 +136,30 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Try eh_sid first (precise); fbclid as fallback (less reliable but works
-  // for visitors who didn't make it through escape but still came via paid IG).
+  // Multi-key join, in order of precision:
+  //   1. cart_token — Shopify-native, survives every checkout flow including
+  //      Shop Pay / Apple Pay / returning customers / subscriptions. Most
+  //      reliable. Set on cart_check events when our snippet touched the cart.
+  //   2. eh_sid — works when landing_site URL preserved our marker.
+  //   3. fbclid — fallback for paid Meta clicks where neither above survived.
   const since = new Date(Date.now() - JOIN_WINDOW_DAYS * 86400_000).toISOString();
   let imp: { bucket: "a" | "b" } | null = null;
-  if (ehSid) {
+  let joinMethod: string | null = null;
+  if (cartToken) {
+    const { data } = await admin
+      .from("escape_events")
+      .select("bucket")
+      .eq("merchant_id", merchantId)
+      .eq("cart_token", cartToken)
+      .eq("in_test", true)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    imp = data as { bucket: "a" | "b" } | null;
+    if (imp) joinMethod = "cart_token";
+  }
+  if (!imp && ehSid) {
     const { data } = await admin
       .from("escape_events")
       .select("bucket")
@@ -152,6 +172,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle();
     imp = data as { bucket: "a" | "b" } | null;
+    if (imp) joinMethod = "eh_sid";
   }
   if (!imp && fbclid) {
     const { data } = await admin
@@ -166,6 +187,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle();
     imp = data as { bucket: "a" | "b" } | null;
+    if (imp) joinMethod = "fbclid";
   }
 
   // Insert purchase. If imp found → in_test=true with bucket. Otherwise
@@ -180,6 +202,7 @@ export async function POST(req: NextRequest) {
     in_test: inTest,
     eh_sid: ehSid,
     fbclid,
+    cart_token: cartToken,
     order_id: orderId,
     value_cents: valueCents,
     currency,
@@ -207,7 +230,15 @@ export async function POST(req: NextRequest) {
   }
 
   return new Response(
-    JSON.stringify({ ok: true, joined: inTest, bucket: inTest ? bucket : null, eh_sid: ehSid, has_fbclid: !!fbclid }),
+    JSON.stringify({
+      ok: true,
+      joined: inTest,
+      bucket: inTest ? bucket : null,
+      method: joinMethod,
+      had_cart_token: !!cartToken,
+      had_eh_sid: !!ehSid,
+      had_fbclid: !!fbclid,
+    }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
 }
