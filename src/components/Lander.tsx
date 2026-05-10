@@ -147,10 +147,10 @@ function Hero() {
         </div>
         <h1 className="text-center max-w-4xl mx-auto text-balance px-1">
           <span className="block h-display text-[36px] sm:text-5xl md:text-7xl text-[var(--color-fg)]">
-            Stop losing IG-sourced sales
+            Your Instagram ads work.
           </span>
           <span className="block mt-1 h-editorial text-[36px] sm:text-5xl md:text-7xl text-[var(--color-accent)]">
-            to the in-app browser.
+            Your Instagram checkout doesn&apos;t.
           </span>
         </h1>
         <p className="mx-auto mt-7 max-w-2xl text-center text-[var(--color-fg-dim)] text-[17px] leading-relaxed">
@@ -1313,7 +1313,7 @@ function FAQ() {
           ))}
         </div>
         <div className="mt-12 card-hi p-8 text-center">
-          <h3 className="h-editorial text-2xl md:text-3xl text-balance">Stop losing IG-sourced sales tonight.</h3>
+          <h3 className="h-editorial text-2xl md:text-3xl text-balance">Stop paying Meta to send traffic to a dead end.</h3>
           <p className="mt-3 text-[var(--color-fg-dim)]">Free tier covers most stores. Install in 60 seconds.</p>
           <div className="mt-6 flex items-center justify-center">
             <CTAButton href="#waitlist" size="lg">Get early access</CTAButton>

@@ -1,10 +1,39 @@
 export const brand = {
   name: "EscapeHatch",
   domain: "escapehatch.app",
-  tagline: "Your Instagram traffic deserves a real browser.",
+  // Hero — names the problem and solution in two beats.
+  tagline: "Your Instagram ads work. Your Instagram checkout doesn't.",
   subhead:
-    "Instagram's in-app browser kills Apple Pay, breaks Shop Pay, and tanks your conversion rate. EscapeHatch reopens every link in the user's real browser — automatically, in milliseconds, before the cart even loads.",
+    "Every paid IG visitor lands in a stripped-down browser where Apple Pay disappears, Shop Pay autofill breaks, and your CVR tanks. EscapeHatch reroutes them out — into Safari, into checkout, into purchase. One snippet. Sixty seconds.",
   ctaPrimary: "Start free",
+  // One-liner for elevator pitches / OG meta / social shares.
   pitchOneLiner:
-    "One snippet. Auto-installed. A/B tested. Recovers checkout flows that Instagram's in-app browser silently breaks.",
+    "Reclaim 20–40% of your Meta-sourced revenue. EscapeHatch reroutes paid IG visitors out of Instagram's broken in-app browser, into the real one — automatically.",
+  // Below-hero positioning beats.
+  positioning: {
+    cost: {
+      eyebrow: "The IG tax",
+      headline: "You're paying Meta to send traffic to a dead end.",
+      body:
+        "Every paid IG click costs $1–3 to acquire. A third of those clicks land in Instagram's in-app browser — where Apple Pay is missing, Shop Pay autofill breaks, and saved sessions don't exist. Customers bounce. You eat the CPC.",
+    },
+    cause: {
+      eyebrow: "Why it breaks",
+      headline: "Instagram opens links in a stripped-down WebView.",
+      body:
+        "Tap any link from inside the IG app — story, ad, profile, DM — and you don't get Safari. You get a sandboxed browser missing the payment sheet, partitioned cookies, and password autofill. Your checkout was never built for it.",
+    },
+    fix: {
+      eyebrow: "How we fix it",
+      headline: "One snippet. Detects the IAB. Reroutes to Safari.",
+      body:
+        "Add a single <script> tag to your theme. We detect every paid IG visitor in the in-app browser and fire a deep link Instagram itself recognizes. The page reopens in Safari before checkout loads. They never see the broken IAB.",
+    },
+    proof: {
+      eyebrow: "What you recover",
+      headline: "20–40% more checkouts complete on IG-sourced traffic.",
+      body:
+        "Built-in A/B test bucketing proves the lift on your own traffic — not vendor case studies. Apple Pay works again. Shop Pay autofill works again. Returning customers are recognized. Your CVR on paid Meta lands where direct traffic does.",
+    },
+  },
 } as const;
