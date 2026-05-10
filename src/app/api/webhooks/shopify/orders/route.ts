@@ -115,6 +115,19 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // Filter to online-storefront orders only. Excludes subscription orders
+  // (Recharge etc.), POS retail, draft/manual orders, B2B wholesale —
+  // matches what merchants typically see as "Online store" AOV/CVR in
+  // Shopify Analytics, Triple Whale, Northbeam.
+  const sourceName = typeof order.source_name === "string" ? order.source_name : null;
+  const isOnlineStore = sourceName === "web" || sourceName === null;
+  if (!isOnlineStore) {
+    return new Response(
+      JSON.stringify({ ok: true, skipped: true, reason: "non_web_source", source: sourceName }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }
+
   const orderId = (order.id != null ? String(order.id) : null) as string | null;
   const totalPrice = order.total_price != null ? parseFloat(String(order.total_price)) : NaN;
   // Sanity cap at $99,999 — anything higher is corrupt data from a bad

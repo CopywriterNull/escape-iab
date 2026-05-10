@@ -1,53 +1,53 @@
 @import "tailwindcss";
 
 /* -----------------------------------------------------------------
-   Default = warm light. Fintech-premium palette: terracotta on cream.
-   Single accent only — no gradients between two hues.
+   Default = clean light. Linear / Stripe / Vercel-inspired neutral
+   cool palette. Single blue accent. No warmth, no terracotta.
    ----------------------------------------------------------------- */
 
 @theme inline {
-  /* surfaces — warm paper */
-  --color-bg: #fbf7f2;
-  --color-bg-elev: #f5efe6;
+  /* surfaces — cool neutral */
+  --color-bg: #fafafa;
+  --color-bg-elev: #f4f4f5;
   --color-card: #ffffff;
-  --color-card-hi: #fdfaf3;
-  --color-border: #e8dfd0;
-  --color-border-soft: #f0e8d9;
+  --color-card-hi: #fcfcfd;
+  --color-border: #e4e4e7;
+  --color-border-soft: #ececf0;
 
   /* type */
-  --color-fg: #1a1612;
-  --color-fg-dim: #58503f;
-  --color-fg-muted: #8a8170;
+  --color-fg: #09090b;
+  --color-fg-dim: #52525b;
+  --color-fg-muted: #8b8d96;
 
-  /* CTA: dark on cream (Mercury / Brex pattern) */
-  --color-cta-bg: #1a1612;
-  --color-cta-fg: #fbf7f2;
+  /* CTA: near-black on white (Vercel/Linear pattern) */
+  --color-cta-bg: #09090b;
+  --color-cta-fg: #fafafa;
 
-  /* single accent: terracotta */
-  --color-accent: #c8553d;
-  --color-accent-soft: rgba(200, 85, 61, 0.10);
+  /* single accent: cool blue */
+  --color-accent: #4f7cff;
+  --color-accent-soft: rgba(79, 124, 255, 0.10);
 
-  /* status — harmonized with warm palette */
-  --color-success: #2d7a4f;
-  --color-success-soft: #e6efe6;
-  --color-danger: #b3392f;
-  --color-danger-soft: #f5e6e1;
+  /* status */
+  --color-success: #16a34a;
+  --color-success-soft: #ecfdf5;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2;
 
-  /* gradient text — single-hue tonal, never two-color */
-  --color-grad-from: #1a1612;
-  --color-grad-mid: #4a3328;
-  --color-grad-to: #c8553d;
+  /* gradient text — single-hue tonal */
+  --color-grad-from: #09090b;
+  --color-grad-mid: #2c2d33;
+  --color-grad-to: #4f7cff;
 
-  /* texture */
-  --color-dot: rgba(26, 22, 18, 0.06);
-  --color-mesh-1: rgba(200, 85, 61, 0.07);
-  --color-mesh-2: rgba(200, 85, 61, 0.04);
+  /* texture — barely there */
+  --color-dot: rgba(9, 9, 11, 0.05);
+  --color-mesh-1: rgba(79, 124, 255, 0.06);
+  --color-mesh-2: rgba(79, 124, 255, 0.03);
 
-  /* warm-tinted shadows — never pure black */
-  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.7) inset, 0 30px 80px -30px rgba(60, 35, 18, 0.14);
-  --shadow-elev: 0 1px 0 0 rgba(255, 255, 255, 0.7) inset, 0 18px 60px -18px rgba(60, 35, 18, 0.18), 0 0 0 1px rgba(200, 85, 61, 0.04);
-  --shadow-cta: 0 10px 28px -10px rgba(26, 22, 18, 0.38);
-  --shadow-accent: 0 10px 28px -10px rgba(200, 85, 61, 0.45);
+  /* shadows — neutral, soft */
+  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.7) inset, 0 24px 60px -24px rgba(15, 23, 42, 0.10);
+  --shadow-elev: 0 1px 0 0 rgba(255, 255, 255, 0.7) inset, 0 16px 48px -16px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(79, 124, 255, 0.04);
+  --shadow-cta: 0 8px 24px -8px rgba(9, 9, 11, 0.32);
+  --shadow-accent: 0 8px 24px -8px rgba(79, 124, 255, 0.4);
 
   /* fonts */
   --font-sans: var(--font-sans);
@@ -55,34 +55,66 @@
   --font-display: var(--font-display);
 }
 
+/* Backend tool theme — cool, neutral, dense. Used on /dashboard via
+   data-theme="backend". Distinct from the warm marketing palette. */
+[data-theme="backend"] {
+  --color-bg: #0a0b0e;
+  --color-bg-elev: #0f1115;
+  --color-card: #13151a;
+  --color-card-hi: #181b22;
+  --color-border: #232730;
+  --color-border-soft: #1a1d24;
+  --color-fg: #e6e8eb;
+  --color-fg-dim: #9097a3;
+  --color-fg-muted: #5e6573;
+  --color-cta-bg: #e6e8eb;
+  --color-cta-fg: #0a0b0e;
+  --color-accent: #5b8cff;
+  --color-accent-soft: rgba(91, 140, 255, 0.10);
+  --color-success: #3fcf8e;
+  --color-success-soft: #0e2a1d;
+  --color-danger: #ff5876;
+  --color-danger-soft: #2a0c14;
+  --color-grad-from: #e6e8eb;
+  --color-grad-mid: #5b8cff;
+  --color-grad-to: #5b8cff;
+  --color-dot: rgba(255, 255, 255, 0.04);
+  --color-mesh-1: rgba(91, 140, 255, 0.08);
+  --color-mesh-2: rgba(91, 140, 255, 0.04);
+  --shadow-card: 0 1px 0 0 rgba(255,255,255,0.03) inset, 0 24px 48px -24px rgba(0,0,0,0.6);
+  --shadow-elev: 0 1px 0 0 rgba(255,255,255,0.04) inset, 0 16px 40px -16px rgba(0,0,0,0.6), 0 0 0 1px rgba(91,140,255,0.04);
+  --shadow-cta: 0 8px 24px -8px rgba(0,0,0,0.5);
+  --shadow-accent: 0 8px 24px -8px rgba(91,140,255,0.4);
+}
+
 [data-theme="dark"] {
-  --color-bg: #100e0a;
-  --color-bg-elev: #18150f;
-  --color-card: #1c1813;
-  --color-card-hi: #221d16;
-  --color-border: #2a241b;
-  --color-border-soft: #1f1a13;
-  --color-fg: #f5ebd6;
-  --color-fg-dim: #b3a98e;
-  --color-fg-muted: #7a7160;
-  --color-cta-bg: #f5ebd6;
-  --color-cta-fg: #100e0a;
-  --color-accent: #e07a5f;
-  --color-accent-soft: rgba(224, 122, 95, 0.12);
-  --color-success: #6abd84;
-  --color-success-soft: #173225;
-  --color-danger: #d65a4d;
-  --color-danger-soft: #2c1410;
-  --color-grad-from: #f5ebd6;
-  --color-grad-mid: #d4a890;
-  --color-grad-to: #e07a5f;
-  --color-dot: rgba(245, 235, 214, 0.05);
-  --color-mesh-1: rgba(224, 122, 95, 0.10);
-  --color-mesh-2: rgba(224, 122, 95, 0.06);
-  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 30px 80px -30px rgba(0, 0, 0, 0.7);
-  --shadow-elev: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset, 0 18px 60px -18px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(224, 122, 95, 0.05);
-  --shadow-cta: 0 10px 28px -10px rgba(245, 235, 214, 0.25);
-  --shadow-accent: 0 10px 28px -10px rgba(224, 122, 95, 0.5);
+  --color-bg: #0a0a0b;
+  --color-bg-elev: #111114;
+  --color-card: #161619;
+  --color-card-hi: #1c1c20;
+  --color-border: #27272d;
+  --color-border-soft: #1c1c22;
+  --color-fg: #fafafa;
+  --color-fg-dim: #a1a1aa;
+  --color-fg-muted: #6b6e78;
+  --color-cta-bg: #fafafa;
+  --color-cta-fg: #0a0a0b;
+  --color-accent: #5b8cff;
+  --color-accent-soft: rgba(91, 140, 255, 0.10);
+  --color-success: #3fcf8e;
+  --color-success-soft: #0e2a1d;
+  --color-danger: #ff5876;
+  --color-danger-soft: #2a0c14;
+  --color-grad-from: #fafafa;
+  --color-grad-mid: #c4c8d4;
+  --color-grad-to: #5b8cff;
+  --color-dot: rgba(255, 255, 255, 0.04);
+  --color-mesh-1: rgba(91, 140, 255, 0.08);
+  --color-mesh-2: rgba(91, 140, 255, 0.04);
+  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.03) inset, 0 24px 60px -24px rgba(0, 0, 0, 0.6);
+  --shadow-elev: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 18px 48px -18px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(91, 140, 255, 0.04);
+  --shadow-cta: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  --shadow-accent: 0 8px 24px -8px rgba(91, 140, 255, 0.4);
 }
 
 :root { color-scheme: light; }
@@ -252,8 +284,45 @@ body {
 :root .ig-chrome { background: #1c1d24; color: #fff; }
 [data-theme="dark"]  .ig-chrome { background: #000; color: #fff; }
 
-[data-theme="dark"] .checkout-shell { background: #1c1813; color: #f5ebd6; }
+[data-theme="dark"] .checkout-shell { background: #161619; color: #fafafa; }
 .checkout-shell { background: #ffffff; color: #1a1612; }
+
+/* Backend dashboard utilities — Polaris/Linear-inspired density. */
+[data-theme="backend"] { color-scheme: dark; }
+[data-theme="backend"] .card { border-radius: 10px; }
+[data-theme="backend"] .card-hi { border-radius: 12px; }
+.tile {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.tile-hi {
+  background: var(--color-card-hi);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.row-divide > * + * { border-top: 1px solid var(--color-border-soft); }
+.mono-label {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-fg-muted);
+  font-weight: 500;
+}
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--color-bg-elev);
+  border: 1px solid var(--color-border);
+  color: var(--color-fg-dim);
+}
 
 /* Scroll-entry — IntersectionObserver-driven; defaults hide nicely if JS off. */
 .reveal { opacity: 1; transform: none; }
