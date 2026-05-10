@@ -117,16 +117,35 @@ export async function POST(req: NextRequest) {
 
   const orderId = (order.id != null ? String(order.id) : null) as string | null;
   const totalPrice = order.total_price != null ? parseFloat(String(order.total_price)) : NaN;
-  const valueCents =
+  // Sanity cap at $99,999 — anything higher is corrupt data from a bad
+  // line-item integration or test order. Don't let one row torch the totals.
+  const MAX_CENTS = 99_999_99;
+  const rawCents =
     Number.isFinite(totalPrice) && totalPrice > 0
       ? Math.round(totalPrice * 100)
       : null;
+  const valueCents = rawCents != null && rawCents > MAX_CENTS ? null : rawCents;
   const currency = typeof order.currency === "string" ? order.currency.slice(0, 8) : null;
   const landingSite = typeof order.landing_site === "string" ? order.landing_site : null;
   const referringSite = typeof order.referring_site === "string" ? order.referring_site : null;
   const cartToken = typeof order.cart_token === "string" ? order.cart_token : null;
   const ehSid = findKey(order, "eh_sid", 64);
   const fbclid = findKey(order, "fbclid", 512);
+
+  // Diagnostic: surface what fields Shopify is/isn't sending so we can see
+  // it in the webhook response logs for a few minutes while debugging.
+  if (process.env.NODE_ENV !== "production" || true) {
+    console.log("[shopify-webhook]", {
+      orderId,
+      cart_token: cartToken,
+      checkout_token: typeof order.checkout_token === "string" ? order.checkout_token : null,
+      landing_site: landingSite,
+      has_note_attributes: Array.isArray(order.note_attributes) ? (order.note_attributes as unknown[]).length : 0,
+      has_attributes: Array.isArray(order.attributes) ? (order.attributes as unknown[]).length : 0,
+      eh_sid: ehSid,
+      fbclid: fbclid ? "yes" : "no",
+    });
+  }
 
   const admin = getSupabaseAdmin();
   if (!admin) {

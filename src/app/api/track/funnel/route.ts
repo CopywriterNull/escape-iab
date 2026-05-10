@@ -102,10 +102,12 @@ async function processFunnel(
       : typeof valueRaw === "string"
         ? parseFloat(valueRaw)
         : NaN;
-  const valueCents =
+  const rawCents =
     Number.isFinite(valueNum) && valueNum > 0
       ? Math.round(valueNum * 100)
       : null;
+  // Sanity cap at $99,999 — corrupt line-item data should not torch totals.
+  const valueCents = rawCents != null && rawCents > 99_999_99 ? null : rawCents;
 
   if (!UUID_RE.test(merchantId) || !ALLOWED_EVENTS.has(eventType) || (!sy && !ehSid)) {
     return json({ ok: false, error: "bad_input" }, 400, origin);
