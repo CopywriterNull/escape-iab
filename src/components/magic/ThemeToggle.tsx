@@ -69,14 +69,22 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
 }
 
 /**
- * Inline script that runs before paint to apply persisted theme.
- * Drop into <head> in app/layout.tsx to avoid the light → dark flash.
+ * Inline script that runs before paint to apply theme.
+ * Logic:
+ *   - Explicit user preference ('dark' or 'light') always wins.
+ *   - No preference + on the homepage ("/") → default to dark.
+ *   - No preference + anywhere else → light (default).
+ * Drop into <head> in app/layout.tsx to avoid the FOUC flash.
  */
 export const themeBootScript = `
 (function(){
   try {
     var t = localStorage.getItem('eh-theme');
-    if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
+    if (t === 'dark') {
+      document.documentElement.setAttribute('data-theme','dark');
+    } else if (t === null && location.pathname === '/') {
+      document.documentElement.setAttribute('data-theme','dark');
+    }
   } catch(e) {}
 })();
 `;
