@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { mockData as d } from "../_mock";
+import { PixelIcon } from "../_pixel-icon";
 
 // 14-day chart series (synthetic but plausible).
 const dailyChart = [
@@ -23,58 +24,134 @@ export default function V6Blend() {
   const baseA = d.funnel[0].a;
   const baseB = d.funnel[0].b;
 
+  const navItems: { label: string; icon: "home" | "terminal" | "gear"; active?: boolean }[] = [
+    { label: "Overview", icon: "home", active: true },
+    { label: "Install", icon: "terminal" },
+    { label: "Settings", icon: "gear" },
+  ];
+
   return (
     <div className="min-h-dvh bg-[var(--color-bg)] text-[var(--color-fg)] grain relative">
       <div aria-hidden className="gradient-dotgrid" />
 
-      {/* Top nav — same as the real dashboard (Vercel-style) */}
-      <header className="sticky top-0 z-40 border-b border-[var(--color-border-soft)] bg-[var(--color-bg)]/85 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-6 h-12 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="inline-flex size-5 items-center justify-center rounded-md bg-[var(--color-accent)] shrink-0">
-              <svg viewBox="0 0 24 24" className="size-3 text-white" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 4h6v6" />
-                <path d="M20 4l-8 8" />
-                <path d="M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5" />
-              </svg>
+      <div className="flex min-h-dvh">
+        {/* ─── Left sidebar ─── */}
+        <aside className="hidden md:flex w-[220px] shrink-0 flex-col border-r border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/30 sticky top-0 h-dvh z-30">
+          {/* Brand */}
+          <div className="h-12 px-4 flex items-center gap-2 border-b border-[var(--color-border-soft)]">
+            <span aria-hidden className="inline-flex size-5 items-center justify-center rounded-md bg-[var(--color-accent)]">
+              <PixelIcon name="arrow-up-right" size={12} className="text-white" />
             </span>
             <span className="text-[13.5px] font-semibold tracking-tight">EscapeHatch</span>
-            <span className="text-[var(--color-fg-muted)] text-[13px]">/</span>
-            <span className="text-[13px] font-medium">{d.merchant.name}</span>
-            <span className="hidden sm:inline text-[11.5px] font-mono text-[var(--color-fg-muted)]">· {d.merchant.domain}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-[var(--color-border-soft)] text-[11px] font-mono text-[var(--color-fg-dim)] bg-[var(--color-bg-elev)]/40">
-              <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
-              A/B running
-            </span>
-            <span className="text-[12px] text-[var(--color-fg-muted)] px-2 py-1">Sign out</span>
+
+          {/* Workspace label */}
+          <div className="px-3 pt-4 pb-1.5 text-[10px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)] font-medium">
+            Workspace
           </div>
-        </div>
-        <div className="mx-auto max-w-7xl px-6">
-          <nav className="flex items-center gap-1 -mb-px">
-            {["Overview", "Install", "Settings"].map((t) => (
-              <span key={t}
-                className="relative px-3 py-3 text-[13px] tracking-tight"
-                style={{
-                  color: t === "Overview" ? "var(--color-fg)" : "var(--color-fg-muted)",
-                  fontWeight: t === "Overview" ? 500 : 400,
-                }}>
-                {t}
-                {t === "Overview" ? <span className="absolute left-3 right-3 -bottom-px h-[2px] bg-[var(--color-fg)] rounded-full" /> : null}
-              </span>
+
+          {/* Nav */}
+          <nav className="px-2 flex flex-col gap-0.5">
+            {navItems.map((item) => (
+              <div
+                key={item.label}
+                className={`group flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] tracking-tight transition-colors ${
+                  item.active
+                    ? "bg-[var(--color-card)] text-[var(--color-fg)] font-medium"
+                    : "text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:bg-[var(--color-card)]/60"
+                }`}
+                style={
+                  item.active
+                    ? { boxShadow: "0 0 0 1px var(--color-border-soft) inset" }
+                    : undefined
+                }
+              >
+                <PixelIcon
+                  name={item.icon}
+                  size={14}
+                  className={item.active ? "text-[var(--color-accent)]" : "text-[var(--color-fg-muted)]"}
+                />
+                {item.label}
+              </div>
             ))}
           </nav>
-        </div>
-      </header>
 
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 relative">
+          {/* Test status card */}
+          <div className="mt-5 mx-3 px-3 py-2.5 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)]">
+            <div className="text-[10px] uppercase tracking-[0.1em] font-mono text-[var(--color-fg-muted)] font-medium">
+              Test status
+            </div>
+            <div className="mt-1.5 flex items-center gap-1.5 text-[12px]">
+              <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
+              A/B 50/50
+            </div>
+            <div className="mt-1 text-[10.5px] font-mono text-[var(--color-fg-muted)] truncate">{d.merchant.domain}</div>
+          </div>
+
+          {/* Recent activity preview */}
+          <div className="mt-5 px-3 pb-1.5 text-[10px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)] font-medium">
+            Live
+          </div>
+          <div className="px-3 space-y-1.5 text-[11.5px]">
+            <div className="flex items-center gap-1.5 text-[var(--color-fg-dim)]">
+              <PixelIcon name="dollar" size={11} className="text-[var(--color-success)]" />
+              <span className="font-mono tnum">$58 · 3m ago</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[var(--color-fg-dim)]">
+              <PixelIcon name="bolt" size={11} className="text-[var(--color-accent)]" />
+              <span className="font-mono tnum">Escape · 4m ago</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[var(--color-fg-dim)]">
+              <PixelIcon name="cart" size={11} className="text-[var(--color-fg-muted)]" />
+              <span className="font-mono tnum">$42 · 8m ago</span>
+            </div>
+          </div>
+
+          <div className="mt-auto" />
+
+          {/* User pill */}
+          <div className="px-3 py-3 border-t border-[var(--color-border-soft)]">
+            <div className="px-1 pb-2 flex items-center gap-2 min-w-0">
+              <span className="size-6 rounded-full bg-[var(--color-accent)]/15 grid place-items-center text-[10px] font-semibold text-[var(--color-accent)] shrink-0">
+                L
+              </span>
+              <div className="min-w-0">
+                <div className="text-[11.5px] truncate" title="lennyhuynh526@gmail.com">lennyhuynh526@…</div>
+                <div className="text-[10px] font-mono text-[var(--color-fg-muted)]">pro plan</div>
+              </div>
+            </div>
+            <div className="text-[11.5px] text-[var(--color-fg-muted)] px-1 py-1">
+              Sign out
+            </div>
+          </div>
+        </aside>
+
+        {/* ─── Main area ─── */}
+        <main className="flex-1 min-w-0 px-4 sm:px-6 py-6 relative">
+        {/* Top bar — breadcrumb only */}
+        <div className="flex items-center justify-between gap-3 pb-4 mb-2 border-b border-[var(--color-border-soft)]">
+          <div className="flex items-center gap-2 text-[12.5px] min-w-0">
+            <PixelIcon name="home" size={12} className="text-[var(--color-fg-muted)]" />
+            <span className="text-[var(--color-fg-muted)]">{d.merchant.name}</span>
+            <span className="text-[var(--color-fg-muted)]">/</span>
+            <span className="font-medium">Overview</span>
+            <span className="hidden sm:inline text-[var(--color-fg-muted)] font-mono text-[11px] ml-2">{d.merchant.domain}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-mono text-[var(--color-fg-muted)] bg-[var(--color-bg-elev)]/60 border border-[var(--color-border-soft)]">
+              <PixelIcon name="search" size={10} />
+              <span className="hidden lg:inline">Search</span>
+              <span className="hidden lg:inline ml-2 px-1 py-0.5 rounded bg-[var(--color-card)] text-[var(--color-fg-dim)]">⌘K</span>
+            </div>
+          </div>
+        </div>
+
         {/* Page header */}
         <div className="flex items-center justify-between gap-3 pb-3 mb-1">
           <div className="min-w-0">
             <h1 className="h-display text-[22px] md:text-[26px] tracking-tight">{d.merchant.name}</h1>
             <div className="mt-1 text-[12px] font-mono text-[var(--color-fg-muted)]">
-              {d.merchant.domain} · {d.rangeLabel} · A/B 50/50
+              {d.rangeLabel} · A/B 50/50
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -107,9 +184,7 @@ export default function V6Blend() {
             className="size-11 rounded-xl grid place-items-center shrink-0"
             style={{ background: "var(--color-card)", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
           >
-            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12l5 5L20 7" />
-            </svg>
+            <PixelIcon name="check" size={20} className="text-[var(--color-success)]" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-[10.5px] uppercase tracking-[0.14em] font-semibold" style={{ color: "var(--color-success)" }}>
@@ -128,21 +203,25 @@ export default function V6Blend() {
           </div>
         </div>
 
-        {/* KPI strip — current theme tiles, with deltas */}
+        {/* KPI strip — current theme tiles, with deltas + pixel icons */}
         <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { l: "Impressions", v: d.impressions.toLocaleString(), s: `${d.escapeAttempts.toLocaleString()} escapes (bucket A)`, delta: "+8.4%" },
-            { l: "Escape rate", v: `${(d.escapeRate * 100).toFixed(0)}%`, s: "of bucket A landings", delta: "+1.2%" },
-            { l: "Revenue (test)", v: `$${d.revenue.toLocaleString()}`, s: `${d.purchases} purchases`, delta: "+18.7%" },
-            { l: "Lift · A vs B", v: `+${(d.liftPct * 100).toFixed(1)}%`, s: `${(d.confident * 100).toFixed(0)}% confident`, delta: null, valueClass: "text-[var(--color-success)]" },
-          ].map((k, i) => (
+          {([
+            { l: "Impressions", v: d.impressions.toLocaleString(), s: `${d.escapeAttempts.toLocaleString()} escapes (bucket A)`, delta: "+8.4%", icon: "eye" as const },
+            { l: "Escape rate", v: `${(d.escapeRate * 100).toFixed(0)}%`, s: "of bucket A landings", delta: "+1.2%", icon: "bolt" as const },
+            { l: "Revenue (test)", v: `$${d.revenue.toLocaleString()}`, s: `${d.purchases} purchases`, delta: "+18.7%", icon: "dollar" as const },
+            { l: "Lift · A vs B", v: `+${(d.liftPct * 100).toFixed(1)}%`, s: `${(d.confident * 100).toFixed(0)}% confident`, delta: null, valueClass: "text-[var(--color-success)]", icon: "chart" as const },
+          ]).map((k, i) => (
             <div key={i} className="bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg px-4 py-3">
-              <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">{k.l}</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">{k.l}</div>
+                <PixelIcon name={k.icon} size={12} className="text-[var(--color-fg-muted)]" />
+              </div>
               <div className="mt-2 flex items-baseline gap-2 flex-wrap">
                 <div className={`text-[26px] font-semibold tnum tracking-tight ${k.valueClass ?? ""}`}>{k.v}</div>
                 {k.delta ? (
-                  <span className="text-[11.5px] font-mono tnum font-medium" style={{ color: "var(--color-success)" }}>
-                    ↑ {k.delta}
+                  <span className="text-[11.5px] font-mono tnum font-medium inline-flex items-center gap-1" style={{ color: "var(--color-success)" }}>
+                    <PixelIcon name="arrow-up" size={9} />
+                    {k.delta}
                   </span>
                 ) : null}
               </div>
@@ -181,9 +260,7 @@ export default function V6Blend() {
                   {/* Drop-off connector */}
                   {i > 0 && dropPct != null ? (
                     <div className="flex items-center gap-2 py-1.5 text-[10.5px] font-mono text-[var(--color-fg-muted)] tnum">
-                      <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.6">
-                        <path d="M6 2v8M3 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                      <PixelIcon name="arrow-down-right" size={11} />
                       <span>{dropPct}% drop-off</span>
                     </div>
                   ) : null}
@@ -361,7 +438,7 @@ export default function V6Blend() {
           <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-soft)]">
             <h2 className="text-[14px] font-semibold tracking-tight">Recent activity</h2>
             <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-fg-muted)] font-mono">
-              <span className="size-1.5 rounded-full bg-[var(--color-success)]" />
+              <PixelIcon name="clock" size={11} />
               Updated 3s ago
             </span>
           </header>
@@ -375,10 +452,25 @@ export default function V6Blend() {
                     : row.type === "CHECKOUT"
                       ? "pill pill-warn"
                       : "pill pill-muted";
+              const iconName =
+                row.type === "PURCHASE"
+                  ? ("dollar" as const)
+                  : row.type === "ESCAPE"
+                    ? ("bolt" as const)
+                    : row.type === "CHECKOUT"
+                      ? ("cart" as const)
+                      : ("cart" as const);
+              const iconClass =
+                row.type === "PURCHASE"
+                  ? "text-[var(--color-success)]"
+                  : row.type === "ESCAPE"
+                    ? "text-[var(--color-accent)]"
+                    : "text-[var(--color-fg-muted)]";
               return (
                 <div key={i} className="px-4 py-2.5 hover:bg-[var(--color-bg-elev)]/50 transition-colors text-[12.5px]">
                   <div className="grid grid-cols-12 items-center gap-3">
-                    <div className="col-span-2">
+                    <div className="col-span-2 flex items-center gap-2">
+                      <PixelIcon name={iconName} size={12} className={iconClass} />
                       <span className={pillCls}>{row.type}</span>
                     </div>
                     <div className="col-span-3">
@@ -398,9 +490,10 @@ export default function V6Blend() {
 
         <div className="mt-8 flex items-center justify-between text-[11px] font-mono text-[var(--color-fg-muted)]">
           <Link href="/preview/dashboard" className="hover:opacity-80">← all variants</Link>
-          <span>V6 · Current theme + V5 banner + V3 ASCII funnel</span>
+          <span>V6 · Sidebar + V5 banner + V3 ASCII funnel + pixel icons</span>
         </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
