@@ -665,16 +665,17 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
         <div className="px-4 py-3">
           {stages.map((stage, i) => {
             const prev = i > 0 ? stages[i - 1] : null;
-            const total = stage.a + stage.b;
-            const totalWidth = (total / maxTotal) * 100;
-            // Within-bar split: cobalt = bucket A, lighter accent = bucket B.
-            const aPct = total > 0 ? (stage.a / total) * 100 : 50;
 
             const cvrA = baseA > 0 ? stage.a / baseA : 0;
             const cvrB = baseB > 0 ? stage.b / baseB : 0;
+            // Bar widths are each bucket's CVR (so they shrink down the funnel
+            // and the eye directly compares A vs B widths per stage).
+            const aWidth = Math.max(cvrA * 100, stage.a > 0 ? 1.5 : 0);
+            const bWidth = Math.max(cvrB * 100, stage.b > 0 ? 1.5 : 0);
+
             const z = i === 0 ? null : zTestTwoProp(stage.a, baseA, stage.b, baseB);
             const liftStr =
-              z?.liftRel != null ? `${z.liftRel > 0 ? "+" : ""}${(z.liftRel * 100).toFixed(0)}%` : null;
+              z?.liftRel != null ? `${z.liftRel > 0 ? "+" : ""}${(z.liftRel * 100).toFixed(1)}%` : null;
             const liftColor =
               z?.liftRel == null
                 ? "text-[var(--color-fg-muted)]"
@@ -691,9 +692,10 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
 
             // Stage-over-stage drop-off (overall, both buckets combined).
             const prevTotal = prev ? prev.a + prev.b : null;
+            const stageTotal = stage.a + stage.b;
             const dropPct =
               prev && prevTotal != null && prevTotal > 0
-                ? Math.round((1 - total / prevTotal) * 100)
+                ? Math.round((1 - stageTotal / prevTotal) * 100)
                 : null;
 
             return (
@@ -708,64 +710,68 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
                   </div>
                 ) : null}
 
-                <div className="group flex items-center gap-3 py-1.5">
-                  {/* Label column */}
-                  <div className="w-[120px] sm:w-[150px] shrink-0">
+                {/* Stage header — label + lift badge */}
+                <div className="flex items-baseline justify-between gap-3 mt-1">
+                  <div className="min-w-0">
                     <div className="text-[12.5px] font-medium tracking-tight leading-tight">{stage.label}</div>
-                    <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono leading-tight mt-0.5">{stage.sub}</div>
+                    <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono leading-tight">{stage.sub}</div>
                   </div>
-                  {/* Bar column */}
-                  <div className="flex-1 min-w-0">
-                    <div className="relative h-6 rounded-md bg-[var(--color-bg-elev)]/50 overflow-hidden">
-                      <div
-                        className="absolute inset-y-0 left-0 flex transition-[width] duration-500"
-                        style={{ width: `${Math.max(2, totalWidth)}%` }}
-                      >
-                        <div
-                          className="h-full bg-[var(--color-accent)]"
-                          style={{ width: `${aPct}%` }}
-                          title={`A: ${stage.a.toLocaleString()}`}
-                        />
-                        <div
-                          className="h-full bg-[var(--color-accent)]/40"
-                          style={{ width: `${100 - aPct}%` }}
-                          title={`B: ${stage.b.toLocaleString()}`}
-                        />
-                      </div>
-                      <div className="absolute inset-0 flex items-center justify-end pr-2 text-[10.5px] font-mono tnum text-[var(--color-fg-dim)] pointer-events-none">
-                        <span>
-                          A {fmtCompact(stage.a)}
-                          {i > 0 ? ` · ${(cvrA * 100).toFixed(1)}%` : ""}
-                          <span className="mx-1.5 text-[var(--color-fg-muted)]">·</span>
-                          B {fmtCompact(stage.b)}
-                          {i > 0 ? ` · ${(cvrB * 100).toFixed(1)}%` : ""}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Lift + p column */}
-                  <div className="w-[78px] shrink-0 text-right">
-                    <div className={`font-mono tnum text-[12.5px] font-semibold ${liftColor}`}>
-                      {liftStr ?? "—"}
-                    </div>
+                  <div className="shrink-0 flex items-baseline gap-2">
+                    {liftStr ? (
+                      <span className={`font-mono tnum text-[12.5px] font-semibold ${liftColor}`}>
+                        {liftStr}
+                      </span>
+                    ) : (
+                      <span className="font-mono text-[11px] text-[var(--color-fg-muted)]">baseline</span>
+                    )}
                     {pStr ? (
-                      <div className={`text-[10px] font-mono tnum ${sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"}`}>
+                      <span className={`text-[10px] font-mono tnum ${sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"}`}>
                         p {pStr}
-                      </div>
+                      </span>
                     ) : null}
+                  </div>
+                </div>
+
+                {/* Two parallel bars: A above (full accent), B below (40% accent).
+                    Width = each bucket's CVR so the eye compares A vs B directly. */}
+                <div className="mt-1.5 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-[44px] shrink-0 text-[9.5px] uppercase tracking-[0.1em] font-mono text-[var(--color-fg-muted)]">A</span>
+                    <div className="flex-1 h-2.5 rounded-sm bg-[var(--color-bg-elev)]/50 overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--color-accent)] transition-[width] duration-500"
+                        style={{ width: `${aWidth}%` }}
+                      />
+                    </div>
+                    <span className="w-[112px] sm:w-[130px] shrink-0 text-right text-[10.5px] font-mono tnum text-[var(--color-fg-dim)]">
+                      {fmtCompact(stage.a)} · {(cvrA * 100).toFixed(i === 0 ? 0 : 1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-[44px] shrink-0 text-[9.5px] uppercase tracking-[0.1em] font-mono text-[var(--color-fg-muted)]">B</span>
+                    <div className="flex-1 h-2.5 rounded-sm bg-[var(--color-bg-elev)]/50 overflow-hidden">
+                      <div
+                        className="h-full bg-[var(--color-accent)]/40 transition-[width] duration-500"
+                        style={{ width: `${bWidth}%` }}
+                      />
+                    </div>
+                    <span className="w-[112px] sm:w-[130px] shrink-0 text-right text-[10.5px] font-mono tnum text-[var(--color-fg-muted)]">
+                      {fmtCompact(stage.b)} · {(cvrB * 100).toFixed(i === 0 ? 0 : 1)}%
+                    </span>
                   </div>
                 </div>
               </div>
             );
           })}
           {/* Legend */}
-          <div className="mt-3 pt-3 border-t border-[var(--color-border-soft)] flex items-center gap-4 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
+          <div className="mt-4 pt-3 border-t border-[var(--color-border-soft)] flex items-center gap-4 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
             <span className="inline-flex items-center gap-1.5">
-              <span className="size-2 rounded-sm bg-[var(--color-accent)]" /> A · escape
+              <span className="size-2 rounded-sm bg-[var(--color-accent)]" /> A · escape variant
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="size-2 rounded-sm bg-[var(--color-accent)]/40" /> B · control
             </span>
+            <span className="ml-auto">Bar width = conversion rate from impressions</span>
           </div>
         </div>
       )}
