@@ -360,6 +360,10 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
   const prevRpv = prevImpressions > 0 ? prevRevenue / prevImpressions : 0;
   const rpvDelta = prevRpv > 0 ? (revPerVisitor - prevRpv) / prevRpv : null;
 
+  // Purchase CVR per bucket — for the lift tile's comparison sub-line.
+  const cvrA = baseA > 0 ? funnel.purchases.a / baseA : null;
+  const cvrB = baseB > 0 ? funnel.purchases.b / baseB : null;
+
   return (
     <KPIGrid
       impressions={totalImpressions}
@@ -370,6 +374,8 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
       revPerVisitor={revPerVisitor}
       rpvPrior={prevRpv > 0 ? prevRpv : null}
       rpvDelta={rpvDelta}
+      cvrA={cvrA}
+      cvrB={cvrB}
       liftRel={liftRel}
       pValue={z?.pValue ?? null}
       period={period}
@@ -649,6 +655,8 @@ function KPIGrid({
   revPerVisitor,
   rpvPrior,
   rpvDelta,
+  cvrA,
+  cvrB,
   liftRel,
   pValue,
   period,
@@ -661,6 +669,8 @@ function KPIGrid({
   revPerVisitor: number;
   rpvPrior: number | null;
   rpvDelta: number | null;
+  cvrA: number | null;
+  cvrB: number | null;
   liftRel: number | null;
   pValue: number | null;
   period: PeriodDelta;
@@ -730,7 +740,15 @@ function KPIGrid({
         icon="chart"
         value={liftStr}
         valueClass={liftColor}
-        sub={pValue != null ? `${Math.round((1 - pValue) * 100)}% confident` : "need more data"}
+        sub={
+          cvrA != null && cvrB != null
+            ? `A ${(cvrA * 100).toFixed(2)}% · B ${(cvrB * 100).toFixed(2)}%${
+                pValue != null ? ` · ${Math.round((1 - pValue) * 100)}%` : ""
+              }`
+            : pValue != null
+              ? `${Math.round((1 - pValue) * 100)}% confident`
+              : "need more data"
+        }
       />
     </div>
   );
