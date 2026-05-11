@@ -27,6 +27,7 @@ import {
 } from "./_components/skeletons";
 import { LiveTimestamp } from "./_components/live-timestamp";
 import { RangeSelector } from "./_components/range-selector";
+import { PixelIcon } from "@/components/PixelIcon";
 
 /* -------- Number formatters -------- */
 
@@ -151,7 +152,7 @@ export default async function DashboardOverview({
       </Suspense>
 
       <Suspense key={`banner-${range.key}`} fallback={<BannerSkeleton />}>
-        <BannerSection merchantId={m} days={d} />
+        <BannerSection merchantId={m} days={d} rangeLabel={range.label} />
       </Suspense>
 
       <Suspense key={`kpi-${range.key}`} fallback={<KPIGridSkeleton />}>
@@ -298,16 +299,35 @@ async function HeroSection({
   );
 }
 
-async function BannerSection({ merchantId, days }: { merchantId: string; days: number }) {
+async function BannerSection({
+  merchantId,
+  days,
+  rangeLabel,
+}: {
+  merchantId: string;
+  days: number;
+  rangeLabel: string;
+}) {
   const [funnel, unattributed] = await Promise.all([
     fetchFunnel(merchantId, days),
     fetchUnattributed(merchantId, days),
   ]);
+  const baseA = funnel.impressions.a;
+  const baseB = funnel.impressions.b;
+  const revA = funnel.revenue_cents.a / 100;
+  const revB = funnel.revenue_cents.b / 100;
+  const rpsA = baseA > 0 ? revA / baseA : 0;
+  const rpsB = baseB > 0 ? revB / baseB : 0;
+  const liftRel = rpsB > 0 ? (rpsA - rpsB) / rpsB : null;
+  const z = zTestTwoProp(funnel.purchases.a, baseA, funnel.purchases.b, baseB);
   return (
     <Banner
       unattributed={unattributed}
       attributedPurchases={funnel.purchases.a + funnel.purchases.b}
       attributedRevenueCents={funnel.revenue_cents.a + funnel.revenue_cents.b}
+      liftRel={liftRel}
+      pValue={z?.pValue ?? null}
+      rangeLabel={rangeLabel}
     />
   );
 }
@@ -326,13 +346,23 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
   const liftRel = rpsB > 0 ? (rpsA - rpsB) / rpsB : null;
   const z = zTestTwoProp(funnel.purchases.a, baseA, funnel.purchases.b, baseB);
   const escapeRate = baseA > 0 ? (100 * funnel.escape_attempts.a) / baseA : 0;
+  const totalImpressions = baseA + baseB;
+  const totalRevenue = revA + revB;
+  const revPerVisitor = totalImpressions > 0 ? totalRevenue / totalImpressions : 0;
+  const prevImpressions = period.previous.impressions;
+  const prevRevenue = period.previous.revenue_cents / 100;
+  const prevRpv = prevImpressions > 0 ? prevRevenue / prevImpressions : 0;
+  const rpvDelta = prevRpv > 0 ? (revPerVisitor - prevRpv) / prevRpv : null;
+
   return (
     <KPIGrid
-      impressions={baseA + baseB}
+      impressions={totalImpressions}
       escapeAttempts={funnel.escape_attempts.a}
       escapeRate={escapeRate}
-      revenue={revA + revB}
+      revenue={totalRevenue}
       purchases={funnel.purchases.a + funnel.purchases.b}
+      revPerVisitor={revPerVisitor}
+      rpvDelta={rpvDelta}
       liftRel={liftRel}
       pValue={z?.pValue ?? null}
       period={period}
@@ -479,15 +509,61 @@ function Banner({
   unattributed,
   attributedPurchases,
   attributedRevenueCents,
+  liftRel,
+  pValue,
+  rangeLabel,
 }: {
   unattributed: { count: number; revenue_cents: number };
   attributedPurchases: number;
   attributedRevenueCents: number;
+  liftRel: number | null;
+  pValue: number | null;
+  rangeLabel: string;
 }) {
   if (unattributed.count === 0 && attributedPurchases === 0) return null;
+
+  // "Test is winning" mode — when we have a positive significant lift
+  const winning = liftRel != null && liftRel > 0 && pValue != null && pValue < 0.1;
   const total = unattributed.count + attributedPurchases;
   const totalRev = (unattributed.revenue_cents + attributedRevenueCents) / 100;
-  const attribPct = total > 0 ? Math.round((100 * attributedPurchases) / total) : 0;
+  const confidence = pValue != null ? Math.round((1 - pValue) * 100) : null;
+
+  if (winning) {
+    return (
+      <div
+        className="rounded-2xl p-4 md:p-5 border flex items-start gap-3 md:gap-4"
+        style={{
+          background: "var(--color-success-soft)",
+          borderColor: "color-mix(in srgb, var(--color-success) 18%, transparent)",
+        }}
+      >
+        <div
+          aria-hidden
+          className="size-10 md:size-11 rounded-xl grid place-items-center shrink-0"
+          style={{ background: "var(--color-card)", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
+        >
+          <PixelIcon name="check" size={18} className="text-[var(--color-success)]" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10.5px] uppercase tracking-[0.14em] font-semibold text-[var(--color-success)]">
+            Test is winning
+          </div>
+          <div className="mt-1 text-[16px] md:text-[20px] font-semibold tracking-tight leading-tight">
+            Bucket A converts{" "}
+            <span className="tnum text-[var(--color-success)]">
+              +{(liftRel * 100).toFixed(1)}%
+            </span>{" "}
+            better than control
+          </div>
+          <div className="mt-1.5 text-[12.5px] text-[var(--color-fg-dim)]">
+            {confidence}% confident over the last {rangeLabel} · {fmtCompact(total)} purchases · {fmtUSD(totalRev, { compact: true })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback: quiet info banner
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-2.5 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)]">
       <div className="flex items-center gap-3 min-w-0">
@@ -495,10 +571,10 @@ function Banner({
         <div className="min-w-0">
           <div className="text-[12.5px] font-medium tracking-tight">
             {fmtCompact(total)} purchases · {fmtUSD(totalRev, { compact: true })}{" "}
-            <span className="text-[var(--color-fg-muted)] font-normal">all sources</span>
+            <span className="text-[var(--color-fg-muted)] font-normal">all sources · last {rangeLabel}</span>
           </div>
           <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] font-mono tnum">
-            {attributedPurchases} attributed ({attribPct}%) · {unattributed.count} unattributed
+            {attributedPurchases} attributed · {unattributed.count} unattributed
           </div>
         </div>
       </div>
@@ -514,6 +590,8 @@ function KPIGrid({
   escapeRate,
   revenue,
   purchases,
+  revPerVisitor,
+  rpvDelta,
   liftRel,
   pValue,
   period,
@@ -523,6 +601,8 @@ function KPIGrid({
   escapeRate: number;
   revenue: number;
   purchases: number;
+  revPerVisitor: number;
+  rpvDelta: number | null;
   liftRel: number | null;
   pValue: number | null;
   period: PeriodDelta;
@@ -538,7 +618,7 @@ function KPIGrid({
         ? "text-[var(--color-success)]"
         : "text-[var(--color-danger)]";
 
-  // Escape-rate delta: derived from current vs previous period.
+  // Escape-rate delta from prior period.
   const prevEscapeRate =
     period.previous.impressions > 0
       ? (100 * period.previous.escape_attempts) / period.previous.impressions
@@ -549,16 +629,27 @@ function KPIGrid({
       : null;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <KPI
+        label="Rev / visitor"
+        icon="dollar"
+        value={`$${revPerVisitor.toFixed(2)}`}
+        valueClass="text-[var(--color-success)]"
+        sub={`over ${fmtCompact(impressions)} visitors`}
+        delta={rpvDelta}
+        deltaLabel={period.priorLabel}
+      />
       <KPI
         label="Impressions"
+        icon="eye"
         value={fmtCompact(impressions)}
-        sub={`${escapeAttempts.toLocaleString()} escapes (bucket A)`}
+        sub={`${escapeAttempts.toLocaleString()} escapes (A)`}
         delta={period.deltas.impressions}
         deltaLabel={period.priorLabel}
       />
       <KPI
         label="Escape rate"
+        icon="bolt"
         value={`${escapeRate.toFixed(0)}%`}
         sub="of bucket A landings"
         delta={escapeRateDelta}
@@ -566,6 +657,7 @@ function KPIGrid({
       />
       <KPI
         label="Revenue (test)"
+        icon="cart"
         value={fmtUSD(revenue, { compact: true })}
         sub={`${purchases.toLocaleString()} purchases`}
         delta={period.deltas.revenue_cents}
@@ -573,6 +665,7 @@ function KPIGrid({
       />
       <KPI
         label="Lift · A vs B"
+        icon="chart"
         value={liftStr}
         valueClass={liftColor}
         sub={pValue != null ? `${Math.round((1 - pValue) * 100)}% confident` : "need more data"}
@@ -583,6 +676,7 @@ function KPIGrid({
 
 function KPI({
   label,
+  icon,
   value,
   sub,
   valueClass = "",
@@ -590,6 +684,7 @@ function KPI({
   deltaLabel,
 }: {
   label: string;
+  icon: "dollar" | "eye" | "bolt" | "cart" | "chart";
   value: string;
   sub?: string;
   valueClass?: string;
@@ -598,12 +693,15 @@ function KPI({
 }) {
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg px-4 py-3">
-      <MonoLabel>{label}</MonoLabel>
+      <div className="flex items-center justify-between gap-2">
+        <MonoLabel>{label}</MonoLabel>
+        <PixelIcon name={icon} size={12} className="text-[var(--color-fg-muted)]" />
+      </div>
       <div className="mt-2 flex items-baseline gap-2 flex-wrap">
-        <div className={`h-section text-[26px] tnum ${valueClass}`}>{value}</div>
+        <div className={`h-section text-[22px] md:text-[24px] tnum ${valueClass}`}>{value}</div>
         {delta != null && Number.isFinite(delta) ? (
           <span
-            className={`text-[11.5px] font-mono tnum font-medium tracking-tight ${
+            className={`text-[11px] font-mono tnum font-medium tracking-tight inline-flex items-center gap-0.5 ${
               delta > 0.001
                 ? "text-[var(--color-success)]"
                 : delta < -0.001
@@ -612,12 +710,13 @@ function KPI({
             }`}
             title={deltaLabel}
           >
-            {delta > 0 ? "↑" : delta < 0 ? "↓" : ""} {Math.abs(delta * 100).toFixed(1)}%
+            {delta > 0 ? <PixelIcon name="arrow-up" size={9} /> : null}
+            {Math.abs(delta * 100).toFixed(1)}%
           </span>
         ) : null}
       </div>
       {sub ? (
-        <div className="mt-1 text-[11.5px] text-[var(--color-fg-muted)] tnum">
+        <div className="mt-1 text-[11px] text-[var(--color-fg-muted)] tnum">
           {sub}
         </div>
       ) : null}
@@ -639,18 +738,16 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
   const empty = baseA + baseB === 0;
-  // Bar widths normalized against the first-stage total (so each bar shrinks
-  // visibly through the funnel).
-  const maxTotal = Math.max(1, baseA + baseB);
 
   return (
-    <Card title="Funnel · A vs B">
+    <Card
+      title="Funnel · A vs B"
+      action={<MonoLabel>ASCII view</MonoLabel>}
+    >
       {empty ? (
         <div className="px-4 py-12 text-center">
           <div className="mx-auto inline-flex size-9 items-center justify-center rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elev)]">
-            <svg viewBox="0 0 24 24" className="size-4 text-[var(--color-fg-muted)]" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <path d="M3 19V5m0 14h18M7 15l4-4 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <PixelIcon name="chart" size={16} className="text-[var(--color-fg-muted)]" />
           </div>
           <div className="mt-3 text-[13px] font-medium">No test data yet</div>
           <div className="mt-1 text-[11.5px] text-[var(--color-fg-muted)]">Paid IG ad clicks will populate here within minutes of install.</div>
@@ -659,14 +756,8 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
         <div className="px-4 py-3">
           {stages.map((stage, i) => {
             const prev = i > 0 ? stages[i - 1] : null;
-
             const cvrA = baseA > 0 ? stage.a / baseA : 0;
             const cvrB = baseB > 0 ? stage.b / baseB : 0;
-            // Bar widths are each bucket's CVR (so they shrink down the funnel
-            // and the eye directly compares A vs B widths per stage).
-            const aWidth = Math.max(cvrA * 100, stage.a > 0 ? 1.5 : 0);
-            const bWidth = Math.max(cvrB * 100, stage.b > 0 ? 1.5 : 0);
-
             const z = i === 0 ? null : zTestTwoProp(stage.a, baseA, stage.b, baseB);
             const liftStr =
               z?.liftRel != null ? `${z.liftRel > 0 ? "+" : ""}${(z.liftRel * 100).toFixed(1)}%` : null;
@@ -678,94 +769,105 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
                   : "text-[var(--color-danger)]";
             const sig = z?.significant === true;
             const pStr =
-              z?.pValue != null
-                ? z.pValue < 0.001
-                  ? "<.001"
-                  : z.pValue.toFixed(3)
-                : null;
-
-            // Stage-over-stage drop-off (overall, both buckets combined).
+              z?.pValue != null ? (z.pValue < 0.001 ? "<.001" : z.pValue.toFixed(3)) : null;
+            // ASCII block bars — 40 wide on desktop, 24 on mobile.
+            const aBlocks40 = Math.max(1, Math.round(cvrA * 40));
+            const bBlocks40 = Math.max(1, Math.round(cvrB * 40));
+            const aBlocks24 = Math.max(1, Math.round(cvrA * 24));
+            const bBlocks24 = Math.max(1, Math.round(cvrB * 24));
             const prevTotal = prev ? prev.a + prev.b : null;
             const stageTotal = stage.a + stage.b;
             const dropPct =
-              prev && prevTotal != null && prevTotal > 0
+              prev && prevTotal && prevTotal > 0
                 ? Math.round((1 - stageTotal / prevTotal) * 100)
                 : null;
 
             return (
               <div key={stage.label}>
-                {/* Drop-off connector — only between rows */}
                 {i > 0 && dropPct != null ? (
-                  <div className="flex items-center gap-2 pl-1 py-1 text-[10.5px] font-mono text-[var(--color-fg-muted)] tnum">
-                    <svg viewBox="0 0 12 12" className="size-3 text-[var(--color-fg-muted)]" fill="none" stroke="currentColor" strokeWidth="1.6">
-                      <path d="M6 2v8M3 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+                  <div className="flex items-center gap-2 py-1.5 text-[10.5px] font-mono text-[var(--color-fg-muted)] tnum">
+                    <PixelIcon name="arrow-down-right" size={11} />
                     <span>{dropPct}% drop-off</span>
                   </div>
                 ) : null}
 
-                {/* Stage header — label + lift badge */}
                 <div className="flex items-baseline justify-between gap-3 mt-1">
                   <div className="min-w-0">
-                    <div className="text-[12.5px] font-medium tracking-tight leading-tight">{stage.label}</div>
-                    <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono leading-tight">{stage.sub}</div>
+                    <div className="text-[12.5px] font-medium tracking-tight">{stage.label}</div>
+                    <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono">{stage.sub}</div>
                   </div>
                   <div className="shrink-0 flex items-baseline gap-2">
                     {liftStr ? (
-                      <span className={`font-mono tnum text-[12.5px] font-semibold ${liftColor}`}>
-                        {liftStr}
-                      </span>
+                      <>
+                        <span className={`font-mono tnum text-[12.5px] font-semibold ${liftColor}`}>
+                          {liftStr}
+                        </span>
+                        {pStr ? (
+                          <span className={`text-[10px] font-mono tnum ${sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"}`}>
+                            p {pStr}
+                          </span>
+                        ) : null}
+                      </>
                     ) : (
                       <span className="font-mono text-[11px] text-[var(--color-fg-muted)]">baseline</span>
                     )}
-                    {pStr ? (
-                      <span className={`text-[10px] font-mono tnum ${sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"}`}>
-                        p {pStr}
-                      </span>
-                    ) : null}
                   </div>
                 </div>
 
-                {/* Two parallel bars: A above (full accent), B below (40% accent).
-                    Width = each bucket's CVR so the eye compares A vs B directly. */}
-                <div className="mt-1.5 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-[44px] shrink-0 text-[9.5px] uppercase tracking-[0.1em] font-mono text-[var(--color-fg-muted)]">A</span>
-                    <div className="flex-1 h-2.5 rounded-sm bg-[var(--color-bg-elev)]/50 overflow-hidden">
-                      <div
-                        className="h-full bg-[var(--color-accent)] transition-[width] duration-500"
-                        style={{ width: `${aWidth}%` }}
-                      />
-                    </div>
-                    <span className="w-[112px] sm:w-[130px] shrink-0 text-right text-[10.5px] font-mono tnum text-[var(--color-fg-dim)]">
-                      {fmtCompact(stage.a)} · {(cvrA * 100).toFixed(i === 0 ? 0 : 1)}%
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-[44px] shrink-0 text-[9.5px] uppercase tracking-[0.1em] font-mono text-[var(--color-fg-muted)]">B</span>
-                    <div className="flex-1 h-2.5 rounded-sm bg-[var(--color-bg-elev)]/50 overflow-hidden">
-                      <div
-                        className="h-full bg-[var(--color-accent)]/40 transition-[width] duration-500"
-                        style={{ width: `${bWidth}%` }}
-                      />
-                    </div>
-                    <span className="w-[112px] sm:w-[130px] shrink-0 text-right text-[10.5px] font-mono tnum text-[var(--color-fg-muted)]">
-                      {fmtCompact(stage.b)} · {(cvrB * 100).toFixed(i === 0 ? 0 : 1)}%
-                    </span>
-                  </div>
-                </div>
+                {/* Desktop ASCII (40 wide) */}
+                <pre
+                  className="mt-1.5 leading-[1.45] text-[11px] tnum hidden sm:block"
+                  style={{ fontFamily: "var(--font-mono), ui-monospace, monospace", margin: 0 }}
+                >
+                  <span style={{ color: "var(--color-fg-muted)" }}>A│</span>
+                  <span style={{ color: "var(--color-accent)" }}>{"█".repeat(aBlocks40)}</span>
+                  <span style={{ color: "var(--color-border-soft)" }}>{"░".repeat(40 - aBlocks40)}</span>
+                  <span style={{ color: "var(--color-fg-muted)" }}>│ </span>
+                  <span style={{ color: "var(--color-fg)" }}>
+                    {stage.a.toLocaleString().padStart(7)} {(cvrA * 100).toFixed(i === 0 ? 0 : 1).padStart(5)}%
+                  </span>
+                  {"\n"}
+                  <span style={{ color: "var(--color-fg-muted)" }}>B│</span>
+                  <span style={{ color: "color-mix(in srgb, var(--color-accent) 45%, transparent)" }}>{"█".repeat(bBlocks40)}</span>
+                  <span style={{ color: "var(--color-border-soft)" }}>{"░".repeat(40 - bBlocks40)}</span>
+                  <span style={{ color: "var(--color-fg-muted)" }}>│ </span>
+                  <span style={{ color: "var(--color-fg-dim)" }}>
+                    {stage.b.toLocaleString().padStart(7)} {(cvrB * 100).toFixed(i === 0 ? 0 : 1).padStart(5)}%
+                  </span>
+                </pre>
+                {/* Mobile ASCII (24 wide) */}
+                <pre
+                  className="mt-1.5 leading-[1.45] text-[10.5px] tnum sm:hidden"
+                  style={{ fontFamily: "var(--font-mono), ui-monospace, monospace", margin: 0 }}
+                >
+                  <span style={{ color: "var(--color-fg-muted)" }}>A│</span>
+                  <span style={{ color: "var(--color-accent)" }}>{"█".repeat(aBlocks24)}</span>
+                  <span style={{ color: "var(--color-border-soft)" }}>{"░".repeat(24 - aBlocks24)}</span>
+                  <span style={{ color: "var(--color-fg-muted)" }}>│ </span>
+                  <span style={{ color: "var(--color-fg)" }}>
+                    {fmtCompact(stage.a)} {(cvrA * 100).toFixed(i === 0 ? 0 : 1)}%
+                  </span>
+                  {"\n"}
+                  <span style={{ color: "var(--color-fg-muted)" }}>B│</span>
+                  <span style={{ color: "color-mix(in srgb, var(--color-accent) 45%, transparent)" }}>{"█".repeat(bBlocks24)}</span>
+                  <span style={{ color: "var(--color-border-soft)" }}>{"░".repeat(24 - bBlocks24)}</span>
+                  <span style={{ color: "var(--color-fg-muted)" }}>│ </span>
+                  <span style={{ color: "var(--color-fg-dim)" }}>
+                    {fmtCompact(stage.b)} {(cvrB * 100).toFixed(i === 0 ? 0 : 1)}%
+                  </span>
+                </pre>
               </div>
             );
           })}
           {/* Legend */}
-          <div className="mt-4 pt-3 border-t border-[var(--color-border-soft)] flex items-center gap-4 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
+          <div className="mt-4 pt-3 border-t border-[var(--color-border-soft)] flex flex-wrap items-center gap-x-4 gap-y-2 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
             <span className="inline-flex items-center gap-1.5">
-              <span className="size-2 rounded-sm bg-[var(--color-accent)]" /> A · escape variant
+              <span className="font-mono text-[var(--color-accent)]">█</span> A · escape
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="size-2 rounded-sm bg-[var(--color-accent)]/40" /> B · control
+              <span className="font-mono" style={{ color: "color-mix(in srgb, var(--color-accent) 45%, transparent)" }}>█</span> B · control
             </span>
-            <span className="ml-auto">Bar width = conversion rate from impressions</span>
+            <span className="ml-auto hidden md:inline">Bar width = CVR from impressions</span>
           </div>
         </div>
       )}
@@ -783,26 +885,31 @@ function SourcesCard({ sources, rangeLabel = "14d" }: { sources: SourceRow[]; ra
       </Card>
     );
   }
+  const max = Math.max(...sources.map((s) => s.total));
   return (
     <Card title="Top sources" action={<MonoLabel>{rangeLabel}</MonoLabel>}>
-      <div className="-mx-4 -my-3.5">
+      <div className="space-y-2">
         {sources.map((s) => {
-          const cvr = s.total > 0 ? (100 * s.purchases) / s.total : 0;
+          const sharePct = max > 0 ? s.total / max : 0;
+          const blocks = Math.max(1, Math.round(sharePct * 28));
+          const cvr = s.total > 0 ? (s.purchases / s.total) * 100 : 0;
           return (
-            <div
-              key={s.utm_source}
-              className="flex items-center justify-between gap-4 px-4 py-2.5 border-b border-[var(--color-border-soft)] last:border-b-0 hover:bg-[var(--color-bg-elev)]/50 transition-colors"
-            >
-              <div className="min-w-0">
-                <div className="text-[13px] font-medium tracking-tight truncate">{s.utm_source}</div>
-                <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] font-mono tnum">
-                  {s.bucket_a.toLocaleString()} A / {s.bucket_b.toLocaleString()} B {cvr > 0 ? `· ${cvr.toFixed(2)}% CVR` : ""}
-                </div>
+            <div key={s.utm_source} className="flex items-baseline gap-3">
+              <div className="w-[80px] sm:w-[100px] shrink-0 text-[12.5px] font-medium tracking-tight truncate">
+                {s.utm_source}
               </div>
-              <div className="text-right shrink-0">
-                <div className="font-mono tnum text-[13px]">{s.total.toLocaleString()}</div>
-                <div className="font-mono tnum text-[11px] text-[var(--color-fg-muted)]">${(s.revenue_cents / 100).toFixed(0)}</div>
-              </div>
+              <pre
+                className="flex-1 leading-none text-[10.5px] tnum overflow-hidden"
+                style={{ fontFamily: "var(--font-mono), ui-monospace, monospace", margin: 0 }}
+              >
+                <span style={{ color: "var(--color-accent)" }}>{"█".repeat(blocks)}</span>
+                <span style={{ color: "var(--color-border-soft)" }}>{"░".repeat(28 - blocks)}</span>
+              </pre>
+              <span className="text-right shrink-0 text-[10.5px] font-mono tnum">
+                <span className="text-[var(--color-fg)]">{fmtCompact(s.total)}</span>
+                <span className="text-[var(--color-fg-muted)]"> · ${(s.revenue_cents / 100).toFixed(0)}</span>
+                {cvr > 0 ? <span className="hidden md:inline text-[var(--color-fg-muted)]"> · {cvr.toFixed(1)}%</span> : null}
+              </span>
             </div>
           );
         })}
@@ -922,14 +1029,14 @@ function ActivityCard({ rows }: { rows: ActivityRow[] }) {
 function ActivityRow({ row }: { row: ActivityRow }) {
   const eventPill =
     row.event_type === "purchase"
-      ? { cls: "pill pill-success", label: "PURCHASE" }
+      ? { cls: "pill pill-success", label: "PURCHASE", icon: "dollar" as const, iconCls: "text-[var(--color-success)]" }
       : row.event_type === "escape_attempt"
-        ? { cls: "pill pill-info", label: "ESCAPE" }
+        ? { cls: "pill pill-info", label: "ESCAPE", icon: "bolt" as const, iconCls: "text-[var(--color-accent)]" }
         : row.event_type === "checkout_started"
-          ? { cls: "pill pill-warn", label: "CHECKOUT" }
+          ? { cls: "pill pill-warn", label: "CHECKOUT", icon: "cart" as const, iconCls: "text-[var(--color-fg-muted)]" }
           : row.event_type === "add_to_cart"
-            ? { cls: "pill pill-muted", label: "ATC" }
-            : { cls: "pill pill-muted", label: row.event_type.toUpperCase() };
+            ? { cls: "pill pill-muted", label: "ATC", icon: "cart" as const, iconCls: "text-[var(--color-fg-muted)]" }
+            : { cls: "pill pill-muted", label: row.event_type.toUpperCase(), icon: "cart" as const, iconCls: "text-[var(--color-fg-muted)]" };
   const value = row.value_cents != null ? `$${(row.value_cents / 100).toFixed(2)}` : "";
   const ts = formatRelative(row.created_at);
   return (
@@ -937,6 +1044,7 @@ function ActivityRow({ row }: { row: ActivityRow }) {
       {/* Desktop grid */}
       <div className="hidden sm:grid grid-cols-12 items-center gap-3">
         <div className="col-span-2 flex items-center gap-2 min-w-0">
+          <PixelIcon name={eventPill.icon} size={12} className={eventPill.iconCls} />
           <span className={eventPill.cls}>{eventPill.label}</span>
         </div>
         <div className="col-span-3 flex items-center gap-2 min-w-0">
@@ -954,6 +1062,7 @@ function ActivityRow({ row }: { row: ActivityRow }) {
       <div className="sm:hidden">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+            <PixelIcon name={eventPill.icon} size={11} className={eventPill.iconCls} />
             <span className={eventPill.cls}>{eventPill.label}</span>
             <span className="pill pill-muted">B{row.bucket.toUpperCase()}</span>
             {!row.in_test ? <span className="pill pill-warn">UNATTR</span> : null}

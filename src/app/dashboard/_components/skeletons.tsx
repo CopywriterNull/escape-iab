@@ -55,14 +55,14 @@ export function BannerSkeleton() {
 
 export function KPIGridSkeleton() {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {[0, 1, 2, 3].map((i) => (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {[0, 1, 2, 3, 4].map((i) => (
         <div
           key={i}
           className="bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg px-4 py-3"
         >
           <Block className="h-2.5 w-20" />
-          <Block className="mt-3 h-7 w-24" />
+          <Block className="mt-3 h-6 w-24" />
           <Block className="mt-2 h-2.5 w-16" />
         </div>
       ))}

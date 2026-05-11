@@ -220,14 +220,14 @@ function HeroProof({ proof }: { proof?: LanderProof }) {
     { value: "1.1 KB", label: "Snippet, edge-cached" },
   ];
   return (
-    <div className="mx-auto mt-14 max-w-3xl grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="mx-auto mt-12 md:mt-14 max-w-3xl grid grid-cols-3 gap-2 md:gap-4">
       {proofs.map((p) => (
         <div
           key={p.label}
-          className="text-center px-4 py-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)]/60"
+          className="text-center px-3 py-3 md:px-4 md:py-4 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-card)]/60"
         >
-          <div className="h-display text-2xl tnum text-[var(--color-fg)]">{p.value}</div>
-          <div className="mt-1 text-[11px] text-[var(--color-fg-muted)] leading-tight">{p.label}</div>
+          <div className="h-display text-[18px] md:text-2xl tnum text-[var(--color-fg)]">{p.value}</div>
+          <div className="mt-1 text-[10px] md:text-[11px] text-[var(--color-fg-muted)] leading-tight">{p.label}</div>
         </div>
       ))}
     </div>

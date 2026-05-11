@@ -4,7 +4,40 @@ import { getCurrentMerchant } from "@/lib/db";
 import { supabaseConfigured, getSupabaseServer } from "@/lib/supabase/server";
 import { brand } from "@/lib/branding";
 import { signOut } from "@/app/actions/auth";
-import { TabStrip } from "./_components/tab-strip";
+import { SidebarNav } from "./_components/sidebar-nav";
+import { PixelIcon } from "@/components/PixelIcon";
+
+type LiveRow = {
+  event_type: string;
+  value_cents: number | null;
+  created_at: string;
+};
+
+async function getRecentForSidebar(merchantId: string, limit = 3): Promise<LiveRow[]> {
+  const supabase = await getSupabaseServer();
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("escape_events")
+    .select("event_type, value_cents, created_at")
+    .eq("merchant_id", merchantId)
+    .in("event_type", ["purchase", "escape_attempt", "checkout_started"])
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []) as LiveRow[];
+}
+
+function ago(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const delta = Math.max(0, Date.now() - t);
+  const s = Math.floor(delta / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
 
 export default async function DashboardLayout({
   children,
@@ -34,82 +67,153 @@ export default async function DashboardLayout({
   if (!user) redirect("/login");
 
   const merchant = await getCurrentMerchant();
+  const live = merchant ? await getRecentForSidebar(merchant.id, 3) : [];
 
   return (
-    <div className="min-h-dvh bg-[var(--color-bg)] text-[var(--color-fg)]">
-      {/* Top nav — sticky, Vercel-style */}
-      <header className="sticky top-0 z-40 border-b border-[var(--color-border-soft)] bg-[var(--color-bg)]/85 backdrop-blur">
-        {/* Row 1: brand mark + breadcrumb + status + user */}
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 h-12 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-2 focus-ring rounded-md shrink-0"
-            >
-              <span aria-hidden className="inline-flex size-5 items-center justify-center rounded-md bg-[var(--color-accent)]">
-                <svg viewBox="0 0 24 24" className="size-3 text-white" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 4h6v6" />
-                  <path d="M20 4l-8 8" />
-                  <path d="M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5" />
-                </svg>
-              </span>
-              <span className="text-[13.5px] font-semibold tracking-tight">{brand.name}</span>
-            </Link>
-            {merchant?.name ? (
-              <>
-                <span className="text-[var(--color-fg-muted)] text-[13px] select-none">/</span>
-                <span className="text-[13px] font-medium truncate" title={merchant.name}>
-                  {merchant.name}
-                </span>
-                {merchant.domain ? (
-                  <span className="hidden sm:inline text-[11.5px] font-mono text-[var(--color-fg-muted)] truncate">
-                    · {merchant.domain}
-                  </span>
-                ) : null}
-              </>
-            ) : null}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span
-              className={`hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-mono ${
-                merchant?.ab_enabled
-                  ? "border-[var(--color-border-soft)] text-[var(--color-fg-dim)] bg-[var(--color-bg-elev)]/40"
-                  : "border-[var(--color-border-soft)] text-[var(--color-fg-muted)] bg-[var(--color-bg-elev)]/40"
-              }`}
-            >
-              <span
-                className={`size-1.5 rounded-full ${
-                  merchant?.ab_enabled ? "bg-[var(--color-success)] pulse-ring" : "bg-[var(--color-fg-muted)]"
-                }`}
-              />
-              {merchant?.ab_enabled ? "A/B running" : "A/B off"}
+    <div className="min-h-dvh flex flex-col md:flex-row bg-[var(--color-bg)] text-[var(--color-fg)]">
+      {/* ─── Desktop sidebar ─── */}
+      <aside className="hidden md:flex w-[220px] shrink-0 flex-col border-r border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/30 sticky top-0 h-dvh z-30">
+        {/* Brand */}
+        <div className="h-12 px-4 flex items-center gap-2 border-b border-[var(--color-border-soft)]">
+          <Link href="/dashboard" className="flex items-center gap-2 focus-ring rounded-md shrink-0">
+            <span aria-hidden className="inline-flex size-5 items-center justify-center rounded-md bg-[var(--color-accent)]">
+              <PixelIcon name="arrow-up-right" size={12} className="text-white" />
             </span>
-            <span className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-[var(--color-fg-dim)] max-w-[180px] truncate" title={user.email ?? ""}>
-              <span className="size-5 rounded-full bg-[var(--color-accent)]/15 grid place-items-center text-[10.5px] font-semibold text-[var(--color-accent)] shrink-0">
-                {user.email?.[0]?.toUpperCase() ?? "?"}
-              </span>
-              <span className="truncate">{user.email}</span>
-            </span>
-            <form action={signOut}>
-              <button
-                type="submit"
-                className="text-[12px] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] focus-ring rounded-md px-2 py-1 transition-colors"
-              >
-                Sign out
-              </button>
-            </form>
-          </div>
+            <span className="text-[13.5px] font-semibold tracking-tight">{brand.name}</span>
+          </Link>
         </div>
 
-        {/* Row 2: tab strip */}
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <TabStrip />
+        {/* Workspace nav */}
+        <div className="px-3 pt-4 pb-1.5 text-[10px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)] font-medium">
+          Workspace
+        </div>
+        <SidebarNav />
+
+        {/* Test status card */}
+        <div className="mt-5 mx-3 px-3 py-2.5 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)]">
+          <div className="text-[10px] uppercase tracking-[0.1em] font-mono text-[var(--color-fg-muted)] font-medium">
+            Test status
+          </div>
+          <div className="mt-1.5 flex items-center gap-1.5 text-[12px]">
+            <span
+              className={`size-1.5 rounded-full ${
+                merchant?.ab_enabled ? "bg-[var(--color-success)] pulse-ring" : "bg-[var(--color-fg-muted)]"
+              }`}
+            />
+            {merchant?.ab_enabled ? "A/B 50/50" : "A/B off"}
+          </div>
+          {merchant?.domain ? (
+            <div className="mt-1 text-[10.5px] font-mono text-[var(--color-fg-muted)] truncate">
+              {merchant.domain}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Live activity preview */}
+        {live.length > 0 ? (
+          <>
+            <div className="mt-5 px-3 pb-1.5 text-[10px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)] font-medium">
+              Live
+            </div>
+            <div className="px-3 space-y-1.5 text-[11.5px]">
+              {live.map((row, i) => {
+                const icon =
+                  row.event_type === "purchase"
+                    ? ("dollar" as const)
+                    : row.event_type === "escape_attempt"
+                      ? ("bolt" as const)
+                      : ("cart" as const);
+                const iconClass =
+                  row.event_type === "purchase"
+                    ? "text-[var(--color-success)]"
+                    : row.event_type === "escape_attempt"
+                      ? "text-[var(--color-accent)]"
+                      : "text-[var(--color-fg-muted)]";
+                const label =
+                  row.event_type === "purchase" && row.value_cents != null
+                    ? `$${(row.value_cents / 100).toFixed(0)}`
+                    : row.event_type === "escape_attempt"
+                      ? "Escape"
+                      : "Checkout";
+                return (
+                  <div key={i} className="flex items-center gap-1.5 text-[var(--color-fg-dim)]">
+                    <PixelIcon name={icon} size={11} className={iconClass} />
+                    <span className="font-mono tnum">
+                      {label} · {ago(row.created_at)} ago
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : null}
+
+        <div className="mt-auto" />
+
+        {/* User pill */}
+        <div className="px-3 py-3 border-t border-[var(--color-border-soft)]">
+          <div className="px-1 pb-2 flex items-center gap-2 min-w-0">
+            <span className="size-6 rounded-full bg-[var(--color-accent)]/15 grid place-items-center text-[10px] font-semibold text-[var(--color-accent)] shrink-0">
+              {user.email?.[0]?.toUpperCase() ?? "?"}
+            </span>
+            <div className="min-w-0">
+              <div className="text-[11.5px] truncate" title={user.email ?? ""}>
+                {user.email}
+              </div>
+              <div className="text-[10px] font-mono text-[var(--color-fg-muted)]">prod</div>
+            </div>
+          </div>
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="w-full text-left text-[11.5px] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] focus-ring rounded-md px-2 py-1 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      {/* ─── Mobile top bar ─── */}
+      <header className="md:hidden sticky top-0 z-30 border-b border-[var(--color-border-soft)] bg-[var(--color-bg)]/95 backdrop-blur">
+        <div className="px-4 h-12 flex items-center justify-between gap-3">
+          <Link href="/dashboard" className="flex items-center gap-2 font-semibold tracking-tight text-[14px]">
+            <span aria-hidden className="inline-flex size-5 items-center justify-center rounded-md bg-[var(--color-accent)]">
+              <PixelIcon name="arrow-up-right" size={12} className="text-white" />
+            </span>
+            {brand.name}
+          </Link>
+          <nav className="flex items-center gap-1 text-[12px]">
+            <Link href="/dashboard" className="px-2 py-1 text-[var(--color-fg)] font-medium">Overview</Link>
+            <Link href="/dashboard/install" className="px-2 py-1 text-[var(--color-fg-muted)]">Install</Link>
+            <Link href="/dashboard/settings" className="px-2 py-1 text-[var(--color-fg-muted)]">Settings</Link>
+          </nav>
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6">{children}</main>
+      {/* ─── Main area ─── */}
+      <main className="flex-1 min-w-0">
+        {/* Slim desktop top bar — breadcrumb + cmd-K hint */}
+        <div className="hidden md:flex items-center justify-between gap-3 px-6 h-11 border-b border-[var(--color-border-soft)] bg-[var(--color-bg)]/85 backdrop-blur sticky top-0 z-20">
+          <div className="flex items-center gap-2 text-[12.5px] min-w-0">
+            <PixelIcon name="home" size={12} className="text-[var(--color-fg-muted)]" />
+            <span className="text-[var(--color-fg-muted)]">{merchant?.name ?? "Workspace"}</span>
+            <span className="text-[var(--color-fg-muted)]">/</span>
+            <span className="font-medium">Overview</span>
+            {merchant?.domain ? (
+              <span className="hidden lg:inline text-[var(--color-fg-muted)] font-mono text-[11px] ml-2 truncate">
+                {merchant.domain}
+              </span>
+            ) : null}
+          </div>
+          <div className="hidden lg:inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-mono text-[var(--color-fg-muted)] bg-[var(--color-bg-elev)]/60 border border-[var(--color-border-soft)]">
+            <PixelIcon name="search" size={10} />
+            <span>Search</span>
+            <span className="ml-2 px-1 py-0.5 rounded bg-[var(--color-card)] text-[var(--color-fg-dim)]">⌘K</span>
+          </div>
+        </div>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 py-5 sm:py-6">{children}</div>
+      </main>
 
       {!merchant ? (
         <div className="fixed bottom-3 left-1/2 -translate-x-1/2 text-[11px] text-[var(--color-fg-muted)] font-mono">

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { mockData as d } from "../_mock";
-import { PixelIcon } from "../_pixel-icon";
+import { PixelIcon } from "@/components/PixelIcon";
 
 // 14-day chart series (synthetic but plausible).
 const dailyChart = [
