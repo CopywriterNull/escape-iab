@@ -169,8 +169,6 @@ function Hero({ proof }: { proof?: LanderProof }) {
           <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)]/80 px-3.5 py-1 text-[12px] text-[var(--color-fg-dim)] backdrop-blur">
             <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
             <span className="font-medium tracking-tight">Now in private beta</span>
-            <span className="opacity-50">·</span>
-            <span>First customer: G FUEL</span>
           </span>
         </div>
         <h1 className="text-center max-w-4xl mx-auto text-balance px-1">
