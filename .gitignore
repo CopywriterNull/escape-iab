@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# Higgsfield raw generations — bloated 4K outputs; only ship optimized.
+public/img/**/_raw/

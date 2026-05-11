@@ -193,6 +193,7 @@ Local dev: `vercel env pull .env.local --environment production --yes`. Override
 ## Tools / MCPs installed
 
 - **Higgsfield MCP** — image & video generation. Registered in `~/.claude.json` user scope via `claude mcp add higgsfield ... uvx higgsfield-mcp`. **Awaiting `HIGGSFIELD_API_KEY` + `HIGGSFIELD_SECRET`** — placeholders in config. User must sign up at higgsfield.ai and replace. Restart Claude Code after.
+  - **Full handoff doc at [`HIGGSFIELD.md`](./HIGGSFIELD.md)** — brand context, model routing (Soul / Nano Banana / Seedream / DoP), MCSLA prompt formula, approved style anchors, image registry by slot, 6 copy-paste prompt templates, A/B variant pattern. Read end-to-end before generating any imagery.
 - **`uv` / `uvx`** installed at `~/.local/bin` via Astral installer.
 - **Taste skills** from `Leonxlnx/taste-skill` package — 12 design-focused skills at `~/.agents/skills/` (design-taste-frontend, high-end-visual-design, redesign-existing-projects, minimalist-ui, gpt-taste, stitch-design-taste, imagegen-frontend-web/mobile, brandkit, image-to-code, industrial-brutalist-ui, full-output-enforcement). Invoke via `Skill` tool.
 - **`andrej-karpathy-skills:karpathy-guidelines`** — available. Use for nontrivial code reviews.
