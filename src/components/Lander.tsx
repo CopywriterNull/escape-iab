@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { brand } from "@/lib/branding";
 
@@ -134,6 +135,20 @@ function CTAButton({
 function Hero() {
   return (
     <section className="relative overflow-hidden">
+      {/* Ambient hero artwork — Higgsfield soul_location: pale interior + cobalt doorway. */}
+      <div
+        aria-hidden
+        className="absolute inset-0 pointer-events-none opacity-[0.22] [mask-image:radial-gradient(ellipse_at_top,black_25%,transparent_75%)]"
+      >
+        <Image
+          src="/img/hero/hero-bg-doorway-cobalt.png"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-[40%_30%]"
+        />
+      </div>
       <div className="absolute inset-0 mesh-bg pointer-events-none" />
       <div className="absolute inset-0 dotgrid opacity-30 pointer-events-none [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_70%)]" />
       <div className="relative mx-auto max-w-6xl px-5 pt-16 md:pt-24 pb-8">
