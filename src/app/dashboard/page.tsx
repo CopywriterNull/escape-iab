@@ -360,6 +360,11 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
   const prevRpv = prevImpressions > 0 ? prevRevenue / prevImpressions : 0;
   const rpvDelta = prevRpv > 0 ? (revPerVisitor - prevRpv) / prevRpv : null;
 
+  // Per-bucket RPV for the A vs B comparison on the RPV tile.
+  const rpvA = baseA > 0 ? revA / baseA : null;
+  const rpvB = baseB > 0 ? revB / baseB : null;
+  const rpvLift = rpvA != null && rpvB != null && rpvB > 0 ? (rpvA - rpvB) / rpvB : null;
+
   // Purchase CVR per bucket — for the lift tile's comparison sub-line.
   const cvrA = baseA > 0 ? funnel.purchases.a / baseA : null;
   const cvrB = baseB > 0 ? funnel.purchases.b / baseB : null;
@@ -374,6 +379,9 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
       revPerVisitor={revPerVisitor}
       rpvPrior={prevRpv > 0 ? prevRpv : null}
       rpvDelta={rpvDelta}
+      rpvA={rpvA}
+      rpvB={rpvB}
+      rpvLift={rpvLift}
       cvrA={cvrA}
       cvrB={cvrB}
       liftRel={liftRel}
@@ -655,6 +663,9 @@ function KPIGrid({
   revPerVisitor,
   rpvPrior,
   rpvDelta,
+  rpvA,
+  rpvB,
+  rpvLift,
   cvrA,
   cvrB,
   liftRel,
@@ -669,6 +680,9 @@ function KPIGrid({
   revPerVisitor: number;
   rpvPrior: number | null;
   rpvDelta: number | null;
+  rpvA: number | null;
+  rpvB: number | null;
+  rpvLift: number | null;
   cvrA: number | null;
   cvrB: number | null;
   liftRel: number | null;
@@ -704,9 +718,15 @@ function KPIGrid({
         value={`$${revPerVisitor.toFixed(2)}`}
         valueClass="text-[var(--color-success)]"
         sub={
-          rpvPrior != null
-            ? `vs $${rpvPrior.toFixed(2)} ${period.priorLabel}`
-            : `over ${fmtCompact(impressions)} visitors`
+          rpvA != null && rpvB != null
+            ? `A $${rpvA.toFixed(2)} · B $${rpvB.toFixed(2)}${
+                rpvLift != null
+                  ? ` · ${rpvLift > 0 ? "+" : ""}${(rpvLift * 100).toFixed(1)}%`
+                  : ""
+              }`
+            : rpvPrior != null
+              ? `vs $${rpvPrior.toFixed(2)} ${period.priorLabel}`
+              : `over ${fmtCompact(impressions)} visitors`
         }
         delta={rpvDelta}
         deltaLabel={period.priorLabel}
