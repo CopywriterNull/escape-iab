@@ -198,11 +198,14 @@ body {
   background-size: 24px 24px;
 }
 
-/* Site-wide top-down dotted gradient — fixed to viewport. Dots are
-   tinted with the accent color, dense at the top of the hero band. */
+/* Top-of-page dotted gradient — absolutely positioned within the page,
+   so it scrolls away with the hero band instead of pinning to viewport. */
 .gradient-dotgrid {
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: min(900px, 90vh);
   pointer-events: none;
   z-index: 0;
   opacity: 1;

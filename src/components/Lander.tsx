@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { brand } from "@/lib/branding";
+import { PlatformLogo, type PlatformId } from "@/components/PlatformLogos";
 
 type Theme = "dark" | "light";
 
@@ -20,7 +21,7 @@ export function Lander({
       <div aria-hidden className="gradient-dotgrid" />
       <Nav theme={theme} />
       <Hero proof={proof} />
-      <LogoStrip />
+      <PlatformsSection />
       <Problem />
       <HowItWorks />
       <DashboardPreview />
@@ -29,6 +30,7 @@ export function Lander({
       <ABCallout />
       <Pricing />
       <FAQ />
+      <ClosingCTA />
       <Footer />
     </div>
   );
@@ -147,6 +149,7 @@ function Hero({ proof }: { proof?: LanderProof }) {
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 mesh-bg pointer-events-none" />
+      <FloatingPlatformLogos />
       <div className="relative mx-auto max-w-6xl px-5 pt-16 md:pt-24 pb-8">
         <div className="flex justify-center mb-7 hero-enter hero-enter-1">
           <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)]/80 px-3.5 py-1 text-[12px] text-[var(--color-fg-dim)] backdrop-blur">
@@ -664,16 +667,140 @@ function SecureTag() {
 /* -------- Logo strip -------- */
 
 function LogoStrip() {
-  const labels = ["Shopify", "Shopify Plus", "Liquid"];
+  // Replaced by <PlatformsSection /> in the page composition.
+  return null;
+}
+
+/* -------- Floating platform logos around the hero (desktop-only) -------- */
+
+type FloatPos = {
+  id: PlatformId;
+  size: number;
+  rotate: number;
+  top: string;
+  side: "left" | "right";
+  offset: string; // distance from the chosen side
+  delay: string;
+};
+
+const HERO_FLOATERS: FloatPos[] = [
+  { id: "instagram",  size: 64, rotate: -8,  top: "10%", side: "left",  offset: "5%",  delay: "0s" },
+  { id: "discord",    size: 56, rotate: 12,  top: "46%", side: "left",  offset: "9%",  delay: "1.6s" },
+  { id: "snap",       size: 50, rotate: -6,  top: "78%", side: "left",  offset: "3%",  delay: "3.1s" },
+  { id: "facebook",   size: 60, rotate: 10,  top: "14%", side: "right", offset: "6%",  delay: "0.7s" },
+  { id: "pinterest",  size: 54, rotate: -10, top: "50%", side: "right", offset: "9%",  delay: "2.2s" },
+  { id: "tiktok",     size: 56, rotate: 6,   top: "76%", side: "right", offset: "4%",  delay: "3.8s" },
+];
+
+function FloatingPlatformLogos() {
   return (
-    <section className="border-y border-[var(--color-border)] bg-[var(--color-bg-elev)]/50">
-      <div className="mx-auto max-w-6xl px-5 py-7 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-sm text-[var(--color-fg-muted)]">
-        <span className="text-[10px] uppercase tracking-[0.22em] font-medium">Built for</span>
-        {labels.map((l) => (
-          <span key={l} className="text-[15px] font-medium text-[var(--color-fg-dim)] tracking-tight">{l}</span>
-        ))}
-        <span className="text-[10px] uppercase tracking-[0.22em] font-medium opacity-60">— more next quarter</span>
+    <div
+      aria-hidden
+      className="hidden lg:block pointer-events-none absolute inset-0 z-0"
+    >
+      {HERO_FLOATERS.map((p) => (
+        <div
+          key={p.id}
+          className="absolute float-slow"
+          style={{
+            top: p.top,
+            [p.side]: p.offset,
+            animationDelay: p.delay,
+          }}
+        >
+          <div
+            className="rounded-[26%] p-1"
+            style={{
+              transform: `rotate(${p.rotate}deg)`,
+              background: "white",
+              boxShadow:
+                "0 1px 0 rgba(255,255,255,0.7) inset, 0 18px 40px -16px rgba(15,23,42,0.28), 0 0 0 1px rgba(15,23,42,0.05)",
+            }}
+          >
+            <PlatformLogo id={p.id} size={p.size} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* -------- Platforms section — "Every app. Detected, escaped, reopened." -------- */
+
+const ALL_PLATFORMS: PlatformId[] = [
+  "instagram",
+  "facebook",
+  "messenger",
+  "snap",
+  "tiktok",
+  "discord",
+  "pinterest",
+  "x",
+];
+
+function PlatformsSection() {
+  return (
+    <section className="border-y border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/40">
+      <div className="mx-auto max-w-6xl px-5 py-16 md:py-20">
+        <div className="text-center mb-10">
+          <div className="eyebrow">In-app browsers we escape from</div>
+          <h2 className="mt-3 h-display text-[28px] md:text-[40px] tracking-tight">
+            Every app.{" "}
+            <span className="h-editorial text-[var(--color-fg-dim)]">
+              Detected, escaped, reopened.
+            </span>
+          </h2>
+          <p className="mt-3 text-[14.5px] text-[var(--color-fg-dim)] max-w-xl mx-auto">
+            One snippet works across every social platform — paid clicks from any of them get reopened in Safari before checkout.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
+          {ALL_PLATFORMS.map((id) => (
+            <div
+              key={id}
+              className="group rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)] p-4 flex items-center gap-3 hover:border-[var(--color-accent)]/30 transition-colors"
+            >
+              <PlatformLogo id={id} size={44} />
+              <div className="min-w-0 flex-1">
+                <div className="text-[13.5px] font-medium tracking-tight capitalize">
+                  {id === "x" ? "X (Twitter)" : id}
+                </div>
+                <div className="text-[11px] text-[var(--color-fg-muted)] font-mono mt-0.5">
+                  IAB · escaped
+                </div>
+              </div>
+              <span className="pill pill-success">ON</span>
+            </div>
+          ))}
+        </div>
       </div>
+    </section>
+  );
+}
+
+/* -------- Closing CTA — "Stop paying Meta to send traffic to a dead end." -------- */
+
+function ClosingCTA() {
+  return (
+    <section className="mx-auto max-w-4xl px-5 py-20 md:py-28 text-center">
+      <h2 className="h-display text-[36px] md:text-[56px] tracking-tight leading-[1]">
+        Stop paying Meta to send <br />
+        <span className="h-editorial text-[var(--color-accent)]">traffic to a dead end.</span>
+      </h2>
+      <p className="mt-5 text-[15px] text-[var(--color-fg-dim)] max-w-lg mx-auto">
+        Every paid IG click that lands in the in-app browser is a customer you already paid for. Recover them.
+      </p>
+      <Link
+        href="#waitlist"
+        className="group mt-8 inline-flex items-center gap-2 px-6 h-12 rounded-full bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-[14px] font-medium press lift focus-ring"
+        style={{ boxShadow: "var(--shadow-cta)" }}
+      >
+        Start free · 60-second install
+        <span className="btn-icon">
+          <ArrowRight />
+        </span>
+      </Link>
     </section>
   );
 }

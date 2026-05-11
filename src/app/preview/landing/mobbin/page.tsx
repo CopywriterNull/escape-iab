@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PlatformLogo, type PlatformId } from "../_platform-logos";
+import { PlatformLogo, type PlatformId } from "@/components/PlatformLogos";
 
 const HERO_PLATFORMS: PlatformId[] = [
   "instagram",
