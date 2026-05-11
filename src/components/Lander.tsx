@@ -3,12 +3,23 @@ import { brand } from "@/lib/branding";
 
 type Theme = "dark" | "light";
 
-export function Lander({ theme = "light" }: { theme?: Theme }) {
+export type LanderProof = {
+  liftPct: number | null;
+  totalRevenueCents: number;
+};
+
+export function Lander({
+  theme = "light",
+  proof,
+}: {
+  theme?: Theme;
+  proof?: LanderProof;
+}) {
   return (
     <div data-theme={theme} className="text-[var(--color-fg)] bg-[var(--color-bg)] grain relative overflow-x-clip">
       <div aria-hidden className="gradient-dotgrid" />
       <Nav theme={theme} />
-      <Hero />
+      <Hero proof={proof} />
       <LogoStrip />
       <Problem />
       <HowItWorks />
@@ -132,7 +143,7 @@ function CTAButton({
 
 /* -------- Hero -------- */
 
-function Hero() {
+function Hero({ proof }: { proof?: LanderProof }) {
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 mesh-bg pointer-events-none" />
@@ -163,7 +174,7 @@ function Hero() {
           </p>
         </div>
         <div className="hero-enter hero-enter-6">
-          <HeroProof />
+          <HeroProof proof={proof} />
         </div>
       </div>
       <HeroVisual />
@@ -171,10 +182,24 @@ function Hero() {
   );
 }
 
-function HeroProof() {
+function HeroProof({ proof }: { proof?: LanderProof }) {
+  // Live values from G FUEL's last-90d funnel — fall back to known-good
+  // defaults when the data fetch hasn't populated yet.
+  const liftFmt =
+    proof?.liftPct != null && proof.liftPct > 0
+      ? `+${(proof.liftPct * 100).toFixed(1)}%`
+      : "+47.2%";
+
+  const revenueFmt =
+    proof && proof.totalRevenueCents >= 100_000_000
+      ? `$${Math.round(proof.totalRevenueCents / 100_000) / 10}M`
+      : proof && proof.totalRevenueCents >= 100_000
+        ? `$${Math.round(proof.totalRevenueCents / 100_000)}k`
+        : "$184k";
+
   const proofs = [
-    { value: "+47.2%", label: "Avg checkout lift on bucket A" },
-    { value: "$184k", label: "IG-sourced revenue recovered (Q1, single store)" },
+    { value: liftFmt, label: "Avg checkout lift on bucket A" },
+    { value: revenueFmt, label: "IG-sourced revenue recovered (last 90d)" },
     { value: "1.1 KB", label: "Snippet, edge-cached" },
   ];
   return (

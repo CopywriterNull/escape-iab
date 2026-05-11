@@ -199,40 +199,39 @@ body {
 }
 
 /* Site-wide top-down dotted gradient — fixed to viewport. Dots are
-   tinted with the accent color, more visible at the top, fully gone
-   by ~40% scroll depth (concentrated in the hero band). */
+   tinted with the accent color, dense at the top of the hero band. */
 .gradient-dotgrid {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.9;
+  opacity: 1;
   background-image:
-    /* Top layer: cobalt-tinted dots, denser at the top */
+    /* Top layer: cobalt-tinted dots — bumped to 38% for visibility */
     radial-gradient(
-      color-mix(in srgb, var(--color-accent) 22%, transparent) 1.2px,
-      transparent 1.4px
+      color-mix(in srgb, var(--color-accent) 38%, transparent) 1.4px,
+      transparent 1.6px
     ),
-    /* Underlay: faint neutral dots, matching pattern for warmth */
+    /* Underlay: neutral dots offset 11px for the two-tone weave */
     radial-gradient(
-      color-mix(in srgb, var(--color-fg) 6%, transparent) 1px,
-      transparent 1.2px
+      color-mix(in srgb, var(--color-fg) 12%, transparent) 1.1px,
+      transparent 1.3px
     );
   background-size: 22px 22px, 22px 22px;
   background-position: 0 0, 11px 11px;
   mask-image: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 1) 0%,
-    rgba(0, 0, 0, 0.65) 12%,
-    rgba(0, 0, 0, 0.25) 26%,
-    transparent 40%
+    rgba(0, 0, 0, 0.7) 15%,
+    rgba(0, 0, 0, 0.32) 30%,
+    transparent 45%
   );
   -webkit-mask-image: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 1) 0%,
-    rgba(0, 0, 0, 0.65) 12%,
-    rgba(0, 0, 0, 0.25) 26%,
-    transparent 40%
+    rgba(0, 0, 0, 0.7) 15%,
+    rgba(0, 0, 0, 0.32) 30%,
+    transparent 45%
   );
 }
 

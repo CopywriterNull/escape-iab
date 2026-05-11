@@ -151,6 +151,118 @@ export async function getRollups(
   return (data as DailyRollup[]) ?? [];
 }
 
+/* -------- Period-over-period delta from daily_rollups -------- */
+
+export type PeriodSummary = {
+  impressions: number;
+  escape_attempts: number;
+  product_viewed: number;
+  add_to_cart: number;
+  checkout_started: number;
+  purchases: number;
+  revenue_cents: number;
+};
+
+export type PeriodDelta = {
+  current: PeriodSummary;
+  previous: PeriodSummary;
+  // Relative delta in [-1, +Infinity]. Null when previous is zero (can't compute %).
+  deltas: {
+    impressions: number | null;
+    escape_attempts: number | null;
+    purchases: number | null;
+    revenue_cents: number | null;
+  };
+  /** True only when daily_rollups can support the requested grain. */
+  comparable: boolean;
+  /** Label like "vs prior 14d" for display. */
+  priorLabel: string;
+};
+
+const EMPTY_PERIOD: PeriodSummary = {
+  impressions: 0,
+  escape_attempts: 0,
+  product_viewed: 0,
+  add_to_cart: 0,
+  checkout_started: 0,
+  purchases: 0,
+  revenue_cents: 0,
+};
+
+function sumRollups(rows: DailyRollup[]): PeriodSummary {
+  const out: PeriodSummary = { ...EMPTY_PERIOD };
+  for (const r of rows) {
+    out.impressions += r.impressions ?? 0;
+    out.escape_attempts += r.escape_attempts ?? 0;
+    out.product_viewed += r.product_viewed ?? 0;
+    out.add_to_cart += r.add_to_cart ?? 0;
+    out.checkout_started += r.checkout_started ?? 0;
+    out.purchases += r.purchases ?? 0;
+    out.revenue_cents += r.revenue_cents ?? 0;
+  }
+  return out;
+}
+
+function relDelta(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  return (current - previous) / previous;
+}
+
+function priorLabelFor(days: number): string {
+  if (days < 1) return `vs prior ${Math.round(days * 24)}h`;
+  if (days === 1) return "vs prior 24h";
+  return `vs prior ${days}d`;
+}
+
+export async function getPeriodDelta(
+  merchantId: string,
+  days: number,
+): Promise<PeriodDelta> {
+  const supabase = await getSupabaseServer();
+  if (!supabase || days < 1) {
+    // daily_rollups is day-grain; sub-day ranges can't compare cleanly.
+    return {
+      current: { ...EMPTY_PERIOD },
+      previous: { ...EMPTY_PERIOD },
+      deltas: { impressions: null, escape_attempts: null, purchases: null, revenue_cents: null },
+      comparable: false,
+      priorLabel: priorLabelFor(days),
+    };
+  }
+
+  const dayMs = 86400_000;
+  const toIso = (d: Date) => d.toISOString().slice(0, 10);
+  const now = Date.now();
+  const sinceDouble = toIso(new Date(now - 2 * days * dayMs));
+  const midpoint = toIso(new Date(now - days * dayMs));
+
+  const { data } = await supabase
+    .from("daily_rollups")
+    .select("*")
+    .eq("merchant_id", merchantId)
+    .gte("day", sinceDouble);
+
+  const rows = (data as DailyRollup[]) ?? [];
+  const currentRows = rows.filter((r) => r.day >= midpoint);
+  const previousRows = rows.filter((r) => r.day < midpoint);
+
+  const current = sumRollups(currentRows);
+  const previous = sumRollups(previousRows);
+
+  return {
+    current,
+    previous,
+    deltas: {
+      impressions: relDelta(current.impressions, previous.impressions),
+      escape_attempts: relDelta(current.escape_attempts, previous.escape_attempts),
+      purchases: relDelta(current.purchases, previous.purchases),
+      revenue_cents: relDelta(current.revenue_cents, previous.revenue_cents),
+    },
+    comparable: true,
+    priorLabel: priorLabelFor(days),
+  };
+}
+
 export type SourceRow = {
   utm_source: string;
   total: number;

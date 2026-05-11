@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense, cache } from "react";
 import {
   getCurrentMerchant,
+  getPeriodDelta,
   getRollups,
   getSourceBreakdown,
   getTestFunnel,
@@ -10,6 +11,7 @@ import {
   sampleSizePerBucket,
   type DailyRollup,
   type Funnel,
+  type PeriodDelta,
   type SourceRow,
 } from "@/lib/db";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -83,6 +85,7 @@ const fetchFunnel = cache(getTestFunnel);
 const fetchUnattributed = cache(getUnattributedPurchaseStats);
 const fetchRollups = cache(getRollups);
 const fetchSources = cache(getSourceBreakdown);
+const fetchPeriodDelta = cache(getPeriodDelta);
 
 const fetchActivity = cache(async function fetchActivity(
   merchantId: string,
@@ -316,7 +319,10 @@ async function BannerSection({ merchantId, days }: { merchantId: string; days: n
 }
 
 async function KPISection({ merchantId, days }: { merchantId: string; days: number }) {
-  const funnel = await fetchFunnel(merchantId, days);
+  const [funnel, period] = await Promise.all([
+    fetchFunnel(merchantId, days),
+    fetchPeriodDelta(merchantId, days),
+  ]);
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
   const revA = funnel.revenue_cents.a / 100;
@@ -335,6 +341,7 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
       purchases={funnel.purchases.a + funnel.purchases.b}
       liftRel={liftRel}
       pValue={z?.pValue ?? null}
+      period={period}
     />
   );
 }
@@ -515,6 +522,7 @@ function KPIGrid({
   purchases,
   liftRel,
   pValue,
+  period,
 }: {
   impressions: number;
   escapeAttempts: number;
@@ -523,6 +531,7 @@ function KPIGrid({
   purchases: number;
   liftRel: number | null;
   pValue: number | null;
+  period: PeriodDelta;
 }) {
   const liftStr =
     liftRel == null
@@ -534,11 +543,40 @@ function KPIGrid({
       : liftRel > 0
         ? "text-[var(--color-success)]"
         : "text-[var(--color-danger)]";
+
+  // Escape-rate delta: derived from current vs previous period.
+  const prevEscapeRate =
+    period.previous.impressions > 0
+      ? (100 * period.previous.escape_attempts) / period.previous.impressions
+      : null;
+  const escapeRateDelta =
+    prevEscapeRate != null && prevEscapeRate > 0
+      ? (escapeRate - prevEscapeRate) / prevEscapeRate
+      : null;
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <KPI label="Impressions" value={fmtCompact(impressions)} sub={`${escapeAttempts.toLocaleString()} escapes (bucket A)`} />
-      <KPI label="Escape rate" value={`${escapeRate.toFixed(0)}%`} sub="of bucket A landings" />
-      <KPI label="Revenue (test)" value={fmtUSD(revenue, { compact: true })} sub={`${purchases.toLocaleString()} purchases`} />
+      <KPI
+        label="Impressions"
+        value={fmtCompact(impressions)}
+        sub={`${escapeAttempts.toLocaleString()} escapes (bucket A)`}
+        delta={period.deltas.impressions}
+        deltaLabel={period.priorLabel}
+      />
+      <KPI
+        label="Escape rate"
+        value={`${escapeRate.toFixed(0)}%`}
+        sub="of bucket A landings"
+        delta={escapeRateDelta}
+        deltaLabel={period.priorLabel}
+      />
+      <KPI
+        label="Revenue (test)"
+        value={fmtUSD(revenue, { compact: true })}
+        sub={`${purchases.toLocaleString()} purchases`}
+        delta={period.deltas.revenue_cents}
+        deltaLabel={period.priorLabel}
+      />
       <KPI
         label="Lift · A vs B"
         value={liftStr}
@@ -554,17 +592,35 @@ function KPI({
   value,
   sub,
   valueClass = "",
+  delta,
+  deltaLabel,
 }: {
   label: string;
   value: string;
   sub?: string;
   valueClass?: string;
+  delta?: number | null;
+  deltaLabel?: string;
 }) {
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg px-4 py-3">
       <MonoLabel>{label}</MonoLabel>
-      <div className={`mt-2 h-section text-[26px] tnum ${valueClass}`}>
-        {value}
+      <div className="mt-2 flex items-baseline gap-2 flex-wrap">
+        <div className={`h-section text-[26px] tnum ${valueClass}`}>{value}</div>
+        {delta != null && Number.isFinite(delta) ? (
+          <span
+            className={`text-[11.5px] font-mono tnum font-medium tracking-tight ${
+              delta > 0.001
+                ? "text-[var(--color-success)]"
+                : delta < -0.001
+                  ? "text-[var(--color-danger)]"
+                  : "text-[var(--color-fg-muted)]"
+            }`}
+            title={deltaLabel}
+          >
+            {delta > 0 ? "↑" : delta < 0 ? "↓" : ""} {Math.abs(delta * 100).toFixed(1)}%
+          </span>
+        ) : null}
       </div>
       {sub ? (
         <div className="mt-1 text-[11.5px] text-[var(--color-fg-muted)] tnum">
@@ -578,8 +634,8 @@ function KPI({
 /* -------- Funnel table — IndexTable-style -------- */
 
 function FunnelTable({ funnel }: { funnel: Funnel }) {
-  type Row = { label: string; a: number; b: number; sub: string };
-  const rows: Row[] = [
+  type Stage = { label: string; a: number; b: number; sub: string };
+  const stages: Stage[] = [
     { label: "Impressions", a: funnel.impressions.a, b: funnel.impressions.b, sub: "test landings" },
     { label: "Product viewed", a: funnel.product_viewed.a, b: funnel.product_viewed.b, sub: "/products/*" },
     { label: "Add to cart", a: funnel.add_to_cart.a, b: funnel.add_to_cart.b, sub: "added a SKU" },
@@ -589,6 +645,9 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
   const empty = baseA + baseB === 0;
+  // Bar widths normalized against the first-stage total (so each bar shrinks
+  // visibly through the funnel).
+  const maxTotal = Math.max(1, baseA + baseB);
 
   return (
     <Card title="Funnel · A vs B">
@@ -603,88 +662,111 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
           <div className="mt-1 text-[11.5px] text-[var(--color-fg-muted)]">Paid IG ad clicks will populate here within minutes of install.</div>
         </div>
       ) : (
-        <div>
-          <div className="hidden sm:grid grid-cols-12 px-4 py-2 border-b border-[var(--color-border-soft)]">
-            <div className="col-span-4">
-              <MonoLabel>Stage</MonoLabel>
-            </div>
-            <div className="col-span-3 text-right"><MonoLabel>A · escape</MonoLabel></div>
-            <div className="col-span-3 text-right"><MonoLabel>B · control</MonoLabel></div>
-            <div className="col-span-1 text-right"><MonoLabel>Lift</MonoLabel></div>
-            <div className="col-span-1 text-right"><MonoLabel>p</MonoLabel></div>
-          </div>
-          {rows.map((row, i) => {
-            const cvrA = baseA > 0 ? row.a / baseA : 0;
-            const cvrB = baseB > 0 ? row.b / baseB : 0;
-            const z = i === 0 ? null : zTestTwoProp(row.a, baseA, row.b, baseB);
-            const lift = z?.liftRel != null ? `${z.liftRel > 0 ? "+" : ""}${(z.liftRel * 100).toFixed(0)}%` : "—";
+        <div className="px-4 py-3">
+          {stages.map((stage, i) => {
+            const prev = i > 0 ? stages[i - 1] : null;
+            const total = stage.a + stage.b;
+            const totalWidth = (total / maxTotal) * 100;
+            // Within-bar split: cobalt = bucket A, lighter accent = bucket B.
+            const aPct = total > 0 ? (stage.a / total) * 100 : 50;
+
+            const cvrA = baseA > 0 ? stage.a / baseA : 0;
+            const cvrB = baseB > 0 ? stage.b / baseB : 0;
+            const z = i === 0 ? null : zTestTwoProp(stage.a, baseA, stage.b, baseB);
+            const liftStr =
+              z?.liftRel != null ? `${z.liftRel > 0 ? "+" : ""}${(z.liftRel * 100).toFixed(0)}%` : null;
             const liftColor =
               z?.liftRel == null
                 ? "text-[var(--color-fg-muted)]"
                 : z.liftRel > 0
                   ? "text-[var(--color-success)]"
                   : "text-[var(--color-danger)]";
-            const p =
+            const sig = z?.significant === true;
+            const pStr =
               z?.pValue != null
                 ? z.pValue < 0.001
                   ? "<.001"
                   : z.pValue.toFixed(3)
-                : "—";
-            const sig = z?.significant === true;
+                : null;
+
+            // Stage-over-stage drop-off (overall, both buckets combined).
+            const prevTotal = prev ? prev.a + prev.b : null;
+            const dropPct =
+              prev && prevTotal != null && prevTotal > 0
+                ? Math.round((1 - total / prevTotal) * 100)
+                : null;
+
             return (
-              <div
-                key={row.label}
-                className="border-b border-[var(--color-border-soft)] last:border-b-0 hover:bg-[var(--color-bg-elev)]/50 transition-colors"
-              >
-                {/* Desktop: 12-col grid */}
-                <div className="hidden sm:grid grid-cols-12 items-center px-4 py-2.5">
-                  <div className="col-span-4">
-                    <div className="text-[13px] font-medium tracking-tight">{row.label}</div>
-                    <div className="text-[11px] text-[var(--color-fg-muted)] font-mono">{row.sub}</div>
+              <div key={stage.label}>
+                {/* Drop-off connector — only between rows */}
+                {i > 0 && dropPct != null ? (
+                  <div className="flex items-center gap-2 pl-1 py-1 text-[10.5px] font-mono text-[var(--color-fg-muted)] tnum">
+                    <svg viewBox="0 0 12 12" className="size-3 text-[var(--color-fg-muted)]" fill="none" stroke="currentColor" strokeWidth="1.6">
+                      <path d="M6 2v8M3 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span>{dropPct}% drop-off</span>
                   </div>
-                  <div className="col-span-3 text-right">
-                    <div className="font-mono tnum text-[13px]">{row.a.toLocaleString()}</div>
-                    {i > 0 ? <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{(cvrA * 100).toFixed(2)}%</div> : null}
+                ) : null}
+
+                <div className="group flex items-center gap-3 py-1.5">
+                  {/* Label column */}
+                  <div className="w-[120px] sm:w-[150px] shrink-0">
+                    <div className="text-[12.5px] font-medium tracking-tight leading-tight">{stage.label}</div>
+                    <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono leading-tight mt-0.5">{stage.sub}</div>
                   </div>
-                  <div className="col-span-3 text-right">
-                    <div className="font-mono tnum text-[13px]">{row.b.toLocaleString()}</div>
-                    {i > 0 ? <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{(cvrB * 100).toFixed(2)}%</div> : null}
-                  </div>
-                  <div className={`col-span-1 text-right font-mono tnum text-[13px] font-semibold ${liftColor}`}>{lift}</div>
-                  <div className={`col-span-1 text-right font-mono tnum text-[11.5px] ${sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"}`}>{p}</div>
-                </div>
-                {/* Mobile: stacked */}
-                <div className="sm:hidden px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium tracking-tight">{row.label}</div>
-                      <div className="text-[11px] text-[var(--color-fg-muted)] font-mono">{row.sub}</div>
-                    </div>
-                    <div className={`shrink-0 font-mono tnum text-[13px] font-semibold ${liftColor}`}>{lift}</div>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/40 px-2 py-1.5">
-                      <div className="text-[9.5px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)]">A · escape</div>
-                      <div className="mt-0.5 flex items-baseline justify-between gap-2">
-                        <span className="font-mono tnum text-[13px]">{row.a.toLocaleString()}</span>
-                        {i > 0 ? <span className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{(cvrA * 100).toFixed(2)}%</span> : null}
+                  {/* Bar column */}
+                  <div className="flex-1 min-w-0">
+                    <div className="relative h-6 rounded-md bg-[var(--color-bg-elev)]/50 overflow-hidden">
+                      <div
+                        className="absolute inset-y-0 left-0 flex transition-[width] duration-500"
+                        style={{ width: `${Math.max(2, totalWidth)}%` }}
+                      >
+                        <div
+                          className="h-full bg-[var(--color-accent)]"
+                          style={{ width: `${aPct}%` }}
+                          title={`A: ${stage.a.toLocaleString()}`}
+                        />
+                        <div
+                          className="h-full bg-[var(--color-accent)]/40"
+                          style={{ width: `${100 - aPct}%` }}
+                          title={`B: ${stage.b.toLocaleString()}`}
+                        />
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-end pr-2 text-[10.5px] font-mono tnum text-[var(--color-fg-dim)] pointer-events-none">
+                        <span>
+                          A {fmtCompact(stage.a)}
+                          {i > 0 ? ` · ${(cvrA * 100).toFixed(1)}%` : ""}
+                          <span className="mx-1.5 text-[var(--color-fg-muted)]">·</span>
+                          B {fmtCompact(stage.b)}
+                          {i > 0 ? ` · ${(cvrB * 100).toFixed(1)}%` : ""}
+                        </span>
                       </div>
                     </div>
-                    <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/40 px-2 py-1.5">
-                      <div className="text-[9.5px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)]">B · control</div>
-                      <div className="mt-0.5 flex items-baseline justify-between gap-2">
-                        <span className="font-mono tnum text-[13px]">{row.b.toLocaleString()}</span>
-                        {i > 0 ? <span className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{(cvrB * 100).toFixed(2)}%</span> : null}
-                      </div>
-                    </div>
                   </div>
-                  {i > 0 ? (
-                    <div className={`mt-1.5 text-[10.5px] font-mono tnum text-right ${sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"}`}>p {p}</div>
-                  ) : null}
+                  {/* Lift + p column */}
+                  <div className="w-[78px] shrink-0 text-right">
+                    <div className={`font-mono tnum text-[12.5px] font-semibold ${liftColor}`}>
+                      {liftStr ?? "—"}
+                    </div>
+                    {pStr ? (
+                      <div className={`text-[10px] font-mono tnum ${sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"}`}>
+                        p {pStr}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             );
           })}
+          {/* Legend */}
+          <div className="mt-3 pt-3 border-t border-[var(--color-border-soft)] flex items-center gap-4 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2 rounded-sm bg-[var(--color-accent)]" /> A · escape
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2 rounded-sm bg-[var(--color-accent)]/40" /> B · control
+            </span>
+          </div>
         </div>
       )}
     </Card>
