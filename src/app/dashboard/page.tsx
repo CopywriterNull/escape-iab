@@ -107,7 +107,12 @@ const fetchActivity = cache(async function fetchActivity(
   return (data ?? []) as ActivityRow[];
 });
 
-type SearchParams = Promise<{ range?: string }>;
+type FunnelMode = "raw" | "corrected";
+type SearchParams = Promise<{ range?: string; funnel?: string }>;
+
+function parseFunnelMode(v: string | undefined): FunnelMode {
+  return v === "raw" ? "raw" : "corrected";
+}
 
 /* -------- Page (shell; data streams via Suspense children) -------- */
 
@@ -118,6 +123,7 @@ export default async function DashboardOverview({
 }) {
   const sp = await searchParams;
   const range = parseRange(sp.range);
+  const funnelMode = parseFunnelMode(sp.funnel);
 
   const merchant = await getCurrentMerchant();
   if (!merchant) {
@@ -159,8 +165,8 @@ export default async function DashboardOverview({
         <KPISection merchantId={m} days={d} />
       </Suspense>
 
-      <Suspense key={`funnel-${range.key}`} fallback={<FunnelSkeleton />}>
-        <FunnelSection merchantId={m} days={d} />
+      <Suspense key={`funnel-${range.key}-${funnelMode}`} fallback={<FunnelSkeleton />}>
+        <FunnelSection merchantId={m} days={d} mode={funnelMode} rangeKey={range.key} />
       </Suspense>
 
       <Layout>
@@ -371,9 +377,19 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
   );
 }
 
-async function FunnelSection({ merchantId, days }: { merchantId: string; days: number }) {
+async function FunnelSection({
+  merchantId,
+  days,
+  mode,
+  rangeKey,
+}: {
+  merchantId: string;
+  days: number;
+  mode: FunnelMode;
+  rangeKey: string;
+}) {
   const funnel = await fetchFunnel(merchantId, days);
-  return <FunnelTable funnel={funnel} />;
+  return <FunnelTable funnel={funnel} mode={mode} rangeKey={rangeKey} />;
 }
 
 async function SourcesSection({
@@ -500,6 +516,45 @@ function MonoLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
       {children}
+    </div>
+  );
+}
+
+function FunnelModeToggle({ active, rangeKey }: { active: FunnelMode; rangeKey: string }) {
+  const opts: { key: FunnelMode; label: string; title: string }[] = [
+    { key: "corrected", label: "Corrected", title: "Each stage clamped to ≥ every later stage. Purchase counts (from webhook) are authoritative." },
+    { key: "raw", label: "Raw", title: "Unaltered pixel-side counts. Useful for spotting Shopify pixel firing anomalies." },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="Funnel data mode"
+      className="inline-flex items-center gap-0.5 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)] p-[2px] text-[10.5px]"
+    >
+      {opts.map((o) => {
+        const isActive = o.key === active;
+        const href =
+          o.key === "corrected"
+            ? `/dashboard?range=${rangeKey}`
+            : `/dashboard?range=${rangeKey}&funnel=raw`;
+        return (
+          <Link
+            key={o.key}
+            href={href}
+            role="tab"
+            aria-selected={isActive}
+            title={o.title}
+            className={`px-2 py-[3px] rounded font-mono uppercase tracking-[0.1em] transition-colors focus-ring ${
+              isActive
+                ? "bg-[var(--color-bg)] text-[var(--color-fg)] font-medium shadow-[0_0_0_1px_var(--color-border-soft)_inset]"
+                : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+            }`}
+            scroll={false}
+          >
+            {o.label}
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -733,7 +788,15 @@ function KPI({
 
 /* -------- Funnel table — IndexTable-style -------- */
 
-function FunnelTable({ funnel }: { funnel: Funnel }) {
+function FunnelTable({
+  funnel,
+  mode,
+  rangeKey,
+}: {
+  funnel: Funnel;
+  mode: FunnelMode;
+  rangeKey: string;
+}) {
   type Stage = { label: string; a: number; b: number; sub: string };
   const stages: Stage[] = [
     { label: "Impressions", a: funnel.impressions.a, b: funnel.impressions.b, sub: "test landings" },
@@ -742,14 +805,15 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
     { label: "Checkout started", a: funnel.checkout_started.a, b: funnel.checkout_started.b, sub: "reached /checkouts" },
     { label: "Purchase", a: funnel.purchases.a, b: funnel.purchases.b, sub: "completed" },
   ];
-  // Monotone correction: each upstream stage must be ≥ every downstream stage.
-  // The Shopify pixel sometimes under-fires checkout_started / add_to_cart
-  // (sandbox subdomain isolation), so we can end up with purchases > checkouts.
-  // We back-propagate the floor so the funnel is always logically consistent —
-  // purchases come from the authoritative webhook source.
-  for (let i = stages.length - 2; i >= 0; i--) {
-    stages[i].a = Math.max(stages[i].a, stages[i + 1].a);
-    stages[i].b = Math.max(stages[i].b, stages[i + 1].b);
+  // In "corrected" mode, back-propagate each stage so it's ≥ every later
+  // stage (the Shopify pixel can under-fire checkout_started / add_to_cart;
+  // purchases are authoritative via the webhook). "raw" preserves the
+  // unaltered pixel-side counts so you can spot pixel-firing anomalies.
+  if (mode === "corrected") {
+    for (let i = stages.length - 2; i >= 0; i--) {
+      stages[i].a = Math.max(stages[i].a, stages[i + 1].a);
+      stages[i].b = Math.max(stages[i].b, stages[i + 1].b);
+    }
   }
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
@@ -758,7 +822,7 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
   return (
     <Card
       title="Funnel · A vs B"
-      action={<MonoLabel>ASCII view</MonoLabel>}
+      action={<FunnelModeToggle active={mode} rangeKey={rangeKey} />}
     >
       {empty ? (
         <div className="px-4 py-12 text-center">
