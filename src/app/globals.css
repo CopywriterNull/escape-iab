@@ -549,6 +549,148 @@ body {
   100% { transform: scaleX(0.82); }
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   Magic UI primitives — rainbow button, shine border, pointer,
+   animated list, text highlighter. CSS-only where possible.
+   ───────────────────────────────────────────────────────────────── */
+
+/* Rainbow button — moving spectrum gradient + soft glow halo. */
+@keyframes rainbow-pan {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.rainbow-btn {
+  --rainbow-1: hsl(0 100% 63%);
+  --rainbow-2: hsl(270 100% 63%);
+  --rainbow-3: hsl(210 100% 63%);
+  --rainbow-4: hsl(195 100% 63%);
+  --rainbow-5: hsl(90 100% 63%);
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(var(--color-cta-bg), var(--color-cta-bg)) padding-box,
+    linear-gradient(90deg,
+      var(--rainbow-1), var(--rainbow-2), var(--rainbow-3),
+      var(--rainbow-4), var(--rainbow-5), var(--rainbow-1)) 0 0 / 200% 100% border-box;
+  border: 1.5px solid transparent;
+  animation: rainbow-pan 4s linear infinite;
+}
+.rainbow-btn::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  z-index: -1;
+  border-radius: inherit;
+  background: inherit;
+  filter: blur(14px);
+  opacity: 0.55;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rainbow-btn { animation: none; }
+}
+
+/* Shine border — animated conic gradient travels around the border. */
+@property --shine-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes shine-rotate {
+  to { --shine-angle: 360deg; }
+}
+.shine-border {
+  position: relative;
+  isolation: isolate;
+}
+.shine-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--shine-angle),
+    color-mix(in srgb, var(--color-accent) 70%, transparent) 0deg,
+    transparent 80deg,
+    color-mix(in srgb, var(--color-accent) 40%, transparent) 160deg,
+    transparent 220deg,
+    color-mix(in srgb, var(--color-accent) 70%, transparent) 320deg,
+    color-mix(in srgb, var(--color-accent) 70%, transparent) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  animation: shine-rotate 6s linear infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shine-border::before { animation: none; }
+}
+
+/* Custom cobalt pointer — small dot follows the mouse on desktop. */
+.magic-pointer {
+  position: fixed;
+  pointer-events: none;
+  z-index: 60;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  mix-blend-mode: multiply;
+  transform: translate(-50%, -50%);
+  transition: width 220ms cubic-bezier(0.32, 0.72, 0, 1),
+              height 220ms cubic-bezier(0.32, 0.72, 0, 1),
+              opacity 220ms ease;
+  opacity: 0;
+}
+.magic-pointer.is-visible { opacity: 0.85; }
+.magic-pointer.is-link { width: 36px; height: 36px; opacity: 0.35; }
+@media (hover: none) { .magic-pointer { display: none; } }
+
+/* Animated list — items slide in from top, then settle. */
+@keyframes magic-list-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+.magic-list-item {
+  animation: magic-list-in 520ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  transition: transform 520ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Text highlighter — sweep activates when .is-active class is added. */
+.magic-highlight {
+  background-image: linear-gradient(
+    to top,
+    transparent 6%,
+    color-mix(in srgb, var(--color-accent) 26%, transparent) 6%,
+    color-mix(in srgb, var(--color-accent) 26%, transparent) 38%,
+    transparent 38%
+  );
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: 0% 100%;
+  padding: 0 0.06em;
+  border-radius: 2px;
+  transition: background-size 700ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.magic-highlight.is-active { background-size: 100% 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .magic-highlight { background-size: 100% 100%; transition: none; }
+}
+
 html { scroll-behavior: smooth; }
 
 /* Hide scrollbar on horizontal overflow containers (e.g. range selector on mobile). */

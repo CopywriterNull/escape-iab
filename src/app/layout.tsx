@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { brand } from "@/lib/branding";
+import { themeBootScript } from "@/components/magic/ThemeToggle";
 import "./globals.css";
 
 const geist = Geist({ variable: "--font-sans", subsets: ["latin"] });
@@ -78,6 +80,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="en"
       className={`${geist.variable} ${geistMono.variable} ${instrumentSerif.variable} antialiased`}
     >
+      <head>
+        <Script
+          id="theme-boot"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeBootScript }}
+        />
+      </head>
       <body className="min-h-dvh">{children}</body>
     </html>
   );

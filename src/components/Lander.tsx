@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { brand } from "@/lib/branding";
 import { PlatformLogo, type PlatformId } from "@/components/PlatformLogos";
+import { RainbowButton } from "@/components/magic/RainbowButton";
+import { ShineBorder } from "@/components/magic/ShineBorder";
+import { ThemeToggle } from "@/components/magic/ThemeToggle";
+import { AnimatedList } from "@/components/magic/AnimatedList";
+import { PointerTracker } from "@/components/magic/PointerTracker";
+import { TextHighlighter } from "@/components/magic/TextHighlighter";
 
 type Theme = "dark" | "light";
 
@@ -17,8 +23,9 @@ export function Lander({
   proof?: LanderProof;
 }) {
   return (
-    <div data-theme={theme} className="text-[var(--color-fg)] bg-[var(--color-bg)] grain relative overflow-x-clip">
+    <div className="text-[var(--color-fg)] bg-[var(--color-bg)] grain relative overflow-x-clip">
       <div aria-hidden className="gradient-dotgrid" />
+      <PointerTracker />
       <Nav theme={theme} />
       <Hero proof={proof} />
       <PlatformsSection />
@@ -38,9 +45,7 @@ export function Lander({
 
 /* -------- Nav -------- */
 
-function Nav({ theme }: { theme: Theme }) {
-  const otherHref = theme === "dark" ? "/" : "/dark";
-  const otherLabel = theme === "dark" ? "Light" : "Dark";
+function Nav({ theme: _theme }: { theme: Theme }) {
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-[var(--color-bg)]/80 border-b border-[var(--color-border)]/60">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between gap-3 sm:gap-6">
@@ -55,25 +60,15 @@ function Nav({ theme }: { theme: Theme }) {
           <NavLink href="#faq">FAQ</NavLink>
         </nav>
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <Link
-            href={otherHref}
-            aria-label={`Switch to ${otherLabel.toLowerCase()} theme`}
-            className="hidden sm:inline-block text-xs px-2.5 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:border-[var(--color-fg-muted)] transition-colors focus-ring"
-          >
-            {otherLabel}
-          </Link>
+          <ThemeToggle className="hidden sm:inline-flex" />
           <Link href="/login" className="hidden sm:inline-block text-sm text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] px-3 py-1.5 transition-colors focus-ring rounded-md">
             Sign in
           </Link>
-          <a
-            href="#waitlist"
-            className="group inline-flex items-center gap-2 rounded-full font-medium press lift focus-ring px-3 py-1.5 text-[13px] sm:text-sm bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)]"
-            style={{ boxShadow: "var(--shadow-cta)" }}
-          >
+          <RainbowButton href="#waitlist" className="!h-9 !px-4 !text-[13px] sm:!text-sm">
             <span className="sm:hidden">Get access</span>
             <span className="hidden sm:inline">Get early access</span>
-            <span className="btn-icon"><ArrowRight /></span>
-          </a>
+            <ArrowRight />
+          </RainbowButton>
         </div>
       </div>
     </header>
@@ -150,6 +145,7 @@ function Hero({ proof }: { proof?: LanderProof }) {
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 mesh-bg pointer-events-none" />
       <FloatingPlatformLogos />
+      <FloatingLiveEvents />
       <div className="relative mx-auto max-w-6xl px-5 pt-16 md:pt-24 pb-8">
         <div className="flex justify-center mb-7 hero-enter hero-enter-1">
           <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)]/80 px-3.5 py-1 text-[12px] text-[var(--color-fg-dim)] backdrop-blur">
@@ -168,7 +164,7 @@ function Hero({ proof }: { proof?: LanderProof }) {
           </span>
         </h1>
         <p className="mx-auto mt-7 max-w-2xl text-center text-[var(--color-fg-dim)] text-[17px] leading-relaxed hero-enter hero-enter-4">
-          Every paid IG ad click opens inside Instagram&apos;s broken in-app browser. EscapeHatch detects it and reopens your store in <span className="highlight-sweep">Safari</span> before checkout loads. One snippet. 60-second install.
+          Every paid IG ad click opens inside Instagram&apos;s broken in-app browser. EscapeHatch detects it and reopens your store in <TextHighlighter delay={400}>Safari</TextHighlighter> before checkout loads. One snippet. 60-second install.
         </p>
         <div className="hero-enter hero-enter-5">
           <Waitlist />
@@ -684,13 +680,22 @@ type FloatPos = {
 };
 
 const HERO_FLOATERS: FloatPos[] = [
-  { id: "instagram",  size: 64, rotate: -8,  top: "10%", side: "left",  offset: "5%",  delay: "0s" },
-  { id: "discord",    size: 56, rotate: 12,  top: "46%", side: "left",  offset: "9%",  delay: "1.6s" },
-  { id: "snap",       size: 50, rotate: -6,  top: "78%", side: "left",  offset: "3%",  delay: "3.1s" },
-  { id: "facebook",   size: 60, rotate: 10,  top: "14%", side: "right", offset: "6%",  delay: "0.7s" },
-  { id: "pinterest",  size: 54, rotate: -10, top: "50%", side: "right", offset: "9%",  delay: "2.2s" },
-  { id: "tiktok",     size: 56, rotate: 6,   top: "76%", side: "right", offset: "4%",  delay: "3.8s" },
+  // Left gutter — 4 floaters (right gutter is reserved for the live events list)
+  { id: "instagram", size: 64, rotate: -8,  top: "10%", side: "left", offset: "5%", delay: "0s" },
+  { id: "facebook",  size: 56, rotate: 8,   top: "30%", side: "left", offset: "12%", delay: "0.8s" },
+  { id: "discord",   size: 58, rotate: 12,  top: "52%", side: "left", offset: "5%", delay: "1.6s" },
+  { id: "pinterest", size: 52, rotate: -10, top: "70%", side: "left", offset: "11%", delay: "2.4s" },
+  { id: "snap",      size: 50, rotate: -6,  top: "86%", side: "left", offset: "3%", delay: "3.1s" },
 ];
+
+function FloatingLiveEvents() {
+  // Anchored top-right of the hero on desktop, scrolls with content.
+  return (
+    <div className="hidden lg:block absolute top-[14%] right-[4%] z-10 w-[300px]">
+      <AnimatedList />
+    </div>
+  );
+}
 
 function FloatingPlatformLogos() {
   return (
@@ -791,16 +796,12 @@ function ClosingCTA() {
       <p className="mt-5 text-[15px] text-[var(--color-fg-dim)] max-w-lg mx-auto">
         Every paid IG click that lands in the in-app browser is a customer you already paid for. Recover them.
       </p>
-      <Link
-        href="#waitlist"
-        className="group mt-8 inline-flex items-center gap-2 px-6 h-12 rounded-full bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-[14px] font-medium press lift focus-ring"
-        style={{ boxShadow: "var(--shadow-cta)" }}
-      >
+      <RainbowButton href="#waitlist" className="mt-8 !h-12 !px-6">
         Start free · 60-second install
         <span className="btn-icon">
           <ArrowRight />
         </span>
-      </Link>
+      </RainbowButton>
     </section>
   );
 }
@@ -1364,9 +1365,9 @@ function Pricing() {
 }
 
 function PricingCard({ tier }: { tier: { name: string; price: string; sub: string; cta: { label: string; href: string }; features: string[]; featured?: boolean; badge?: string } }) {
-  return (
+  const cardBody = (
     <div
-      className={`relative rounded-2xl flex flex-col ${
+      className={`relative rounded-2xl flex flex-col h-full ${
         tier.featured
           ? "border-2 border-[var(--color-accent)]/50 bg-[var(--color-card-hi)]"
           : "border border-[var(--color-border)] bg-[var(--color-card)]"
@@ -1412,6 +1413,7 @@ function PricingCard({ tier }: { tier: { name: string; price: string; sub: strin
       </div>
     </div>
   );
+  return tier.featured ? <ShineBorder radius={18}>{cardBody}</ShineBorder> : cardBody;
 }
 
 /* -------- FAQ -------- */
