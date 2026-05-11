@@ -147,14 +147,14 @@ function Hero() {
         </div>
         <h1 className="text-center max-w-4xl mx-auto text-balance px-1">
           <span className="block h-display text-[36px] sm:text-5xl md:text-7xl text-[var(--color-fg)] hero-enter hero-enter-2">
-            Your Instagram ads <span className="highlight-sweep">work</span>.
+            Your Instagram ads work.
           </span>
           <span className="block mt-1 h-editorial text-[36px] sm:text-5xl md:text-7xl text-[var(--color-accent)] hero-enter hero-enter-3">
             Your Instagram checkout doesn&apos;t.
           </span>
         </h1>
         <p className="mx-auto mt-7 max-w-2xl text-center text-[var(--color-fg-dim)] text-[17px] leading-relaxed hero-enter hero-enter-4">
-          {brand.subhead}
+          Every paid IG ad click opens inside Instagram&apos;s broken in-app browser. EscapeHatch detects it and reopens your store in <span className="highlight-sweep">Safari</span> before checkout loads. One snippet. 60-second install.
         </p>
         <div className="hero-enter hero-enter-5">
           <Waitlist />
