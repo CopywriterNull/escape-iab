@@ -119,7 +119,7 @@ export default async function DashboardLayout({
 
       {/* Main content */}
       <main className="flex-1 min-w-0">
-        <div className="mx-auto max-w-6xl px-6 py-6">{children}</div>
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-5 sm:py-6">{children}</div>
       </main>
 
       {!merchant ? (

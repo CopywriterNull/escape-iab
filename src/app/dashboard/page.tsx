@@ -16,7 +16,11 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const RANGES: { key: string; label: string; days: number }[] = [
+type Range = { key: string; label: string; days: number; subDay?: boolean };
+
+const RANGES: Range[] = [
+  { key: "1h", label: "1h", days: 1 / 24, subDay: true },
+  { key: "6h", label: "6h", days: 6 / 24, subDay: true },
   { key: "1d", label: "24h", days: 1 },
   { key: "7d", label: "7d", days: 7 },
   { key: "14d", label: "14d", days: 14 },
@@ -24,9 +28,9 @@ const RANGES: { key: string; label: string; days: number }[] = [
   { key: "90d", label: "90d", days: 90 },
 ];
 
-function parseRange(v: string | undefined): { key: string; days: number; label: string } {
+function parseRange(v: string | undefined): Range {
   const found = RANGES.find((r) => r.key === v);
-  return found ?? RANGES[2]; // default 14d
+  return found ?? RANGES[4]; // default 14d
 }
 
 type ActivityRow = {
@@ -164,22 +168,22 @@ function Page({
   title: string;
   subtitle?: React.ReactNode;
   action?: React.ReactNode;
-  range?: { key: string; label: string; days: number };
+  range?: Range;
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between flex-wrap gap-3 pb-4 border-b border-[var(--color-border)]">
-        <div>
+    <div className="space-y-5 md:space-y-6">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 pb-4 border-b border-[var(--color-border)]">
+        <div className="min-w-0">
           <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-accent)]">
             Overview
           </div>
-          <h1 className="mt-2 h-display text-[32px] tracking-tight">
+          <h1 className="mt-2 h-display text-[26px] md:text-[32px] tracking-tight truncate">
             {title}
           </h1>
           {subtitle ? <div className="mt-2">{subtitle}</div> : null}
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap -mx-1 md:mx-0 overflow-x-auto md:overflow-visible scrollbar-none">
           {range ? <RangeSelector active={range.key} /> : null}
           {action}
         </div>
@@ -191,19 +195,25 @@ function Page({
 
 function RangeSelector({ active }: { active: string }) {
   return (
-    <div className="inline-flex items-center rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-0.5 text-[12px]">
+    <div
+      role="tablist"
+      aria-label="Date range"
+      className="inline-flex items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-card)] p-[3px] text-[12px] shadow-[0_1px_0_rgba(0,0,0,0.02)]"
+    >
       {RANGES.map((r) => {
         const isActive = r.key === active;
         return (
           <Link
             key={r.key}
             href={`/dashboard?range=${r.key}`}
-            className={`px-2.5 py-1 rounded-sm font-mono tnum transition-colors focus-ring ${
-              isActive
-                ? "bg-[var(--color-bg-elev)] text-[var(--color-fg)] font-medium"
-                : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
-            }`}
+            role="tab"
+            aria-selected={isActive}
             aria-current={isActive ? "page" : undefined}
+            className={`relative px-2.5 py-[5px] rounded-full font-mono tnum focus-ring select-none transition-[background-color,color,transform] duration-200 ease-out active:scale-[0.97] ${
+              isActive
+                ? "bg-[var(--color-bg)] text-[var(--color-fg)] font-medium shadow-[0_1px_2px_rgba(0,0,0,0.06),0_0_0_1px_var(--color-border-soft)_inset]"
+                : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-elev)]/60"
+            }`}
           >
             {r.label}
           </Link>
@@ -423,7 +433,7 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
         </div>
       ) : (
         <div>
-          <div className="grid grid-cols-12 px-4 py-2 border-b border-[var(--color-border-soft)]">
+          <div className="hidden sm:grid grid-cols-12 px-4 py-2 border-b border-[var(--color-border-soft)]">
             <div className="col-span-4">
               <MonoLabel>Stage</MonoLabel>
             </div>
@@ -453,22 +463,54 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
             return (
               <div
                 key={row.label}
-                className="grid grid-cols-12 items-center px-4 py-2.5 border-b border-[var(--color-border-soft)] last:border-b-0 hover:bg-[var(--color-bg-elev)]/50 transition-colors"
+                className="border-b border-[var(--color-border-soft)] last:border-b-0 hover:bg-[var(--color-bg-elev)]/50 transition-colors"
               >
-                <div className="col-span-4">
-                  <div className="text-[13px] font-medium tracking-tight">{row.label}</div>
-                  <div className="text-[11px] text-[var(--color-fg-muted)] font-mono">{row.sub}</div>
+                {/* Desktop: 12-col grid */}
+                <div className="hidden sm:grid grid-cols-12 items-center px-4 py-2.5">
+                  <div className="col-span-4">
+                    <div className="text-[13px] font-medium tracking-tight">{row.label}</div>
+                    <div className="text-[11px] text-[var(--color-fg-muted)] font-mono">{row.sub}</div>
+                  </div>
+                  <div className="col-span-3 text-right">
+                    <div className="font-mono tnum text-[13px]">{row.a.toLocaleString()}</div>
+                    {i > 0 ? <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{(cvrA * 100).toFixed(2)}%</div> : null}
+                  </div>
+                  <div className="col-span-3 text-right">
+                    <div className="font-mono tnum text-[13px]">{row.b.toLocaleString()}</div>
+                    {i > 0 ? <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{(cvrB * 100).toFixed(2)}%</div> : null}
+                  </div>
+                  <div className={`col-span-1 text-right font-mono tnum text-[13px] font-semibold ${liftColor}`}>{lift}</div>
+                  <div className={`col-span-1 text-right font-mono tnum text-[11.5px] ${sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"}`}>{p}</div>
                 </div>
-                <div className="col-span-3 text-right">
-                  <div className="font-mono tnum text-[13px]">{row.a.toLocaleString()}</div>
-                  {i > 0 ? <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{(cvrA * 100).toFixed(2)}%</div> : null}
+                {/* Mobile: stacked */}
+                <div className="sm:hidden px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-medium tracking-tight">{row.label}</div>
+                      <div className="text-[11px] text-[var(--color-fg-muted)] font-mono">{row.sub}</div>
+                    </div>
+                    <div className={`shrink-0 font-mono tnum text-[13px] font-semibold ${liftColor}`}>{lift}</div>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/40 px-2 py-1.5">
+                      <div className="text-[9.5px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)]">A · escape</div>
+                      <div className="mt-0.5 flex items-baseline justify-between gap-2">
+                        <span className="font-mono tnum text-[13px]">{row.a.toLocaleString()}</span>
+                        {i > 0 ? <span className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{(cvrA * 100).toFixed(2)}%</span> : null}
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/40 px-2 py-1.5">
+                      <div className="text-[9.5px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)]">B · control</div>
+                      <div className="mt-0.5 flex items-baseline justify-between gap-2">
+                        <span className="font-mono tnum text-[13px]">{row.b.toLocaleString()}</span>
+                        {i > 0 ? <span className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{(cvrB * 100).toFixed(2)}%</span> : null}
+                      </div>
+                    </div>
+                  </div>
+                  {i > 0 ? (
+                    <div className={`mt-1.5 text-[10.5px] font-mono tnum text-right ${sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"}`}>p {p}</div>
+                  ) : null}
                 </div>
-                <div className="col-span-3 text-right">
-                  <div className="font-mono tnum text-[13px]">{row.b.toLocaleString()}</div>
-                  {i > 0 ? <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{(cvrB * 100).toFixed(2)}%</div> : null}
-                </div>
-                <div className={`col-span-1 text-right font-mono tnum text-[13px] font-semibold ${liftColor}`}>{lift}</div>
-                <div className={`col-span-1 text-right font-mono tnum text-[11.5px] ${sig ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]"}`}>{p}</div>
               </div>
             );
           })}
@@ -521,14 +563,14 @@ function SourcesCard({ sources, rangeLabel = "14d" }: { sources: SourceRow[]; ra
 function ChartCard({ rollups, rangeLabel = "14d" }: { rollups: DailyRollup[]; rangeLabel?: string }) {
   return (
     <Card title="Impressions vs escapes" action={<MonoLabel>{rangeLabel}</MonoLabel>}>
-      <DailyChart rollups={rollups} />
+      <DailyChart rollups={rollups} rangeLabel={rangeLabel} />
     </Card>
   );
 }
 
-function DailyChart({ rollups }: { rollups: DailyRollup[] }) {
+function DailyChart({ rollups, rangeLabel }: { rollups: DailyRollup[]; rangeLabel: string }) {
   if (rollups.length === 0) {
-    return <MutedText>Once events arrive, you&apos;ll see a 14-day trend here.</MutedText>;
+    return <MutedText>Once events arrive, you&apos;ll see a {rangeLabel} trend here.</MutedText>;
   }
   const byDay = new Map<string, { day: string; impressions: number; escapes: number }>();
   for (const r of rollups) {
@@ -643,20 +685,43 @@ function ActivityRow({ row }: { row: ActivityRow }) {
   const value = row.value_cents != null ? `$${(row.value_cents / 100).toFixed(2)}` : "";
   const ts = formatRelative(row.created_at);
   return (
-    <div className="grid grid-cols-12 items-center gap-3 px-4 py-2 hover:bg-[var(--color-bg-elev)]/50 transition-colors text-[12.5px]">
-      <div className="col-span-2 flex items-center gap-2 min-w-0">
-        <span className={eventPill.cls}>{eventPill.label}</span>
+    <div className="px-4 py-2.5 hover:bg-[var(--color-bg-elev)]/50 transition-colors text-[12.5px]">
+      {/* Desktop grid */}
+      <div className="hidden sm:grid grid-cols-12 items-center gap-3">
+        <div className="col-span-2 flex items-center gap-2 min-w-0">
+          <span className={eventPill.cls}>{eventPill.label}</span>
+        </div>
+        <div className="col-span-3 flex items-center gap-2 min-w-0">
+          <span className="pill pill-muted">BUCKET&nbsp;{row.bucket.toUpperCase()}</span>
+          {!row.in_test ? <span className="pill pill-warn">UNATTR</span> : null}
+        </div>
+        <div className="col-span-3 text-[12px] text-[var(--color-fg-dim)] tnum truncate">
+          {row.utm_source ? `utm: ${row.utm_source}` : ""}
+          {row.iab_kind && row.iab_kind !== "instagram" ? ` · ${row.iab_kind}` : ""}
+        </div>
+        <div className="col-span-2 text-right tnum">{value}</div>
+        <div className="col-span-2 text-right text-[11.5px] text-[var(--color-fg-muted)] tnum">{ts} ago</div>
       </div>
-      <div className="col-span-3 flex items-center gap-2 min-w-0">
-        <span className="pill pill-muted">BUCKET&nbsp;{row.bucket.toUpperCase()}</span>
-        {!row.in_test ? <span className="pill pill-warn">UNATTR</span> : null}
+      {/* Mobile stacked */}
+      <div className="sm:hidden">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+            <span className={eventPill.cls}>{eventPill.label}</span>
+            <span className="pill pill-muted">B{row.bucket.toUpperCase()}</span>
+            {!row.in_test ? <span className="pill pill-warn">UNATTR</span> : null}
+          </div>
+          <div className="shrink-0 text-right">
+            {value ? <div className="tnum text-[13px] font-medium">{value}</div> : null}
+            <div className="text-[10.5px] text-[var(--color-fg-muted)] font-mono tnum">{ts} ago</div>
+          </div>
+        </div>
+        {row.utm_source || (row.iab_kind && row.iab_kind !== "instagram") ? (
+          <div className="mt-1 text-[11px] text-[var(--color-fg-dim)] font-mono tnum truncate">
+            {row.utm_source ? `utm: ${row.utm_source}` : ""}
+            {row.iab_kind && row.iab_kind !== "instagram" ? ` · ${row.iab_kind}` : ""}
+          </div>
+        ) : null}
       </div>
-      <div className="col-span-3 text-[12px] text-[var(--color-fg-dim)] tnum truncate">
-        {row.utm_source ? `utm: ${row.utm_source}` : ""}
-        {row.iab_kind && row.iab_kind !== "instagram" ? ` · ${row.iab_kind}` : ""}
-      </div>
-      <div className="col-span-2 text-right tnum">{value}</div>
-      <div className="col-span-2 text-right text-[11.5px] text-[var(--color-fg-muted)] tnum">{ts} ago</div>
     </div>
   );
 }
