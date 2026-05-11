@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { brand } from "@/lib/branding";
 
@@ -135,49 +134,41 @@ function CTAButton({
 function Hero() {
   return (
     <section className="relative overflow-hidden">
-      {/* Ambient hero artwork — Higgsfield soul_location: pale interior + cobalt doorway. */}
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none opacity-[0.22] [mask-image:radial-gradient(ellipse_at_top,black_25%,transparent_75%)]"
-      >
-        <Image
-          src="/img/hero/hero-bg-doorway-cobalt.png"
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-[40%_30%]"
-        />
-      </div>
       <div className="absolute inset-0 mesh-bg pointer-events-none" />
       <div className="absolute inset-0 dotgrid opacity-30 pointer-events-none [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_70%)]" />
-      <div className="relative mx-auto max-w-6xl px-5 pt-16 md:pt-24 pb-8">
-        <div className="flex justify-center mb-7">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)]/80 px-3.5 py-1 text-[12px] text-[var(--color-fg-dim)] backdrop-blur">
-            <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
-            <span className="font-medium tracking-tight">Now in private beta</span>
-            <span className="opacity-50">·</span>
-            <span>First customer: G FUEL</span>
-          </span>
+      <div className="relative mx-auto max-w-6xl px-5 pt-12 md:pt-20 pb-16 md:pb-24">
+        <div className="grid md:grid-cols-2 gap-10 md:gap-12 lg:gap-16 items-center">
+          {/* Left: copy + CTA */}
+          <div className="max-w-xl">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)]/80 px-3.5 py-1 text-[12px] text-[var(--color-fg-dim)] backdrop-blur">
+              <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
+              <span className="font-medium tracking-tight">Now in private beta</span>
+              <span className="opacity-50">·</span>
+              <span>First customer: G FUEL</span>
+            </span>
+            <h1 className="mt-6 text-balance">
+              <span className="block h-display text-[36px] sm:text-5xl md:text-[52px] lg:text-6xl text-[var(--color-fg)]">
+                Your Instagram ads work.
+              </span>
+              <span className="block mt-1 h-editorial text-[36px] sm:text-5xl md:text-[52px] lg:text-6xl text-[var(--color-accent)]">
+                Your Instagram checkout doesn&apos;t.
+              </span>
+            </h1>
+            <p className="mt-6 text-[var(--color-fg-dim)] text-[16px] md:text-[17px] leading-relaxed max-w-lg">
+              {brand.subhead}
+            </p>
+            <Waitlist />
+            <p className="mt-3 text-[11px] text-[var(--color-fg-muted)]">
+              No credit card · 5,000 escapes/mo on free · Install in 60 seconds
+            </p>
+            <HeroProof />
+          </div>
+          {/* Right: phones */}
+          <div className="relative">
+            <HeroVisual />
+          </div>
         </div>
-        <h1 className="text-center max-w-4xl mx-auto text-balance px-1">
-          <span className="block h-display text-[36px] sm:text-5xl md:text-7xl text-[var(--color-fg)]">
-            Your Instagram ads work.
-          </span>
-          <span className="block mt-1 h-editorial text-[36px] sm:text-5xl md:text-7xl text-[var(--color-accent)]">
-            Your Instagram checkout doesn&apos;t.
-          </span>
-        </h1>
-        <p className="mx-auto mt-7 max-w-2xl text-center text-[var(--color-fg-dim)] text-[17px] leading-relaxed">
-          {brand.subhead}
-        </p>
-        <Waitlist />
-        <p className="mt-3 text-center text-xs text-[var(--color-fg-muted)]">
-          No credit card · 5,000 escapes/mo on free · Install in 60 seconds
-        </p>
-        <HeroProof />
       </div>
-      <HeroVisual />
     </section>
   );
 }
@@ -189,14 +180,14 @@ function HeroProof() {
     { value: "1.1 KB", label: "Snippet, edge-cached" },
   ];
   return (
-    <div className="mx-auto mt-14 max-w-3xl grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="mt-10 grid grid-cols-3 gap-3 max-w-lg">
       {proofs.map((p) => (
         <div
           key={p.label}
-          className="text-center px-4 py-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)]/60"
+          className="px-3 py-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)]/60"
         >
-          <div className="h-display text-2xl tnum text-[var(--color-fg)]">{p.value}</div>
-          <div className="mt-1 text-[11px] text-[var(--color-fg-muted)] leading-tight">{p.label}</div>
+          <div className="h-display text-xl md:text-2xl tnum text-[var(--color-fg)]">{p.value}</div>
+          <div className="mt-1 text-[10.5px] text-[var(--color-fg-muted)] leading-tight">{p.label}</div>
         </div>
       ))}
     </div>
@@ -209,7 +200,7 @@ function Waitlist() {
       id="waitlist"
       action="/login"
       method="GET"
-      className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-2.5 max-w-md mx-auto"
+      className="mt-7 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 max-w-md"
     >
       <input
         type="email"
@@ -234,7 +225,7 @@ function Waitlist() {
 
 function HeroVisual() {
   return (
-    <div className="relative mx-auto max-w-[760px] px-5 pb-20">
+    <div className="relative w-full max-w-[640px] mx-auto md:mx-0">
       <div className="relative grid grid-cols-2 gap-3 sm:gap-5 items-start">
         <PhoneCol
           variant="danger"
@@ -264,7 +255,7 @@ function HeroVisual() {
         />
         <ConnectorArrow />
       </div>
-      <p className="text-center text-[11px] text-[var(--color-fg-muted)] mt-7 italic">
+      <p className="text-center text-[11px] text-[var(--color-fg-muted)] mt-5 italic">
         Illustrative checkout. Actual lift varies — your dashboard A/B tests against your own traffic.
       </p>
     </div>

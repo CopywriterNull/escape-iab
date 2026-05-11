@@ -35,7 +35,7 @@ export default async function DashboardLayout({
   const merchant = await getCurrentMerchant();
 
   return (
-    <div className="min-h-dvh flex bg-[var(--color-bg)] text-[var(--color-fg)]">
+    <div className="min-h-dvh flex flex-col md:flex-row bg-[var(--color-bg)] text-[var(--color-fg)]">
       {/* Sidebar */}
       <aside className="hidden md:flex w-[240px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-bg-elev)]/40 sticky top-0 h-dvh">
         <div className="px-4 h-14 flex items-center gap-2.5 border-b border-[var(--color-border)]">

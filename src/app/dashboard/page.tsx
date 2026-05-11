@@ -221,7 +221,7 @@ async function HeroSection({
         <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-accent)]">
           Test performance
         </div>
-        <div className="mt-2 h-display text-[40px] md:text-[44px] tracking-tight text-[var(--color-fg-dim)]">
+        <div className="mt-2 h-display text-[32px] md:text-[44px] tracking-tight text-[var(--color-fg-dim)]">
           Waiting for traffic
         </div>
         <div className="mt-2 text-[13px] text-[var(--color-fg-muted)] max-w-xl">
@@ -273,7 +273,7 @@ async function HeroSection({
           Test performance · last {rangeLabel}
         </div>
       </div>
-      <div className={`mt-2 h-display tracking-tight text-[44px] md:text-[56px] leading-[1.05] tnum ${liftColor}`}>
+      <div className={`mt-2 h-display tracking-tight text-[36px] md:text-[56px] leading-[1.05] tnum ${liftColor}`}>
         {liftStr}
       </div>
       <div className="mt-2 text-[14px] text-[var(--color-fg-dim)]">
