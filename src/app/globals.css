@@ -198,29 +198,41 @@ body {
   background-size: 24px 24px;
 }
 
-/* Site-wide top-down dotted gradient — fixed to viewport, fades to
-   transparent by ~70% scroll depth. Tones the dot color almost to white. */
+/* Site-wide top-down dotted gradient — fixed to viewport. Dots are
+   tinted with the accent color, more visible at the top, fully gone
+   by ~40% scroll depth (concentrated in the hero band). */
 .gradient-dotgrid {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.65;
-  background-image: radial-gradient(var(--color-dot) 1px, transparent 1px);
-  background-size: 22px 22px;
+  opacity: 0.9;
+  background-image:
+    /* Top layer: cobalt-tinted dots, denser at the top */
+    radial-gradient(
+      color-mix(in srgb, var(--color-accent) 22%, transparent) 1.2px,
+      transparent 1.4px
+    ),
+    /* Underlay: faint neutral dots, matching pattern for warmth */
+    radial-gradient(
+      color-mix(in srgb, var(--color-fg) 6%, transparent) 1px,
+      transparent 1.2px
+    );
+  background-size: 22px 22px, 22px 22px;
+  background-position: 0 0, 11px 11px;
   mask-image: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.95) 0%,
-    rgba(0, 0, 0, 0.55) 22%,
-    rgba(0, 0, 0, 0.18) 50%,
-    transparent 72%
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.65) 12%,
+    rgba(0, 0, 0, 0.25) 26%,
+    transparent 40%
   );
   -webkit-mask-image: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.95) 0%,
-    rgba(0, 0, 0, 0.55) 22%,
-    rgba(0, 0, 0, 0.18) 50%,
-    transparent 72%
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.65) 12%,
+    rgba(0, 0, 0, 0.25) 26%,
+    transparent 40%
   );
 }
 

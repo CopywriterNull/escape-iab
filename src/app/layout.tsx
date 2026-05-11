@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { brand } from "@/lib/branding";
 import "./globals.css";
@@ -22,13 +22,71 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: `${brand.name} — ${brand.tagline}`, template: `%s · ${brand.name}` },
   description: brand.subhead,
+  applicationName: brand.name,
+  authors: [{ name: brand.name }],
+  generator: "Next.js",
+  keywords: [
+    "Instagram in-app browser",
+    "IAB escape",
+    "Shopify checkout abandonment",
+    "Meta ads conversion",
+    "Apple Pay Instagram",
+    "Shop Pay Instagram",
+    "IG paid traffic conversion",
+    "in-app browser redirect",
+    "Shopify CRO",
+    "Instagram ad CVR",
+  ],
+  category: "ecommerce",
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     title: `${brand.name} — ${brand.tagline}`,
     description: brand.subhead,
     type: "website",
     siteName: brand.name,
+    locale: "en_US",
+    url: SITE_URL,
   },
-  twitter: { card: "summary_large_image", title: brand.name, description: brand.subhead },
+  twitter: {
+    card: "summary_large_image",
+    title: `${brand.name} — ${brand.tagline}`,
+    description: brand.subhead,
+    creator: "@escapehatchapp",
+    site: "@escapehatchapp",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  appleWebApp: {
+    capable: true,
+    title: brand.name,
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafafa" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0b" },
+  ],
+  colorScheme: "light dark",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
