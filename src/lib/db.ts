@@ -168,49 +168,28 @@ export async function getSourceBreakdown(
   const supabase = await getSupabaseServer();
   if (!supabase) return [];
   const since = new Date(Date.now() - days * 86400_000).toISOString();
-  const { data } = await supabase
-    .from("escape_events")
-    .select("event_type, bucket, utm_source, url, value_cents")
-    .eq("merchant_id", merchantId)
-    .gte("created_at", since)
-    .limit(20000);
-
-  const map = new Map<string, SourceRow>();
-  for (const row of (data ?? []) as {
-    event_type: string;
-    bucket: "a" | "b";
-    utm_source: string | null;
-    url: string | null;
-    value_cents: number | null;
-  }[]) {
-    let src = row.utm_source;
-    if (!src && row.url) {
-      const m = row.url.match(/[?&]utm_source=([^&#]+)/i);
-      if (m) src = decodeURIComponent(m[1]).slice(0, 64);
-    }
-    if (!src) src = "(direct)";
-    const cur =
-      map.get(src) ?? {
-        utm_source: src,
-        total: 0,
-        bucket_a: 0,
-        bucket_b: 0,
-        purchases: 0,
-        revenue_cents: 0,
-      };
-    if (row.event_type === "impression") {
-      cur.total += 1;
-      if (row.bucket === "b") cur.bucket_b += 1;
-      else cur.bucket_a += 1;
-    } else if (row.event_type === "purchase") {
-      cur.purchases += 1;
-      cur.revenue_cents += row.value_cents ?? 0;
-    }
-    map.set(src, cur);
-  }
-  return Array.from(map.values())
-    .sort((a, b) => b.total - a.total)
-    .slice(0, limit);
+  const { data, error } = await supabase.rpc("eh_test_sources", {
+    p_merchant_id: merchantId,
+    p_since: since,
+    p_limit: limit,
+  });
+  if (error || !Array.isArray(data)) return [];
+  return (data as {
+    utm_source: string;
+    total: number | string;
+    bucket_a: number | string;
+    bucket_b: number | string;
+    purchases: number | string;
+    revenue_cents: number | string;
+  }[]).map((r) => ({
+    utm_source: r.utm_source,
+    total: typeof r.total === "string" ? parseInt(r.total, 10) : r.total,
+    bucket_a: typeof r.bucket_a === "string" ? parseInt(r.bucket_a, 10) : r.bucket_a,
+    bucket_b: typeof r.bucket_b === "string" ? parseInt(r.bucket_b, 10) : r.bucket_b,
+    purchases: typeof r.purchases === "string" ? parseInt(r.purchases, 10) : r.purchases,
+    revenue_cents:
+      typeof r.revenue_cents === "string" ? parseInt(r.revenue_cents, 10) : r.revenue_cents,
+  }));
 }
 
 export async function getIabBreakdown(

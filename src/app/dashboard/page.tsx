@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense, cache } from "react";
 import {
   getCurrentMerchant,
   getRollups,
@@ -12,9 +13,41 @@ import {
   type SourceRow,
 } from "@/lib/db";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import {
+  ActivitySkeleton,
+  BannerSkeleton,
+  ChartSkeleton,
+  FunnelSkeleton,
+  HeroSkeleton,
+  KPIGridSkeleton,
+  SampleSizeSkeleton,
+  SourcesSkeleton,
+} from "./_components/skeletons";
+import { LiveTimestamp } from "./_components/live-timestamp";
+
+/* -------- Number formatters -------- */
+
+const compactNF = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+function fmtCompact(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  if (Math.abs(n) < 10_000) return n.toLocaleString();
+  return compactNF.format(n);
+}
+
+function fmtUSD(n: number, opts?: { compact?: boolean }): string {
+  if (!Number.isFinite(n)) return "—";
+  if (opts?.compact && Math.abs(n) >= 10_000) return `$${compactNF.format(n)}`;
+  return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+}
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+/* -------- Range types + constants -------- */
 
 type Range = { key: string; label: string; days: number; subDay?: boolean };
 
@@ -43,10 +76,17 @@ type ActivityRow = {
   created_at: string;
 };
 
-async function getRecentActivity(
+/* -------- Cached fetchers (React.cache dedupes within a single render) -------- */
+
+const fetchFunnel = cache(getTestFunnel);
+const fetchUnattributed = cache(getUnattributedPurchaseStats);
+const fetchRollups = cache(getRollups);
+const fetchSources = cache(getSourceBreakdown);
+
+const fetchActivity = cache(async function fetchActivity(
   merchantId: string,
   days: number,
-  limit = 14,
+  limit = 12,
 ): Promise<ActivityRow[]> {
   const supabase = await getSupabaseServer();
   if (!supabase) return [];
@@ -60,9 +100,11 @@ async function getRecentActivity(
     .order("created_at", { ascending: false })
     .limit(limit);
   return (data ?? []) as ActivityRow[];
-}
+});
 
 type SearchParams = Promise<{ range?: string }>;
+
+/* -------- Page (shell; data streams via Suspense children) -------- */
 
 export default async function DashboardOverview({
   searchParams,
@@ -81,29 +123,8 @@ export default async function DashboardOverview({
     );
   }
 
-  const [funnel, rollups, sources, unattributed, activity] = await Promise.all([
-    getTestFunnel(merchant.id, range.days),
-    getRollups(merchant.id, range.days),
-    getSourceBreakdown(merchant.id, range.days, 8),
-    getUnattributedPurchaseStats(merchant.id, range.days),
-    getRecentActivity(merchant.id, range.days, 12),
-  ]);
-
-  const escapeRate =
-    funnel.impressions.a > 0
-      ? (100 * funnel.escape_attempts.a) / funnel.impressions.a
-      : 0;
-
-  const baseA = funnel.impressions.a;
-  const baseB = funnel.impressions.b;
-  const revA = funnel.revenue_cents.a / 100;
-  const revB = funnel.revenue_cents.b / 100;
-  const rpsA = baseA > 0 ? revA / baseA : 0;
-  const rpsB = baseB > 0 ? revB / baseB : 0;
-  const liftRel = rpsB > 0 ? (rpsA - rpsB) / rpsB : null;
-  const z = zTestTwoProp(funnel.purchases.a, baseA, funnel.purchases.b, baseB);
-  const totalImpressions = baseA + baseB;
-  const totalEscapes = funnel.escape_attempts.a;
+  const m = merchant.id;
+  const d = range.days;
 
   return (
     <Page
@@ -127,33 +148,235 @@ export default async function DashboardOverview({
         </Link>
       }
     >
-      <Banner unattributed={unattributed} attributedPurchases={funnel.purchases.a + funnel.purchases.b} attributedRevenueCents={funnel.revenue_cents.a + funnel.revenue_cents.b} />
+      <Suspense fallback={<HeroSkeleton />}>
+        <HeroSection merchantId={m} days={d} rangeLabel={range.label} />
+      </Suspense>
 
-      <KPIGrid
-        impressions={totalImpressions}
-        escapeAttempts={totalEscapes}
-        escapeRate={escapeRate}
-        revenue={revA + revB}
-        purchases={funnel.purchases.a + funnel.purchases.b}
-        liftRel={liftRel}
-        pValue={z?.pValue ?? null}
-      />
+      <Suspense fallback={<BannerSkeleton />}>
+        <BannerSection merchantId={m} days={d} />
+      </Suspense>
 
-      <FunnelTable funnel={funnel} />
+      <Suspense fallback={<KPIGridSkeleton />}>
+        <KPISection merchantId={m} days={d} />
+      </Suspense>
+
+      <Suspense fallback={<FunnelSkeleton />}>
+        <FunnelSection merchantId={m} days={d} />
+      </Suspense>
 
       <Layout>
         <LayoutCol size="primary">
-          <SourcesCard sources={sources} rangeLabel={range.label} />
+          <Suspense fallback={<SourcesSkeleton rangeLabel={range.label} />}>
+            <SourcesSection merchantId={m} days={d} rangeLabel={range.label} />
+          </Suspense>
         </LayoutCol>
         <LayoutCol size="secondary">
-          <ChartCard rollups={rollups} rangeLabel={range.label} />
-          <SampleSizeCard funnel={funnel} />
+          <Suspense fallback={<ChartSkeleton rangeLabel={range.label} />}>
+            <ChartSection merchantId={m} days={d} rangeLabel={range.label} />
+          </Suspense>
+          <Suspense fallback={<SampleSizeSkeleton />}>
+            <SampleSizeSection merchantId={m} days={d} />
+          </Suspense>
         </LayoutCol>
       </Layout>
 
-      <ActivityCard rows={activity} />
+      <Suspense fallback={<ActivitySkeleton />}>
+        <ActivitySection merchantId={m} days={d} />
+      </Suspense>
     </Page>
   );
+}
+
+/* -------- Section components — each owns its own fetch -------- */
+
+async function HeroSection({
+  merchantId,
+  days,
+  rangeLabel,
+}: {
+  merchantId: string;
+  days: number;
+  rangeLabel: string;
+}) {
+  const funnel = await fetchFunnel(merchantId, days);
+  const baseA = funnel.impressions.a;
+  const baseB = funnel.impressions.b;
+  const revA = funnel.revenue_cents.a / 100;
+  const revB = funnel.revenue_cents.b / 100;
+  const rpsA = baseA > 0 ? revA / baseA : 0;
+  const rpsB = baseB > 0 ? revB / baseB : 0;
+  const liftRel = rpsB > 0 ? (rpsA - rpsB) / rpsB : null;
+  const z = zTestTwoProp(funnel.purchases.a, baseA, funnel.purchases.b, baseB);
+
+  const totalImpressions = baseA + baseB;
+  const currentRev = revA + revB;
+  // If every impression got bucket-A treatment, projected revenue would be:
+  const projectedRev = totalImpressions * rpsA;
+  const revenueDelta = projectedRev - currentRev;
+
+  // No test data → friendly empty state.
+  if (totalImpressions === 0) {
+    return (
+      <div className="px-1 py-1">
+        <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-accent)]">
+          Test performance
+        </div>
+        <div className="mt-2 h-display text-[40px] md:text-[44px] tracking-tight text-[var(--color-fg-dim)]">
+          Waiting for traffic
+        </div>
+        <div className="mt-2 text-[13px] text-[var(--color-fg-muted)] max-w-xl">
+          Paid Instagram clicks will populate this within minutes of install.
+        </div>
+      </div>
+    );
+  }
+
+  const liftStr = liftRel == null ? "—" : `${liftRel > 0 ? "+" : ""}${(liftRel * 100).toFixed(1)}%`;
+  const liftColor =
+    liftRel == null
+      ? "text-[var(--color-fg-dim)]"
+      : liftRel > 0
+        ? "text-[var(--color-success)]"
+        : "text-[var(--color-danger)]";
+
+  // Plain-English confidence sentence.
+  const confidence =
+    z?.pValue != null ? Math.round((1 - z.pValue) * 100) : null;
+  const sig = z?.significant === true;
+  const winner = liftRel != null && liftRel > 0 ? "A (escape)" : "B (control)";
+
+  let confidenceText: React.ReactNode;
+  if (confidence == null) {
+    confidenceText = (
+      <>Gathering data · not enough impressions for a verdict.</>
+    );
+  } else if (sig) {
+    confidenceText = (
+      <>
+        <span className="text-[var(--color-fg)] font-medium">{confidence}% confident</span>
+        <span className="text-[var(--color-fg-muted)]"> · winner: {winner}</span>
+      </>
+    );
+  } else {
+    confidenceText = (
+      <>
+        <span className="text-[var(--color-fg-dim)]">{confidence}% confident</span>
+        <span className="text-[var(--color-fg-muted)]"> · need 95% to call it. Keep the test running.</span>
+      </>
+    );
+  }
+
+  return (
+    <div className="px-1 py-1">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-accent)]">
+          Test performance · last {rangeLabel}
+        </div>
+      </div>
+      <div className={`mt-2 h-display tracking-tight text-[44px] md:text-[56px] leading-[1.05] tnum ${liftColor}`}>
+        {liftStr}
+      </div>
+      <div className="mt-2 text-[14px] text-[var(--color-fg-dim)]">
+        {liftRel == null ? (
+          <>Need both buckets to have revenue to compute lift.</>
+        ) : revenueDelta >= 0 ? (
+          <>
+            Projected{" "}
+            <span className="text-[var(--color-fg)] font-medium tnum">{fmtUSD(revenueDelta, { compact: true })}</span>{" "}
+            more revenue if 100% of traffic got the escape.
+          </>
+        ) : (
+          <>
+            Escape currently{" "}
+            <span className="text-[var(--color-danger)] font-medium tnum">underperforming</span>{" "}
+            control by {fmtUSD(Math.abs(revenueDelta), { compact: true })}.
+          </>
+        )}
+      </div>
+      <div className="mt-1 text-[12.5px] font-mono">
+        {confidenceText}
+      </div>
+    </div>
+  );
+}
+
+async function BannerSection({ merchantId, days }: { merchantId: string; days: number }) {
+  const [funnel, unattributed] = await Promise.all([
+    fetchFunnel(merchantId, days),
+    fetchUnattributed(merchantId, days),
+  ]);
+  return (
+    <Banner
+      unattributed={unattributed}
+      attributedPurchases={funnel.purchases.a + funnel.purchases.b}
+      attributedRevenueCents={funnel.revenue_cents.a + funnel.revenue_cents.b}
+    />
+  );
+}
+
+async function KPISection({ merchantId, days }: { merchantId: string; days: number }) {
+  const funnel = await fetchFunnel(merchantId, days);
+  const baseA = funnel.impressions.a;
+  const baseB = funnel.impressions.b;
+  const revA = funnel.revenue_cents.a / 100;
+  const revB = funnel.revenue_cents.b / 100;
+  const rpsA = baseA > 0 ? revA / baseA : 0;
+  const rpsB = baseB > 0 ? revB / baseB : 0;
+  const liftRel = rpsB > 0 ? (rpsA - rpsB) / rpsB : null;
+  const z = zTestTwoProp(funnel.purchases.a, baseA, funnel.purchases.b, baseB);
+  const escapeRate = baseA > 0 ? (100 * funnel.escape_attempts.a) / baseA : 0;
+  return (
+    <KPIGrid
+      impressions={baseA + baseB}
+      escapeAttempts={funnel.escape_attempts.a}
+      escapeRate={escapeRate}
+      revenue={revA + revB}
+      purchases={funnel.purchases.a + funnel.purchases.b}
+      liftRel={liftRel}
+      pValue={z?.pValue ?? null}
+    />
+  );
+}
+
+async function FunnelSection({ merchantId, days }: { merchantId: string; days: number }) {
+  const funnel = await fetchFunnel(merchantId, days);
+  return <FunnelTable funnel={funnel} />;
+}
+
+async function SourcesSection({
+  merchantId,
+  days,
+  rangeLabel,
+}: {
+  merchantId: string;
+  days: number;
+  rangeLabel: string;
+}) {
+  const sources = await fetchSources(merchantId, days, 8);
+  return <SourcesCard sources={sources} rangeLabel={rangeLabel} />;
+}
+
+async function ChartSection({
+  merchantId,
+  days,
+  rangeLabel,
+}: {
+  merchantId: string;
+  days: number;
+  rangeLabel: string;
+}) {
+  const rollups = await fetchRollups(merchantId, days);
+  return <ChartCard rollups={rollups} rangeLabel={rangeLabel} />;
+}
+
+async function SampleSizeSection({ merchantId, days }: { merchantId: string; days: number }) {
+  const funnel = await fetchFunnel(merchantId, days);
+  return <SampleSizeCard funnel={funnel} />;
+}
+
+async function ActivitySection({ merchantId, days }: { merchantId: string; days: number }) {
+  const rows = await fetchActivity(merchantId, days, 12);
+  return <ActivityCard rows={rows} />;
 }
 
 /* -------- Polaris-inspired primitives -------- */
@@ -238,7 +461,7 @@ function Card({
 }) {
   return (
     <section
-      className={`bg-[var(--color-card)] border border-[var(--color-border)] rounded ${className}`}
+      className={`bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg ${className}`}
     >
       {title || action ? (
         <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-soft)]">
@@ -318,7 +541,7 @@ function Banner({
         </span>
         <div className="min-w-0">
           <div className="text-[13px] font-medium tracking-tight">
-            {total.toLocaleString()} purchases · ${totalRev.toLocaleString(undefined, { maximumFractionDigits: 0 })} (all sources)
+            {fmtCompact(total)} purchases · {fmtUSD(totalRev, { compact: true })} (all sources)
           </div>
           <div className="mt-0.5 text-[11.5px] text-[var(--color-fg-dim)] font-mono tnum">
             {attributedPurchases} attributed ({attribPct}%) · {unattributed.count} unattributed
@@ -365,14 +588,14 @@ function KPIGrid({
         : "text-[var(--color-danger)]";
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <KPI label="Impressions" value={impressions.toLocaleString()} sub="in test population" />
-      <KPI label="Escape rate" value={`${escapeRate.toFixed(0)}%`} sub={`${escapeAttempts.toLocaleString()} of bucket A`} />
-      <KPI label="Revenue (test)" value={`$${revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} sub={`${purchases.toLocaleString()} attributed`} />
+      <KPI label="Impressions" value={fmtCompact(impressions)} sub={`${escapeAttempts.toLocaleString()} escapes (bucket A)`} />
+      <KPI label="Escape rate" value={`${escapeRate.toFixed(0)}%`} sub="of bucket A landings" />
+      <KPI label="Revenue (test)" value={fmtUSD(revenue, { compact: true })} sub={`${purchases.toLocaleString()} purchases`} />
       <KPI
         label="Lift · A vs B"
         value={liftStr}
         valueClass={liftColor}
-        sub={pValue != null ? `p = ${pValue < 0.001 ? "<.001" : pValue.toFixed(3)}` : "need more data"}
+        sub={pValue != null ? `${Math.round((1 - pValue) * 100)}% confident` : "need more data"}
       />
     </div>
   );
@@ -390,7 +613,7 @@ function KPI({
   valueClass?: string;
 }) {
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded px-4 py-3">
+    <div className="bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg px-4 py-3">
       <MonoLabel>{label}</MonoLabel>
       <div className={`mt-2 h-section text-[26px] tnum ${valueClass}`}>
         {value}
@@ -651,12 +874,7 @@ function ActivityCard({ rows }: { rows: ActivityRow[] }) {
   return (
     <Card
       title="Recent activity"
-      action={
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-fg-muted)] font-mono">
-          <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
-          live
-        </span>
-      }
+      action={<LiveTimestamp />}
     >
       {rows.length === 0 ? (
         <MutedText>No events yet.</MutedText>
