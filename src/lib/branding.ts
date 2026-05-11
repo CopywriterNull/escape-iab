@@ -4,7 +4,7 @@ export const brand = {
   // Hero — names the problem and solution in two beats.
   tagline: "Your Instagram ads work. Your Instagram checkout doesn't.",
   subhead:
-    "Every paid IG visitor lands in a stripped-down browser where Apple Pay disappears, Shop Pay autofill breaks, and your CVR tanks. EscapeHatch reroutes them out — into Safari, into checkout, into purchase. One snippet. Sixty seconds.",
+    "Every paid IG ad click opens your store inside Instagram's in-app browser — where Apple Pay disappears, Shop Pay autofill fails, and your CVR tanks. EscapeHatch detects that broken browser and reopens your store in Safari before checkout loads, so customers buy with one tap instead of bouncing. One snippet. 60-second install.",
   ctaPrimary: "Start free",
   // One-liner for elevator pitches / OG meta / social shares.
   pitchOneLiner:

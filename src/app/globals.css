@@ -198,6 +198,32 @@ body {
   background-size: 24px 24px;
 }
 
+/* Site-wide top-down dotted gradient — fixed to viewport, fades to
+   transparent by ~70% scroll depth. Tones the dot color almost to white. */
+.gradient-dotgrid {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.65;
+  background-image: radial-gradient(var(--color-dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.55) 22%,
+    rgba(0, 0, 0, 0.18) 50%,
+    transparent 72%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.55) 22%,
+    rgba(0, 0, 0, 0.18) 50%,
+    transparent 72%
+  );
+}
+
 .card {
   background: var(--color-card);
   border: 1px solid var(--color-border);
@@ -426,6 +452,66 @@ body {
   border-left: 1.5px solid var(--color-success);
   border-bottom: 1.5px solid var(--color-success);
   transform: rotate(-45deg) translate(0.5px, -0.5px);
+}
+
+/* Hero entry — CSS-only blur+float-up, no JS required.
+   Staggered via .hero-enter-1..5 classes. Respects reduced-motion. */
+@keyframes hero-enter-line {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+.hero-enter {
+  opacity: 0;
+  animation: hero-enter-line 800ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+.hero-enter-1 { animation-delay: 0ms; }
+.hero-enter-2 { animation-delay: 120ms; }
+.hero-enter-3 { animation-delay: 260ms; }
+.hero-enter-4 { animation-delay: 420ms; }
+.hero-enter-5 { animation-delay: 580ms; }
+.hero-enter-6 { animation-delay: 720ms; }
+
+/* Highlighter sweep — soft cobalt underline that draws left→right
+   after the line has settled. Pin behind text, animates background-size. */
+@keyframes highlight-grow {
+  to { background-size: 100% 100%; }
+}
+.highlight-sweep {
+  background-image: linear-gradient(
+    to top,
+    transparent 6%,
+    color-mix(in srgb, var(--color-accent) 22%, transparent) 6%,
+    color-mix(in srgb, var(--color-accent) 22%, transparent) 38%,
+    transparent 38%
+  );
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: 0% 100%;
+  animation: highlight-grow 700ms 1100ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  padding: 0 0.06em;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-enter {
+    opacity: 1;
+    animation: none;
+    filter: none;
+    transform: none;
+  }
+  .highlight-sweep {
+    background-size: 100% 100%;
+    animation: none;
+  }
 }
 
 /* Scroll-entry — IntersectionObserver-driven; defaults hide nicely if JS off. */
