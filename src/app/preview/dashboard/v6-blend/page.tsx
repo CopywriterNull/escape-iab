@@ -1,6 +1,24 @@
 import Link from "next/link";
 import { mockData as d } from "../_mock";
 
+// 14-day chart series (synthetic but plausible).
+const dailyChart = [
+  { day: "11/10", impressions: 760, escapes: 478 },
+  { day: "11/11", impressions: 840, escapes: 530 },
+  { day: "11/12", impressions: 910, escapes: 581 },
+  { day: "11/13", impressions: 720, escapes: 461 },
+  { day: "11/14", impressions: 880, escapes: 562 },
+  { day: "11/15", impressions: 950, escapes: 608 },
+  { day: "11/16", impressions: 1040, escapes: 665 },
+  { day: "11/17", impressions: 920, escapes: 591 },
+  { day: "11/18", impressions: 870, escapes: 557 },
+  { day: "11/19", impressions: 980, escapes: 626 },
+  { day: "11/20", impressions: 1010, escapes: 647 },
+  { day: "11/21", impressions: 1080, escapes: 691 },
+  { day: "11/22", impressions: 1140, escapes: 729 },
+  { day: "11/23", impressions: 950, escapes: 608 },
+];
+
 export default function V6Blend() {
   const baseA = d.funnel[0].a;
   const baseB = d.funnel[0].b;
@@ -229,6 +247,152 @@ export default function V6Blend() {
               </span>
               <span className="ml-auto">Bar width = CVR from impressions</span>
             </div>
+          </div>
+        </div>
+
+        {/* ─── 2-col: Sources (primary) + Chart + Sample size (secondary) ─── */}
+        <div className="mt-4 grid lg:grid-cols-12 gap-4">
+          {/* Sources card */}
+          <div className="lg:col-span-7 bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg">
+            <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-soft)]">
+              <h2 className="text-[14px] font-semibold tracking-tight">Top sources</h2>
+              <span className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-fg-muted)]">{d.range}</span>
+            </header>
+            <div className="px-4 py-3 space-y-2">
+              {(() => {
+                const sourceMax = Math.max(...d.sources.map((s) => s.total));
+                return d.sources.map((s) => {
+                  const sharePct = s.total / sourceMax;
+                  const blocks = Math.max(1, Math.round(sharePct * 32));
+                  const cvr = s.total > 0 ? (s.purchases / s.total) * 100 : 0;
+                  return (
+                    <div key={s.utm_source} className="flex items-baseline gap-3">
+                      <div className="w-[88px] shrink-0 text-[12.5px] font-medium tracking-tight truncate">{s.utm_source}</div>
+                      <pre
+                        className="flex-1 leading-none text-[11px] tnum overflow-hidden"
+                        style={{ fontFamily: "var(--font-mono), ui-monospace, monospace", margin: 0 }}
+                      >
+                        <span style={{ color: "var(--color-accent)" }}>{"█".repeat(blocks)}</span>
+                        <span style={{ color: "var(--color-border-soft)" }}>{"░".repeat(32 - blocks)}</span>
+                      </pre>
+                      <span className="w-[160px] shrink-0 text-right text-[11px] font-mono tnum">
+                        <span className="text-[var(--color-fg)]">{s.total.toLocaleString()}</span>
+                        <span className="text-[var(--color-fg-muted)]"> · {s.purchases} buys · ${s.revenue.toLocaleString()}</span>
+                        {cvr > 0 ? <span className="text-[var(--color-fg-muted)]"> · {cvr.toFixed(2)}%</span> : null}
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+
+          {/* Chart + Sample size stacked */}
+          <div className="lg:col-span-5 flex flex-col gap-4">
+            {/* Chart */}
+            <div className="bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg">
+              <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-soft)]">
+                <h2 className="text-[14px] font-semibold tracking-tight">Impressions vs escapes</h2>
+                <span className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-fg-muted)]">{d.range}</span>
+              </header>
+              <div className="px-4 py-3">
+                {(() => {
+                  const w = 480;
+                  const h = 110;
+                  const maxV = Math.max(...dailyChart.flatMap((p) => [p.impressions, p.escapes]));
+                  const x = (i: number) => 6 + (i * (w - 12)) / Math.max(1, dailyChart.length - 1);
+                  const y = (v: number) => h - 12 - ((h - 24) * v) / maxV;
+                  const linePath = (key: "impressions" | "escapes") =>
+                    dailyChart.map((p, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(p[key])}`).join(" ");
+                  const areaPath =
+                    linePath("escapes") +
+                    ` L ${x(dailyChart.length - 1)} ${h - 12} L ${x(0)} ${h - 12} Z`;
+                  return (
+                    <>
+                      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[110px]">
+                        {[35, 60, 85].map((yy) => (
+                          <line key={yy} x1="6" x2={w - 6} y1={yy} y2={yy} stroke="var(--color-border-soft)" />
+                        ))}
+                        <path d={areaPath} fill="var(--color-accent)" fillOpacity="0.07" />
+                        <path d={linePath("impressions")} fill="none" stroke="var(--color-fg-muted)" strokeWidth="1.5" />
+                        <path d={linePath("escapes")} fill="none" stroke="var(--color-accent)" strokeWidth="1.75" />
+                      </svg>
+                      <div className="mt-1 flex items-center gap-3 text-[10.5px] text-[var(--color-fg-muted)] font-mono">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="size-1.5 rounded-full bg-[var(--color-fg-muted)]" /> impressions
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="size-1.5 rounded-full bg-[var(--color-accent)]" /> escapes
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Sample size */}
+            <div className="bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg">
+              <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-soft)]">
+                <h2 className="text-[14px] font-semibold tracking-tight">Sample size</h2>
+                <span className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-fg-muted)]">30% MDE · 95% conf</span>
+              </header>
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3 mb-2 text-[12px] text-[var(--color-fg-muted)] font-mono tnum">
+                  <span>{baseA.toLocaleString()}</span>
+                  <span>8,420 / bucket</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-[var(--color-border-soft)] overflow-hidden">
+                  <div
+                    className="h-full bg-[var(--color-accent)] transition-[width] duration-500"
+                    style={{ width: `${Math.min(100, (baseA / 8420) * 100)}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-[11px] text-[var(--color-fg-muted)] leading-relaxed">
+                  Sample size sufficient for 95% confidence at 30% MDE. You can call this test.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Activity log ─── */}
+        <div className="mt-4 bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg">
+          <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-soft)]">
+            <h2 className="text-[14px] font-semibold tracking-tight">Recent activity</h2>
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-fg-muted)] font-mono">
+              <span className="size-1.5 rounded-full bg-[var(--color-success)]" />
+              Updated 3s ago
+            </span>
+          </header>
+          <div className="row-divide">
+            {d.activity.map((row, i) => {
+              const pillCls =
+                row.type === "PURCHASE"
+                  ? "pill pill-success"
+                  : row.type === "ESCAPE"
+                    ? "pill pill-info"
+                    : row.type === "CHECKOUT"
+                      ? "pill pill-warn"
+                      : "pill pill-muted";
+              return (
+                <div key={i} className="px-4 py-2.5 hover:bg-[var(--color-bg-elev)]/50 transition-colors text-[12.5px]">
+                  <div className="grid grid-cols-12 items-center gap-3">
+                    <div className="col-span-2">
+                      <span className={pillCls}>{row.type}</span>
+                    </div>
+                    <div className="col-span-3">
+                      <span className="pill pill-muted">BUCKET&nbsp;{row.bucket}</span>
+                    </div>
+                    <div className="col-span-3 text-[12px] text-[var(--color-fg-dim)] tnum truncate">
+                      utm: {row.utm}
+                    </div>
+                    <div className="col-span-2 text-right tnum">{row.value}</div>
+                    <div className="col-span-2 text-right text-[11.5px] text-[var(--color-fg-muted)] tnum">{row.ago} ago</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
