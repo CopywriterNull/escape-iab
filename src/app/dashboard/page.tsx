@@ -24,6 +24,7 @@ import {
   SourcesSkeleton,
 } from "./_components/skeletons";
 import { LiveTimestamp } from "./_components/live-timestamp";
+import { RangeSelector } from "./_components/range-selector";
 
 /* -------- Number formatters -------- */
 
@@ -148,39 +149,39 @@ export default async function DashboardOverview({
         </Link>
       }
     >
-      <Suspense fallback={<HeroSkeleton />}>
+      <Suspense key={`hero-${range.key}`} fallback={<HeroSkeleton />}>
         <HeroSection merchantId={m} days={d} rangeLabel={range.label} />
       </Suspense>
 
-      <Suspense fallback={<BannerSkeleton />}>
+      <Suspense key={`banner-${range.key}`} fallback={<BannerSkeleton />}>
         <BannerSection merchantId={m} days={d} />
       </Suspense>
 
-      <Suspense fallback={<KPIGridSkeleton />}>
+      <Suspense key={`kpi-${range.key}`} fallback={<KPIGridSkeleton />}>
         <KPISection merchantId={m} days={d} />
       </Suspense>
 
-      <Suspense fallback={<FunnelSkeleton />}>
+      <Suspense key={`funnel-${range.key}`} fallback={<FunnelSkeleton />}>
         <FunnelSection merchantId={m} days={d} />
       </Suspense>
 
       <Layout>
         <LayoutCol size="primary">
-          <Suspense fallback={<SourcesSkeleton rangeLabel={range.label} />}>
+          <Suspense key={`sources-${range.key}`} fallback={<SourcesSkeleton rangeLabel={range.label} />}>
             <SourcesSection merchantId={m} days={d} rangeLabel={range.label} />
           </Suspense>
         </LayoutCol>
         <LayoutCol size="secondary">
-          <Suspense fallback={<ChartSkeleton rangeLabel={range.label} />}>
+          <Suspense key={`chart-${range.key}`} fallback={<ChartSkeleton rangeLabel={range.label} />}>
             <ChartSection merchantId={m} days={d} rangeLabel={range.label} />
           </Suspense>
-          <Suspense fallback={<SampleSizeSkeleton />}>
+          <Suspense key={`sample-${range.key}`} fallback={<SampleSizeSkeleton />}>
             <SampleSizeSection merchantId={m} days={d} />
           </Suspense>
         </LayoutCol>
       </Layout>
 
-      <Suspense fallback={<ActivitySkeleton />}>
+      <Suspense key={`activity-${range.key}`} fallback={<ActivitySkeleton />}>
         <ActivitySection merchantId={m} days={d} />
       </Suspense>
     </Page>
@@ -395,53 +396,20 @@ function Page({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-5 md:space-y-6">
-      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 pb-4 border-b border-[var(--color-border)]">
+    <div className="space-y-4 md:space-y-5">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-3 mb-1">
         <div className="min-w-0">
-          <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-accent)]">
-            Overview
-          </div>
-          <h1 className="mt-2 h-display text-[26px] md:text-[32px] tracking-tight truncate">
+          <h1 className="h-display text-[22px] md:text-[26px] tracking-tight truncate">
             {title}
           </h1>
-          {subtitle ? <div className="mt-2">{subtitle}</div> : null}
+          {subtitle ? <div className="mt-1">{subtitle}</div> : null}
         </div>
-        <div className="flex items-center gap-3 flex-wrap -mx-1 md:mx-0 overflow-x-auto md:overflow-visible scrollbar-none">
+        <div className="flex items-center gap-2 flex-wrap -mx-1 md:mx-0 overflow-x-auto md:overflow-visible scrollbar-none">
           {range ? <RangeSelector active={range.key} /> : null}
           {action}
         </div>
       </div>
       <div className="space-y-4">{children}</div>
-    </div>
-  );
-}
-
-function RangeSelector({ active }: { active: string }) {
-  return (
-    <div
-      role="tablist"
-      aria-label="Date range"
-      className="inline-flex items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-card)] p-[3px] text-[12px] shadow-[0_1px_0_rgba(0,0,0,0.02)]"
-    >
-      {RANGES.map((r) => {
-        const isActive = r.key === active;
-        return (
-          <Link
-            key={r.key}
-            href={`/dashboard?range=${r.key}`}
-            role="tab"
-            aria-selected={isActive}
-            aria-current={isActive ? "page" : undefined}
-            className={`relative px-2.5 py-[5px] rounded-full font-mono tnum focus-ring select-none transition-[background-color,color,transform] duration-200 ease-out active:scale-[0.97] ${
-              isActive
-                ? "bg-[var(--color-bg)] text-[var(--color-fg)] font-medium shadow-[0_1px_2px_rgba(0,0,0,0.06),0_0_0_1px_var(--color-border-soft)_inset]"
-                : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-elev)]/60"
-            }`}
-          >
-            {r.label}
-          </Link>
-        );
-      })}
     </div>
   );
 }
@@ -519,40 +487,20 @@ function Banner({
   const total = unattributed.count + attributedPurchases;
   const totalRev = (unattributed.revenue_cents + attributedRevenueCents) / 100;
   const attribPct = total > 0 ? Math.round((100 * attributedPurchases) / total) : 0;
-  const warn = unattributed.count > attributedPurchases * 2;
   return (
-    <div
-      className={`flex items-center justify-between gap-4 px-4 py-3 rounded-lg border ${
-        warn
-          ? "border-[var(--color-danger)]/30 bg-[var(--color-danger-soft)]"
-          : "border-[var(--color-accent)]/20 bg-[var(--color-accent-soft)]"
-      }`}
-    >
+    <div className="flex items-center justify-between gap-4 px-4 py-2.5 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)]">
       <div className="flex items-center gap-3 min-w-0">
-        <span
-          className={`size-7 rounded-md grid place-items-center shrink-0 ${
-            warn ? "text-[var(--color-danger)]" : "text-[var(--color-accent)]"
-          }`}
-        >
-          <svg viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <circle cx="8" cy="8" r="6.5" />
-            <path d="M8 4.5v4M8 11v0.5" strokeLinecap="round" />
-          </svg>
-        </span>
+        <span className="size-1.5 rounded-full bg-[var(--color-accent)] shrink-0" />
         <div className="min-w-0">
-          <div className="text-[13px] font-medium tracking-tight">
-            {fmtCompact(total)} purchases · {fmtUSD(totalRev, { compact: true })} (all sources)
+          <div className="text-[12.5px] font-medium tracking-tight">
+            {fmtCompact(total)} purchases · {fmtUSD(totalRev, { compact: true })}{" "}
+            <span className="text-[var(--color-fg-muted)] font-normal">all sources</span>
           </div>
-          <div className="mt-0.5 text-[11.5px] text-[var(--color-fg-dim)] font-mono tnum">
+          <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] font-mono tnum">
             {attributedPurchases} attributed ({attribPct}%) · {unattributed.count} unattributed
           </div>
         </div>
       </div>
-      {warn ? (
-        <div className="text-[11px] text-[var(--color-fg-dim)] hidden md:block max-w-[280px] text-right">
-          Most orders skip our cookie chain — Shopify checkout breaks attribution. Cart-token join is enabled, watch this fall.
-        </div>
-      ) : null}
     </div>
   );
 }

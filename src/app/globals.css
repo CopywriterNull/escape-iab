@@ -537,6 +537,16 @@ body {
   .reveal.is-visible { opacity: 1; transform: translateY(0); }
 }
 
+/* Top progress bar creep — NProgress-style ease toward 80% then halt
+   until transition resolves (and the bar fades out via opacity). */
+@keyframes progress-creep {
+  0%   { transform: scaleX(0.04); }
+  20%  { transform: scaleX(0.35); }
+  50%  { transform: scaleX(0.6); }
+  80%  { transform: scaleX(0.78); }
+  100% { transform: scaleX(0.82); }
+}
+
 html { scroll-behavior: smooth; }
 
 /* Hide scrollbar on horizontal overflow containers (e.g. range selector on mobile). */

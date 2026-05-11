@@ -43,13 +43,11 @@ export function HeroSkeleton() {
 
 export function BannerSkeleton() {
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)]">
-      <div className="flex items-center gap-3 min-w-0">
-        <Block className="size-7 rounded-md shrink-0" />
-        <div className="min-w-0 space-y-1.5">
-          <Block className="h-3 w-56" />
-          <Block className="h-2.5 w-40" />
-        </div>
+    <div className="flex items-center gap-3 px-4 py-2.5 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)]">
+      <Block className="size-1.5 rounded-full shrink-0" />
+      <div className="min-w-0 space-y-1.5">
+        <Block className="h-3 w-56" />
+        <Block className="h-2.5 w-40" />
       </div>
     </div>
   );
@@ -242,15 +240,14 @@ export function ActivitySkeleton() {
 
 export function PageHeaderSkeleton() {
   return (
-    <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 pb-4 border-b border-[var(--color-border)]">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-3 mb-1">
       <div className="min-w-0 space-y-2">
-        <Block className="h-2.5 w-20" />
-        <Block className="h-7 w-48" />
+        <Block className="h-6 w-48" />
         <Block className="h-3 w-72" />
       </div>
-      <div className="flex items-center gap-3">
-        <Block className="h-8 w-[260px] rounded-full" />
-        <Block className="h-8 w-32 rounded-md" />
+      <div className="flex items-center gap-2">
+        <Block className="h-7 w-[280px] rounded-full" />
+        <Block className="h-7 w-32 rounded-md" />
       </div>
     </div>
   );

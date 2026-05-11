@@ -6,7 +6,18 @@ export const brand = {
   subhead:
     "Every paid IG ad click opens inside Instagram's broken in-app browser. EscapeHatch detects it and reopens your store in Safari before checkout loads. One snippet. 60-second install.",
   ctaPrimary: "Start free",
-  // One-liner for elevator pitches / OG meta / social shares.
+  // ---- Meta copy — distinct per surface, per 2026 best practice ----
+  // SERP <title>: ≤60 chars, keyword-led
+  seoTitle: "EscapeHatch · Recover IG ad revenue lost to checkout",
+  // SERP <meta description>: 150-160 chars, includes CTA verb
+  seoDescription:
+    "EscapeHatch detects Instagram's broken in-app browser and reopens your Shopify store in Safari — so paid IG clicks reach checkout. 60-second install.",
+  // Social card title (OG/Twitter): 55-60 chars, hook-led
+  ogTitle: "Your Instagram ads work. Your checkout doesn't.",
+  // Social card description: 150-160 chars, scroll-stopping
+  ogDescription:
+    "Detects Instagram's broken in-app browser and reopens your store in Safari before checkout loads — so paid IG clicks buy instead of bouncing.",
+  // One-liner for elevator pitches / social shares.
   pitchOneLiner:
     "Reclaim 20–40% of your Meta-sourced revenue. EscapeHatch reroutes paid IG visitors out of Instagram's broken in-app browser, into the real one — automatically.",
   // Below-hero positioning beats.

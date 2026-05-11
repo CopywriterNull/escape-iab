@@ -1,8 +1,12 @@
 import { ImageResponse } from "next/og";
 import { brand } from "@/lib/branding";
 
-export const runtime = "edge";
-export const alt = `${brand.name} — ${brand.tagline}`;
+// nodejs runtime per 2026 best practice for OG images:
+// - no edge bundle 500KB ceiling
+// - more reliable font fetch from Google Fonts
+// - platforms cache for days anyway, no latency advantage to edge
+export const runtime = "nodejs";
+export const alt = brand.ogTitle;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -52,31 +56,14 @@ export default async function OpengraphImage() {
           flexDirection: "column",
           padding: 80,
           fontFamily: "Geist, system-ui, sans-serif",
-          position: "relative",
         }}
       >
-        {/* Cobalt-tinted dot pattern across the upper portion */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage:
-              "radial-gradient(rgba(79, 124, 255, 0.22) 1.4px, transparent 1.6px)",
-            backgroundSize: "26px 26px",
-            opacity: 0.9,
-            // satori doesn't support mask-image; clip via height instead
-            height: "55%",
-            display: "flex",
-          }}
-        />
-
         {/* Top: brand wordmark + status */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            zIndex: 1,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -141,7 +128,7 @@ export default async function OpengraphImage() {
         <div style={{ flex: 1, display: "flex" }} />
 
         {/* Two-line H1 */}
-        <div style={{ display: "flex", flexDirection: "column", zIndex: 1 }}>
+        <div style={{ display: "flex", flexDirection: "column" }}>
           <div
             style={{
               fontSize: 78,
@@ -164,7 +151,7 @@ export default async function OpengraphImage() {
               marginTop: 6,
             }}
           >
-            Your Instagram checkout doesn{"’"}t.
+            Your Instagram checkout doesn’t.
           </div>
         </div>
 
@@ -179,11 +166,10 @@ export default async function OpengraphImage() {
             justifyContent: "space-between",
             color: "#52525b",
             fontSize: 18,
-            zIndex: 1,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span>Detects Instagram{"’"}s in-app browser, reopens in Safari.</span>
+            <span>Detects Instagram’s in-app browser, reopens in Safari.</span>
           </div>
           <div style={{ fontWeight: 500, color: "#09090b" }}>{brand.domain}</div>
         </div>

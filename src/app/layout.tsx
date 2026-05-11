@@ -20,30 +20,15 @@ const SITE_URL =
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: `${brand.name} — ${brand.tagline}`, template: `%s · ${brand.name}` },
-  description: brand.subhead,
+  title: { default: brand.seoTitle, template: `%s · ${brand.name}` },
+  description: brand.seoDescription,
   applicationName: brand.name,
   authors: [{ name: brand.name }],
-  generator: "Next.js",
-  keywords: [
-    "Instagram in-app browser",
-    "IAB escape",
-    "Shopify checkout abandonment",
-    "Meta ads conversion",
-    "Apple Pay Instagram",
-    "Shop Pay Instagram",
-    "IG paid traffic conversion",
-    "in-app browser redirect",
-    "Shopify CRO",
-    "Instagram ad CVR",
-  ],
   category: "ecommerce",
-  alternates: {
-    canonical: "/",
-  },
+  alternates: { canonical: "/" },
   openGraph: {
-    title: `${brand.name} — ${brand.tagline}`,
-    description: brand.subhead,
+    title: brand.ogTitle,
+    description: brand.ogDescription,
     type: "website",
     siteName: brand.name,
     locale: "en_US",
@@ -51,10 +36,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: `${brand.name} — ${brand.tagline}`,
-    description: brand.subhead,
-    creator: "@escapehatchapp",
-    site: "@escapehatchapp",
+    title: brand.ogTitle,
+    description: brand.ogDescription,
   },
   robots: {
     index: true,
