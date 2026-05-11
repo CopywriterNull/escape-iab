@@ -632,7 +632,7 @@ body {
   .shine-border::before { animation: none; }
 }
 
-/* Custom cobalt pointer — small dot follows the mouse on desktop. */
+/* Custom cobalt pointer — small dot replaces the system cursor on desktop. */
 .magic-pointer {
   position: fixed;
   pointer-events: none;
@@ -651,6 +651,18 @@ body {
 .magic-pointer.is-visible { opacity: 0.85; }
 .magic-pointer.is-link { width: 36px; height: 36px; opacity: 0.35; }
 @media (hover: none) { .magic-pointer { display: none; } }
+
+/* When the magic cursor is mounted, hide the system cursor on hover devices.
+   Re-enable it for form controls so text input still feels right. */
+.has-magic-cursor,
+.has-magic-cursor * {
+  cursor: none;
+}
+.has-magic-cursor input,
+.has-magic-cursor textarea,
+.has-magic-cursor [contenteditable] {
+  cursor: text;
+}
 
 /* Animated list — items slide in from top, then settle. */
 @keyframes magic-list-in {

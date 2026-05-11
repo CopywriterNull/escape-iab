@@ -16,13 +16,16 @@ export function PointerTracker() {
     const dot = dotRef.current;
     if (!dot) return;
 
+    // Hide the system cursor on hover-capable devices once JS has loaded.
+    document.documentElement.classList.add("has-magic-cursor");
+
     const onMove = (e: PointerEvent) => {
       target.current.x = e.clientX;
       target.current.y = e.clientY;
       dot.classList.add("is-visible");
       // Grow over links/buttons.
       const interactive =
-        (e.target as HTMLElement | null)?.closest("a,button,[role=tab],[role=button]") != null;
+        (e.target as HTMLElement | null)?.closest("a,button,input,textarea,[role=tab],[role=button]") != null;
       dot.classList.toggle("is-link", interactive);
     };
     const onLeave = () => dot.classList.remove("is-visible");
@@ -42,6 +45,7 @@ export function PointerTracker() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerleave", onLeave);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      document.documentElement.classList.remove("has-magic-cursor");
     };
   }, []);
 

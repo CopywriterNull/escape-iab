@@ -4,7 +4,6 @@ import { PlatformLogo, type PlatformId } from "@/components/PlatformLogos";
 import { RainbowButton } from "@/components/magic/RainbowButton";
 import { ShineBorder } from "@/components/magic/ShineBorder";
 import { ThemeToggle } from "@/components/magic/ThemeToggle";
-import { AnimatedList } from "@/components/magic/AnimatedList";
 import { PointerTracker } from "@/components/magic/PointerTracker";
 import { TextHighlighter } from "@/components/magic/TextHighlighter";
 
@@ -64,11 +63,15 @@ function Nav({ theme: _theme }: { theme: Theme }) {
           <Link href="/login" className="hidden sm:inline-block text-sm text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] px-3 py-1.5 transition-colors focus-ring rounded-md">
             Sign in
           </Link>
-          <RainbowButton href="#waitlist" className="!h-9 !px-4 !text-[13px] sm:!text-sm">
+          <a
+            href="#waitlist"
+            className="group inline-flex items-center gap-2 rounded-full font-medium press lift focus-ring px-3 py-1.5 text-[13px] sm:text-sm bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)]"
+            style={{ boxShadow: "var(--shadow-cta)" }}
+          >
             <span className="sm:hidden">Get access</span>
             <span className="hidden sm:inline">Get early access</span>
-            <ArrowRight />
-          </RainbowButton>
+            <span className="btn-icon"><ArrowRight /></span>
+          </a>
         </div>
       </div>
     </header>
@@ -145,7 +148,6 @@ function Hero({ proof }: { proof?: LanderProof }) {
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 mesh-bg pointer-events-none" />
       <FloatingPlatformLogos />
-      <FloatingLiveEvents />
       <div className="relative mx-auto max-w-6xl px-5 pt-16 md:pt-24 pb-8">
         <div className="flex justify-center mb-7 hero-enter hero-enter-1">
           <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)]/80 px-3.5 py-1 text-[12px] text-[var(--color-fg-dim)] backdrop-blur">
@@ -231,14 +233,10 @@ function Waitlist() {
         placeholder="you@yourstore.com"
         className="w-full sm:flex-1 px-4 py-3 rounded-full bg-[var(--color-card)] border border-[var(--color-border)] text-sm placeholder:text-[var(--color-fg-muted)] focus:outline-none focus:border-[var(--color-accent)]/60 focus:ring-2 focus:ring-[color-mix(in_srgb,var(--color-accent)_20%,transparent)]"
       />
-      <button
-        type="submit"
-        className="group w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-full bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-sm font-medium press lift focus-ring"
-        style={{ boxShadow: "var(--shadow-cta)" }}
-      >
+      <RainbowButton type="submit" className="w-full sm:w-auto group !h-[46px] !px-5 !text-sm">
         <span>Get early access</span>
         <span className="btn-icon"><ArrowRight /></span>
-      </button>
+      </RainbowButton>
     </form>
   );
 }
@@ -680,22 +678,15 @@ type FloatPos = {
 };
 
 const HERO_FLOATERS: FloatPos[] = [
-  // Left gutter — 4 floaters (right gutter is reserved for the live events list)
-  { id: "instagram", size: 64, rotate: -8,  top: "10%", side: "left", offset: "5%", delay: "0s" },
-  { id: "facebook",  size: 56, rotate: 8,   top: "30%", side: "left", offset: "12%", delay: "0.8s" },
-  { id: "discord",   size: 58, rotate: 12,  top: "52%", side: "left", offset: "5%", delay: "1.6s" },
-  { id: "pinterest", size: 52, rotate: -10, top: "70%", side: "left", offset: "11%", delay: "2.4s" },
-  { id: "snap",      size: 50, rotate: -6,  top: "86%", side: "left", offset: "3%", delay: "3.1s" },
+  // Left gutter
+  { id: "instagram", size: 64, rotate: -8,  top: "10%", side: "left", offset: "5%",  delay: "0s" },
+  { id: "discord",   size: 58, rotate: 12,  top: "46%", side: "left", offset: "9%",  delay: "1.6s" },
+  { id: "snap",      size: 50, rotate: -6,  top: "78%", side: "left", offset: "3%",  delay: "3.1s" },
+  // Right gutter
+  { id: "facebook",  size: 60, rotate: 10,  top: "14%", side: "right", offset: "6%", delay: "0.7s" },
+  { id: "pinterest", size: 54, rotate: -10, top: "50%", side: "right", offset: "9%", delay: "2.2s" },
+  { id: "tiktok",    size: 56, rotate: 6,   top: "76%", side: "right", offset: "4%", delay: "3.8s" },
 ];
-
-function FloatingLiveEvents() {
-  // Anchored top-right of the hero on desktop, scrolls with content.
-  return (
-    <div className="hidden lg:block absolute top-[14%] right-[4%] z-10 w-[300px]">
-      <AnimatedList />
-    </div>
-  );
-}
 
 function FloatingPlatformLogos() {
   return (
