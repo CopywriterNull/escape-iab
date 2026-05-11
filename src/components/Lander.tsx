@@ -6,12 +6,14 @@ import { ShineBorder } from "@/components/magic/ShineBorder";
 import { ThemeToggle } from "@/components/magic/ThemeToggle";
 import { PointerTracker } from "@/components/magic/PointerTracker";
 import { TextHighlighter } from "@/components/magic/TextHighlighter";
+import { StickyMobileCTAInner } from "@/components/magic/StickyMobileCTAInner";
 
 type Theme = "dark" | "light";
 
 export type LanderProof = {
   liftPct: number | null;
   totalRevenueCents: number;
+  escapesToday?: number;
 };
 
 export function Lander({
@@ -25,10 +27,11 @@ export function Lander({
     <div className="text-[var(--color-fg)] bg-[var(--color-bg)] grain relative overflow-x-clip">
       <div aria-hidden className="gradient-dotgrid" />
       <PointerTracker />
-      <Nav theme={theme} />
+      <Nav theme={theme} escapesToday={proof?.escapesToday ?? 0} />
       <Hero proof={proof} />
       <PlatformsSection />
       <Problem />
+      <ComparisonStrip />
       <HowItWorks />
       <DashboardPreview />
       <Features />
@@ -38,20 +41,33 @@ export function Lander({
       <FAQ />
       <ClosingCTA />
       <Footer />
+      <StickyMobileCTA />
     </div>
   );
 }
 
 /* -------- Nav -------- */
 
-function Nav({ theme: _theme }: { theme: Theme }) {
+function Nav({ theme: _theme, escapesToday }: { theme: Theme; escapesToday: number }) {
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-[var(--color-bg)]/80 border-b border-[var(--color-border)]/60">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between gap-3 sm:gap-6">
-        <Link href="/" className="flex items-center gap-2 sm:gap-2.5 font-semibold tracking-tight focus-ring rounded-md text-[15px] sm:text-base">
-          <Logo />
-          <span>{brand.name}</span>
-        </Link>
+        <div className="flex items-center gap-3 min-w-0">
+          <Link href="/" className="flex items-center gap-2 sm:gap-2.5 font-semibold tracking-tight focus-ring rounded-md text-[15px] sm:text-base">
+            <Logo />
+            <span>{brand.name}</span>
+          </Link>
+          {escapesToday > 0 ? (
+            <span
+              className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] text-[11px] font-mono"
+              title="Live escapes since UTC midnight"
+            >
+              <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
+              <span className="tnum text-[var(--color-fg)]">{escapesToday.toLocaleString()}</span>
+              <span className="text-[var(--color-fg-muted)]">escapes today</span>
+            </span>
+          ) : null}
+        </div>
         <nav className="hidden md:flex items-center gap-1 text-sm">
           <NavLink href="#how">How it works</NavLink>
           <NavLink href="#dashboard">Dashboard</NavLink>
@@ -775,6 +791,109 @@ function PlatformsSection() {
   );
 }
 
+/* -------- Comparison strip — side-by-side without / with EscapeHatch -------- */
+
+function ComparisonStrip() {
+  const rows = [
+    { label: "Apple Pay", before: "Unavailable", after: "Works as expected" },
+    { label: "Shop Pay autofill", before: "Broken", after: "Single-tap return" },
+    { label: "Saved cart / session", before: "Lost", after: "Recognized" },
+    { label: "Checkout CVR (paid IG)", before: "0.83%", after: "2.84%" },
+    { label: "Refund-rate friction", before: "Higher", after: "Lower" },
+    { label: "60-second install", before: "—", after: "Single snippet" },
+  ];
+  return (
+    <section className="border-y border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/30">
+      <div className="mx-auto max-w-6xl px-5 py-20 md:py-24">
+        <div className="text-center mb-12">
+          <div className="eyebrow">Side by side</div>
+          <h2 className="mt-3 h-display text-[28px] md:text-[40px] tracking-tight">
+            Without it.{" "}
+            <span className="h-editorial text-[var(--color-accent)]">With it.</span>
+          </h2>
+          <p className="mt-3 text-[14.5px] text-[var(--color-fg-dim)] max-w-xl mx-auto">
+            One snippet later, every breakage paid Meta traffic hits in the in-app browser turns into a clean Safari checkout.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)] overflow-hidden">
+          {/* Desktop header row */}
+          <div className="hidden sm:grid grid-cols-12 px-5 py-3 border-b border-[var(--color-border-soft)] text-[10.5px] uppercase tracking-[0.16em] font-mono text-[var(--color-fg-muted)] font-medium">
+            <div className="col-span-4">Behavior</div>
+            <div className="col-span-4 flex items-center gap-2">
+              <span className="size-1.5 rounded-full bg-[var(--color-danger)]" />
+              Without EscapeHatch
+            </div>
+            <div className="col-span-4 flex items-center gap-2">
+              <span className="size-1.5 rounded-full bg-[var(--color-success)]" />
+              With EscapeHatch
+            </div>
+          </div>
+          {rows.map((r) => (
+            <div
+              key={r.label}
+              className="px-4 sm:px-5 py-3 border-b border-[var(--color-border-soft)] last:border-b-0"
+            >
+              {/* Desktop: 3-col grid */}
+              <div className="hidden sm:grid grid-cols-12 items-baseline text-[13.5px]">
+                <div className="col-span-4 font-medium tracking-tight">{r.label}</div>
+                <div className="col-span-4 flex items-center gap-2 text-[var(--color-fg-dim)]">
+                  <Cross />
+                  <span>{r.before}</span>
+                </div>
+                <div className="col-span-4 flex items-center gap-2 text-[var(--color-fg)]">
+                  <Check />
+                  <span>{r.after}</span>
+                </div>
+              </div>
+              {/* Mobile: stacked */}
+              <div className="sm:hidden">
+                <div className="text-[13px] font-medium tracking-tight mb-2">{r.label}</div>
+                <div className="grid grid-cols-2 gap-2 text-[12px]">
+                  <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/40 px-2 py-1.5">
+                    <div className="text-[9.5px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)] flex items-center gap-1">
+                      <span className="size-1 rounded-full bg-[var(--color-danger)]" />
+                      Without
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-[var(--color-fg-dim)]">
+                      <Cross />
+                      <span>{r.before}</span>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/40 px-2 py-1.5">
+                    <div className="text-[9.5px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)] flex items-center gap-1">
+                      <span className="size-1 rounded-full bg-[var(--color-success)]" />
+                      With
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-[var(--color-fg)]">
+                      <Check />
+                      <span>{r.after}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------- Sticky mobile bottom CTA — appears after scrolling past hero -------- */
+
+function StickyMobileCTA() {
+  return (
+    <div
+      aria-hidden="false"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 pb-[max(env(safe-area-inset-bottom),0px)] pointer-events-none"
+      id="sticky-mobile-cta"
+    >
+      <StickyMobileCTAInner />
+    </div>
+  );
+}
+
 /* -------- Closing CTA — "Stop paying Meta to send traffic to a dead end." -------- */
 
 function ClosingCTA() {
@@ -1435,6 +1554,26 @@ function FAQ() {
       q: "Why pay — can't my dev write it in 5 minutes?",
       a: "They can. Then they have to build the dashboard, the A/B framework, the analytics pipeline, the fallback UI, the alerting when IG patches it, the Shopify App Embed, the CSP variants, and the multi-store admin. Or you spend $29 and have it tonight.",
     },
+    {
+      q: "Does it work on Shopify Plus?",
+      a: "Yes. The snippet drops into theme.liquid same as any Shopify install. We've validated against checkout extensibility, Shop Pay, and the Plus B2B portal. Multi-store rollups are a Pro plan feature so a single dashboard covers every storefront.",
+    },
+    {
+      q: "What if my store is headless (Hydrogen / Next.js / custom)?",
+      a: "Drop the snippet into your root layout's <head>. The detection + redirect logic doesn't depend on Liquid — it runs purely client-side on first paint. Hydrogen, Next.js Commerce, Medusa, and custom-built stores all work.",
+    },
+    {
+      q: "How fast will I see results?",
+      a: "First escapes within minutes of installing. The A/B test reaches 95% statistical significance in 5-14 days for most stores spending $30k+/mo on Meta. Dashboard fires lift + p-value the moment you have enough sample.",
+    },
+    {
+      q: "Is the snippet GDPR / CCPA compliant?",
+      a: "We don't set cookies, we don't fingerprint, we don't ship analytics off your domain. The only data we collect is an IP-hashed event row per escape — no PII, no third-party trackers. Add us under \"functional\" in your consent banner if you have one.",
+    },
+    {
+      q: "What happens if Apple Pay actually works in the IAB someday?",
+      a: "We unmount cleanly — the snippet exits silently if it doesn't detect a broken IAB context. No customer-facing breakage. You can also flip the killswitch from your dashboard in case Instagram ever fixes things first.",
+    },
   ];
   return (
     <section id="faq" className="relative">
@@ -1461,13 +1600,6 @@ function FAQ() {
             </details>
           ))}
         </div>
-        <div className="mt-12 card-hi p-8 text-center">
-          <h3 className="h-editorial text-2xl md:text-3xl text-balance">Stop paying Meta to send traffic to a dead end.</h3>
-          <p className="mt-3 text-[var(--color-fg-dim)]">Free tier covers most stores. Install in 60 seconds.</p>
-          <div className="mt-6 flex items-center justify-center">
-            <CTAButton href="#waitlist" size="lg">Get early access</CTAButton>
-          </div>
-        </div>
       </div>
     </section>
   );
@@ -1476,17 +1608,65 @@ function FAQ() {
 /* -------- Footer -------- */
 
 function Footer() {
+  const cols = [
+    {
+      heading: "Product",
+      links: [
+        { label: "How it works", href: "#how" },
+        { label: "Dashboard", href: "#dashboard" },
+        { label: "Pricing", href: "#pricing" },
+        { label: "FAQ", href: "#faq" },
+      ],
+    },
+    {
+      heading: "Company",
+      links: [
+        { label: "Sign in", href: "/login" },
+        { label: "Email", href: "mailto:hi@escapehatch.app" },
+        { label: "Twitter / X", href: "https://x.com/escapehatchapp" },
+      ],
+    },
+    {
+      heading: "Legal",
+      links: [
+        { label: "Privacy", href: "/privacy" },
+        { label: "Terms", href: "/terms" },
+      ],
+    },
+  ];
   return (
-    <footer className="border-t border-[var(--color-border)] mt-12">
-      <div className="mx-auto max-w-6xl px-5 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 text-sm text-[var(--color-fg-muted)]">
-        <div className="flex items-center gap-2">
-          <Logo />
-          <span className="font-semibold text-[var(--color-fg)]">{brand.name}</span>
-          <span className="ml-2">© {new Date().getFullYear()}</span>
+    <footer className="border-t border-[var(--color-border-soft)] mt-12">
+      <div className="mx-auto max-w-6xl px-5 py-12 grid grid-cols-2 sm:grid-cols-4 gap-8">
+        <div className="col-span-2 sm:col-span-1 max-w-xs">
+          <div className="flex items-center gap-2">
+            <Logo />
+            <span className="font-semibold text-[var(--color-fg)] tracking-tight">{brand.name}</span>
+          </div>
+          <p className="mt-3 text-[12.5px] text-[var(--color-fg-dim)] leading-relaxed">
+            Detects Instagram&apos;s in-app browser and reopens your store in Safari. One snippet. 60-second install.
+          </p>
         </div>
-        <div className="flex items-center gap-6">
-          <Link href="/login" className="hover:text-[var(--color-fg)]">Sign in</Link>
-          <a href="mailto:hi@escapehatch.app" className="hover:text-[var(--color-fg)]">hi@escapehatch.app</a>
+        {cols.map((col) => (
+          <div key={col.heading}>
+            <div className="text-[10.5px] uppercase tracking-[0.16em] font-mono font-medium text-[var(--color-fg-muted)]">
+              {col.heading}
+            </div>
+            <ul className="mt-3 space-y-2 text-[13px]">
+              {col.links.map((l) => (
+                <li key={l.label}>
+                  <Link href={l.href} className="text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] transition-colors">
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-[var(--color-border-soft)]">
+        <div className="mx-auto max-w-6xl px-5 py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[11.5px] font-mono text-[var(--color-fg-muted)]">
+          <span>© {new Date().getFullYear()} {brand.name} · Built for ecommerce that lives on Meta ads</span>
+          <span>{brand.domain}</span>
         </div>
       </div>
     </footer>

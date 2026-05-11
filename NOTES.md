@@ -229,6 +229,44 @@ Local dev: `vercel env pull .env.local --environment production --yes`. Override
 
 ## Significant commits (most recent first)
 
+### Session 2026-05-10 → 2026-05-11
+- Marketing batch — live "escapes today" counter pill in nav (uses new
+  `getEscapesToday()` in lib/db.ts; page revalidate now 5 min);
+  `<ComparisonStrip />` section (without/with grid w/ mobile stacked fallback);
+  `<StickyMobileCTAInner />` client component (md:hidden, scrolls in after
+  700px); expanded FAQ (+6 objection-handling Qs); cleaner Footer with
+  Product/Company/Legal columns + brand description; new `/privacy` +
+  `/terms` stub pages; removed duplicate "dead end" CTA from inside FAQ
+- Dashboard structural tighten — `<Page>` header drops the redundant H1
+  + verbose subtitle (info already in top nav breadcrumb + tab strip);
+  now just a slim toolbar w/ "Last 14d" status + range picker + Install CTA
+- Preview `/preview/dashboard/v6-blend` — added 5th KPI tile **Rev per
+  visitor** as the headline metric (per merchant request); grid now
+  `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`
+- Magic UI batch — `<RainbowButton>` (cobalt-spectrum pan + halo) on
+  hero CTA + closing CTA only; `<ShineBorder>` wraps featured Pro pricing
+  tier (conic-gradient @property animation); `<ThemeToggle>` w/
+  `themeBootScript` injected to <head> beforeInteractive (no flash);
+  `<AnimatedList>` component (currently unmounted — too noisy in hero,
+  keeps for future placements); `<PointerTracker>` cobalt dot replaces
+  system cursor via `.has-magic-cursor` class on <html>;
+  `<TextHighlighter>` IntersectionObserver-driven sweep on "Safari"
+- Dot gradient un-stuck — `position: absolute` (was fixed), height
+  `min(900px, 90vh)`, denser cobalt mix (38%), neutral underlay 12%
+- Floating platform logos around hero (6 platforms — IG/FB/Snap/Discord
+  /Pinterest/TikTok, desktop-only, .float-slow with staggered delays)
+- Platforms section "Every app. Detected, escaped, reopened." 4×2 grid
+  of all 8 IAB platforms (replaces old LogoStrip with placeholder
+  "Trusted by 30+ Brands")
+- OG image fixed (was returning text/html due to satori JSX errors) —
+  runtime: nodejs, removed invalid {"'"} interpolations
+- Mobbin-style preview at `/preview/landing/mobbin` w/ overlapping
+  platform stack hero — `_platform-logos.tsx` moved to
+  `src/components/PlatformLogos.tsx` (shared by real homepage)
+- 6 dashboard variants at `/preview/dashboard/v[1-6]` for design comparison
+
+### Older
+
 - `ce9c55f` — UVP rewrite: "Your Instagram ads work. Your Instagram checkout doesn't."
 - `b7b0dd0` — dashboard typography matches homepage (h-display + accent eyebrows)
 - `9b3f010` — brutalist mono terminal aesthetic (rolled back)

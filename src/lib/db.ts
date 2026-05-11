@@ -1,5 +1,20 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 
+/** Total escape_attempt events since UTC midnight for the given merchant. */
+export async function getEscapesToday(merchantId: string): Promise<number> {
+  const supabase = await getSupabaseServer();
+  if (!supabase) return 0;
+  const midnight = new Date();
+  midnight.setUTCHours(0, 0, 0, 0);
+  const { count } = await supabase
+    .from("escape_events")
+    .select("*", { count: "exact", head: true })
+    .eq("merchant_id", merchantId)
+    .eq("event_type", "escape_attempt")
+    .gte("created_at", midnight.toISOString());
+  return count ?? 0;
+}
+
 export type Merchant = {
   id: string;
   user_id: string;

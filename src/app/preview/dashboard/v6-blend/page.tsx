@@ -203,13 +203,14 @@ export default function V6Blend() {
           </div>
         </div>
 
-        {/* KPI strip — current theme tiles, with deltas + pixel icons */}
-        <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* KPI strip — 5 tiles incl. Rev per visitor (the merchant's headline metric) */}
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {([
-            { l: "Impressions", v: d.impressions.toLocaleString(), s: `${d.escapeAttempts.toLocaleString()} escapes (bucket A)`, delta: "+8.4%", icon: "eye" as const },
-            { l: "Escape rate", v: `${(d.escapeRate * 100).toFixed(0)}%`, s: "of bucket A landings", delta: "+1.2%", icon: "bolt" as const },
-            { l: "Revenue (test)", v: `$${d.revenue.toLocaleString()}`, s: `${d.purchases} purchases`, delta: "+18.7%", icon: "dollar" as const },
-            { l: "Lift · A vs B", v: `+${(d.liftPct * 100).toFixed(1)}%`, s: `${(d.confident * 100).toFixed(0)}% confident`, delta: null, valueClass: "text-[var(--color-success)]", icon: "chart" as const },
+            { l: "Rev / visitor", v: `$${(d.revenue / d.impressions).toFixed(2)}`, s: `over ${d.impressions.toLocaleString()} visitors`, delta: "+15.2%", icon: "dollar" as const, valueClass: "text-[var(--color-success)]" },
+            { l: "Impressions", v: d.impressions.toLocaleString(), s: `${d.escapeAttempts.toLocaleString()} escapes (bucket A)`, delta: "+8.4%", icon: "eye" as const, valueClass: "" },
+            { l: "Escape rate", v: `${(d.escapeRate * 100).toFixed(0)}%`, s: "of bucket A landings", delta: "+1.2%", icon: "bolt" as const, valueClass: "" },
+            { l: "Revenue (test)", v: `$${d.revenue.toLocaleString()}`, s: `${d.purchases} purchases`, delta: "+18.7%", icon: "dollar" as const, valueClass: "" },
+            { l: "Lift · A vs B", v: `+${(d.liftPct * 100).toFixed(1)}%`, s: `${(d.confident * 100).toFixed(0)}% confident`, delta: null as string | null, valueClass: "text-[var(--color-success)]", icon: "chart" as const },
           ]).map((k, i) => (
             <div key={i} className="bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg px-4 py-3">
               <div className="flex items-center justify-between gap-2">

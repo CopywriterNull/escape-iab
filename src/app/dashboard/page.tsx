@@ -121,7 +121,7 @@ export default async function DashboardOverview({
   const merchant = await getCurrentMerchant();
   if (!merchant) {
     return (
-      <Page title="Overview" range={range}>
+      <Page range={range}>
         <Card><CardBody><MutedText>Provisioning merchant record…</MutedText></CardBody></Card>
       </Page>
     );
@@ -132,14 +132,8 @@ export default async function DashboardOverview({
 
   return (
     <Page
-      title={merchant.name ?? "Your store"}
       range={range}
-      subtitle={
-        <span className="font-mono text-[12px] text-[var(--color-fg-muted)]">
-          {merchant.domain ?? "—"} · last {range.label} ·{" "}
-          {merchant.ab_enabled ? "A/B 50/50" : "A/B off"}
-        </span>
-      }
+      subtitle={<span>Last {range.label}</span>}
       action={
         <Link
           href="/dashboard/install"
@@ -390,13 +384,13 @@ async function ActivitySection({ merchantId, days }: { merchantId: string; days:
 /* -------- Polaris-inspired primitives -------- */
 
 function Page({
-  title,
   subtitle,
   action,
   range,
   children,
 }: {
-  title: string;
+  // Title was redundant with the top-nav breadcrumb + tab strip — dropped.
+  title?: string;
   subtitle?: React.ReactNode;
   action?: React.ReactNode;
   range?: Range;
@@ -404,18 +398,18 @@ function Page({
 }) {
   return (
     <div className="space-y-4 md:space-y-5">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pb-3 mb-1">
-        <div className="min-w-0">
-          <h1 className="h-display text-[22px] md:text-[26px] tracking-tight truncate">
-            {title}
-          </h1>
-          {subtitle ? <div className="mt-1">{subtitle}</div> : null}
+      {/* Slim toolbar — just the range pills + actions. */}
+      {(range || action || subtitle) ? (
+        <div className="flex items-center justify-between gap-3 flex-wrap pb-2 mb-1">
+          <div className="min-w-0 text-[11.5px] font-mono text-[var(--color-fg-muted)] tnum">
+            {subtitle}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap -mx-1 md:mx-0 overflow-x-auto md:overflow-visible scrollbar-none">
+            {range ? <RangeSelector active={range.key} /> : null}
+            {action}
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap -mx-1 md:mx-0 overflow-x-auto md:overflow-visible scrollbar-none">
-          {range ? <RangeSelector active={range.key} /> : null}
-          {action}
-        </div>
-      </div>
+      ) : null}
       <div className="space-y-4">{children}</div>
     </div>
   );
