@@ -362,6 +362,7 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
       revenue={totalRevenue}
       purchases={funnel.purchases.a + funnel.purchases.b}
       revPerVisitor={revPerVisitor}
+      rpvPrior={prevRpv > 0 ? prevRpv : null}
       rpvDelta={rpvDelta}
       liftRel={liftRel}
       pValue={z?.pValue ?? null}
@@ -591,6 +592,7 @@ function KPIGrid({
   revenue,
   purchases,
   revPerVisitor,
+  rpvPrior,
   rpvDelta,
   liftRel,
   pValue,
@@ -602,6 +604,7 @@ function KPIGrid({
   revenue: number;
   purchases: number;
   revPerVisitor: number;
+  rpvPrior: number | null;
   rpvDelta: number | null;
   liftRel: number | null;
   pValue: number | null;
@@ -635,7 +638,11 @@ function KPIGrid({
         icon="dollar"
         value={`$${revPerVisitor.toFixed(2)}`}
         valueClass="text-[var(--color-success)]"
-        sub={`over ${fmtCompact(impressions)} visitors`}
+        sub={
+          rpvPrior != null
+            ? `vs $${rpvPrior.toFixed(2)} ${period.priorLabel}`
+            : `over ${fmtCompact(impressions)} visitors`
+        }
         delta={rpvDelta}
         deltaLabel={period.priorLabel}
       />
@@ -735,6 +742,15 @@ function FunnelTable({ funnel }: { funnel: Funnel }) {
     { label: "Checkout started", a: funnel.checkout_started.a, b: funnel.checkout_started.b, sub: "reached /checkouts" },
     { label: "Purchase", a: funnel.purchases.a, b: funnel.purchases.b, sub: "completed" },
   ];
+  // Monotone correction: each upstream stage must be ≥ every downstream stage.
+  // The Shopify pixel sometimes under-fires checkout_started / add_to_cart
+  // (sandbox subdomain isolation), so we can end up with purchases > checkouts.
+  // We back-propagate the floor so the funnel is always logically consistent —
+  // purchases come from the authoritative webhook source.
+  for (let i = stages.length - 2; i >= 0; i--) {
+    stages[i].a = Math.max(stages[i].a, stages[i + 1].a);
+    stages[i].b = Math.max(stages[i].b, stages[i + 1].b);
+  }
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
   const empty = baseA + baseB === 0;
