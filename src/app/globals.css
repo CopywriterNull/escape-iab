@@ -632,7 +632,10 @@ body {
   .shine-border::before { animation: none; }
 }
 
-/* Custom cobalt pointer — small dot replaces the system cursor on desktop. */
+/* Custom cobalt pointer — small dot replaces the system cursor on desktop.
+   Blend mode swaps with theme so the dot stays visible on both:
+     light bg → multiply (cobalt stays cobalt against white)
+     dark  bg → screen (cobalt lifts to a luminous light blue against black) */
 .magic-pointer {
   position: fixed;
   pointer-events: none;
@@ -648,6 +651,7 @@ body {
               opacity 220ms ease;
   opacity: 0;
 }
+[data-theme="dark"] .magic-pointer { mix-blend-mode: screen; }
 .magic-pointer.is-visible { opacity: 0.85; }
 .magic-pointer.is-link { width: 36px; height: 36px; opacity: 0.35; }
 @media (hover: none) { .magic-pointer { display: none; } }
