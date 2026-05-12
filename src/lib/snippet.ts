@@ -14,8 +14,8 @@
 // (Exception: non-IG IABs get a single iab_detected beacon for analytics
 // segmentation, but they're not in the bucketed test.)
 
-export type SnippetVersion = "v7";
-export const CURRENT_VERSION: SnippetVersion = "v7";
+export type SnippetVersion = "v7" | "v8";
+export const CURRENT_VERSION: SnippetVersion = "v8";
 
 type SnippetOpts = {
   merchantId: string;
@@ -38,7 +38,10 @@ try{
   var u=navigator.userAgent||"";
   if(!/Mobile|iPhone|iPod|iPad|Android/i.test(u))return;
   var kind=null;
-  if(/Instagram/i.test(u))kind="instagram";
+  // Check Barcelona (Threads) BEFORE Instagram — Threads UAs contain both
+  // tokens since Threads runs on IG's codebase.
+  if(/Barcelona/i.test(u))kind="threads";
+  else if(/Instagram/i.test(u))kind="instagram";
   else if(/FBAN|FBAV/i.test(u))kind=/Messenger/i.test(u)?"messenger":"facebook";
   else if(/Messenger/i.test(u))kind="messenger";
   else if(/TikTok|musical_ly/i.test(u))kind="tiktok";
@@ -84,7 +87,10 @@ try{
   // post-escape impression here too — otherwise pixel events fired on the
   // Safari side can't join back to a bucket-A impression.
   var postEscape=qsP.get("opened_external_browser")==="true";
-  var inTest=((kind==="instagram")&&isPaidAd)||postEscape;
+  // Instagram and Threads both use the Meta extbrowser private scheme;
+  // include both in the paid-ad test population.
+  var isMetaIAB=(kind==="instagram"||kind==="threads");
+  var inTest=(isMetaIAB&&isPaidAd)||postEscape;
 
   function readSy(){try{return(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){return null;}}
   var sy=readSy();
@@ -105,7 +111,7 @@ try{
 
   function beacon(t,extra){
     try{
-      var p={m:M,v:V,t:t,b:bk||"",k:kind,sy:sy,sid:sid,ig:kind==="instagram"?1:0,it:inTest?1:0,u:location.href,r:document.referrer||"",us:us,um:um,uc:uc,uct:uct,ut:ut,fc:fc,ts:Date.now()};
+      var p={m:M,v:V,t:t,b:bk||"",k:kind,sy:sy,sid:sid,ig:isMetaIAB?1:0,it:inTest?1:0,u:location.href,r:document.referrer||"",us:us,um:um,uc:uc,uct:uct,ut:ut,fc:fc,ts:Date.now()};
       if(extra)for(var key in extra)p[key]=extra[key];
       var body=JSON.stringify(p);
       var sent=false;
@@ -193,14 +199,31 @@ try{
 
   var dest=location.href;
   try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");nu.searchParams.set("eh_sid",sid);nu.searchParams.set("eh_escape","1");dest=nu.toString();}catch(e){}
-  var s=atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==")+encodeURIComponent(dest);
+  // Threads uses barcelona://extbrowser/?url= ; Instagram uses instagram://
+  // Both schemes accept identical payloads and hand off to system default.
+  var schemePrefix=kind==="threads"
+    ?atob("YmFyY2Vsb25hOi8vZXh0YnJvd3Nlci8/dXJsPQ==")
+    :atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==");
+  var s=schemePrefix+encodeURIComponent(dest);
   try{sessionStorage.setItem("eh_a","1");}catch(e){}
   beacon("escape_attempt");
   setTimeout(function(){try{location.replace(s);}catch(e){location.href=s;}},60);
 
+  // Visibility polling — if the OS opened our scheme, the page goes hidden.
+  // Poll document.hidden at three intervals; any positive hit marks the
+  // escape as succeeded so the fallback button doesn't paint on top of a
+  // user who's already in Safari/Chrome.
+  var escaped=false;
+  function probeH(){if(document.hidden)escaped=true;}
+  setTimeout(probeH,120);
+  setTimeout(probeH,380);
+  setTimeout(probeH,760);
+  try{document.addEventListener("visibilitychange",function(){if(document.hidden)escaped=true;});}catch(e){}
+
   if(FB){
     document.addEventListener("DOMContentLoaded",function(){
       setTimeout(function(){
+        if(escaped)return;
         try{
           var b=document.createElement("a");
           b.href=s;
