@@ -797,7 +797,7 @@ function ComparisonStrip() {
     { label: "Shop Pay autofill", before: "Broken", after: "Single-tap return" },
     { label: "Saved cart / session", before: "Lost", after: "Recognized" },
     { label: "Checkout CVR (paid IG)", before: "0.83%", after: "2.84%" },
-    { label: "Refund-rate friction", before: "Higher", after: "Lower" },
+    { label: "Cookie continuity", before: "_shopify_y resets at checkout", after: "Cart-token bridges the chain" },
     { label: "60-second install", before: "—", after: "Single snippet" },
   ];
   return (

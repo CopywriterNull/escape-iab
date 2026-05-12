@@ -24,18 +24,22 @@ export async function GET(
   // Resolve merchant settings if DB available; else fall back to defaults.
   let abEnabled = true;
   let fallbackButton = true;
+  let escapeEnabled = true;
+  let fallbackText: string | null = null;
   let valid = isValidShape;
   if (isValidShape) {
     const admin = getSupabaseAdmin();
     if (admin) {
       const { data } = await admin
         .from("merchants")
-        .select("ab_enabled, fallback_button")
+        .select("ab_enabled, fallback_button, escape_enabled, fallback_text")
         .eq("id", merchantId)
         .maybeSingle();
       if (data) {
         abEnabled = data.ab_enabled !== false;
         fallbackButton = data.fallback_button !== false;
+        escapeEnabled = data.escape_enabled !== false;
+        fallbackText = (data.fallback_text as string | null) ?? null;
       } else {
         valid = false;
       }
@@ -59,6 +63,8 @@ export async function GET(
     version: CURRENT_VERSION,
     abEnabled,
     fallbackButton,
+    escapeEnabled,
+    fallbackText,
   });
   const body = await obfuscateSnippet(raw);
 

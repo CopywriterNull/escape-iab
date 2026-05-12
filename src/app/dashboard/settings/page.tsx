@@ -56,6 +56,28 @@ export default async function SettingsPage() {
             label="Fallback button"
             hint='If the auto-redirect doesn&apos;t fire within 2s, show a "tap to open in browser" button.'
           />
+          <Field
+            label="Custom fallback text"
+            hint="Override the fallback button copy (max 60 chars). Leave blank for default."
+          >
+            <input
+              type="text"
+              name="fallback_text"
+              defaultValue={merchant.fallback_text ?? ""}
+              maxLength={60}
+              placeholder="tap to open in browser"
+              className="w-full px-3.5 py-2.5 rounded-lg bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-sm focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
+            />
+          </Field>
+        </div>
+
+        <div className="border-t border-[var(--color-border-soft)] pt-7 space-y-5">
+          <Toggle
+            name="escape_enabled"
+            defaultOn={merchant.escape_enabled ?? true}
+            label="Escape engine"
+            hint="Master switch. Off = snippet still tracks impressions but skips the redirect. Use as a panic button without uninstalling from theme.liquid."
+          />
         </div>
 
         <div className="pt-2">

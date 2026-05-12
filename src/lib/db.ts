@@ -23,6 +23,8 @@ export type Merchant = {
   plan: string;
   ab_enabled: boolean;
   fallback_button: boolean;
+  escape_enabled?: boolean;
+  fallback_text?: string | null;
   created_at: string;
 };
 

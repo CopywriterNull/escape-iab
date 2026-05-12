@@ -23,6 +23,8 @@ type SnippetOpts = {
   version?: SnippetVersion;
   abEnabled?: boolean;
   fallbackButton?: boolean;
+  escapeEnabled?: boolean;
+  fallbackText?: string | null;
 };
 
 export function buildSnippet(opts: SnippetOpts): string {
@@ -31,10 +33,15 @@ export function buildSnippet(opts: SnippetOpts): string {
   const version = JSON.stringify(opts.version ?? CURRENT_VERSION);
   const abEnabled = opts.abEnabled === true ? "true" : "false";
   const fallbackButton = opts.fallbackButton === false ? "false" : "true";
+  // Kill-switch: when false, snippet still beacons impressions but skips
+  // the actual redirect. Useful for pausing without uninstalling.
+  const escapeEnabled = opts.escapeEnabled === false ? "false" : "true";
+  // Custom fallback text — null/empty falls back to the base64-encoded default.
+  const fallbackText = JSON.stringify(opts.fallbackText ?? "");
 
   return `(function(){
 try{
-  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton};
+  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText};
   var u=navigator.userAgent||"";
   if(!/Mobile|iPhone|iPod|iPad|Android/i.test(u))return;
   var kind=null;
@@ -196,6 +203,9 @@ try{
   try{attempted=sessionStorage.getItem("eh_a")==="1";}catch(e){}
   if(attempted){beacon("escape_skipped",{r:"s"});return;}
   if(AB&&bk==="b")return;
+  // Kill switch: skip the redirect entirely but keep tracking (impression
+  // already fired above, so we still see traffic + the test population).
+  if(!KE){beacon("escape_skipped",{r:"k"});return;}
 
   var dest=location.href;
   try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");nu.searchParams.set("eh_sid",sid);nu.searchParams.set("eh_escape","1");dest=nu.toString();}catch(e){}
@@ -227,7 +237,7 @@ try{
         try{
           var b=document.createElement("a");
           b.href=s;
-          b.textContent=atob("dGFwIHRvIG9wZW4gaW4gYnJvd3Nlcg==");
+          b.textContent=FT||atob("dGFwIHRvIG9wZW4gaW4gYnJvd3Nlcg==");
           b.setAttribute("style","position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#000;padding:12px 22px;border-radius:999px;font-weight:700;font-size:14px;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;text-decoration:none;box-shadow:0 10px 28px rgba(0,0,0,.55);");
           b.addEventListener("click",function(){beacon("fallback_clicked");});
           document.body.appendChild(b);
