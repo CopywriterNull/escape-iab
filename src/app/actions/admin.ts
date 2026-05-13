@@ -1,9 +1,12 @@
 "use server";
 
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 
 const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
+const IMP_COOKIE = "eh_imp_merchant_id";
 
 async function requireAdmin(): Promise<boolean> {
   const supabase = await getSupabaseServer();
@@ -63,4 +66,27 @@ export async function assignMerchantToCurrentUser(formData: FormData) {
 
   await admin.from("merchants").update({ user_id: user.id }).eq("id", id);
   revalidatePath("/admin");
+}
+
+/** Set the impersonation cookie + jump into the dashboard as that merchant. */
+export async function impersonateMerchant(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+  const cookieStore = await cookies();
+  cookieStore.set(IMP_COOKIE, id, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24, // 24h
+  });
+  redirect("/dashboard");
+}
+
+/** Clear impersonation and return to /admin. */
+export async function stopImpersonating() {
+  const cookieStore = await cookies();
+  cookieStore.delete(IMP_COOKIE);
+  redirect("/admin");
 }

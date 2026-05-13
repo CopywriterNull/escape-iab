@@ -1,4 +1,8 @@
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
+
+const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
+const IMP_COOKIE = "eh_imp_merchant_id";
 
 /** Total escape_attempt events since UTC midnight for the given merchant. */
 export async function getEscapesToday(merchantId: string): Promise<number> {
@@ -64,10 +68,30 @@ export async function getCurrentMerchant(): Promise<Merchant | null> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+
+  // Admin impersonation: if the eh_imp_merchant_id cookie is set AND
+  // the current user is the admin, load that merchant via service-role.
+  // Honoured only for the admin email — anyone else with the cookie set
+  // is ignored (cookie alone confers no privilege).
+  if (user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    const cookieStore = await cookies();
+    const impId = cookieStore.get(IMP_COOKIE)?.value;
+    if (impId) {
+      const admin = getSupabaseAdmin();
+      if (admin) {
+        const { data } = await admin
+          .from("merchants")
+          .select("*")
+          .eq("id", impId)
+          .maybeSingle();
+        if (data) return data as Merchant;
+      }
+    }
+  }
+
   // Use limit(1) instead of maybeSingle() — maybeSingle returns null when
   // there's more than one row, which silently breaks the dashboard if a
-  // user accidentally owns multiple merchants (e.g., manual INSERT during
-  // a client install). Return the oldest merchant (the original one).
+  // user accidentally owns multiple merchants. Return the oldest.
   const { data } = await supabase
     .from("merchants")
     .select("*")
@@ -76,6 +100,33 @@ export async function getCurrentMerchant(): Promise<Merchant | null> {
     .limit(1);
   if (!data || data.length === 0) return null;
   return data[0] as Merchant;
+}
+
+/** True if the current user is admin AND impersonating a non-self merchant. */
+export async function getImpersonationStatus(): Promise<{
+  active: boolean;
+  merchant: Merchant | null;
+}> {
+  const supabase = await getSupabaseServer();
+  if (!supabase) return { active: false, merchant: null };
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { active: false, merchant: null };
+  if (user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+    return { active: false, merchant: null };
+  }
+  const cookieStore = await cookies();
+  const impId = cookieStore.get(IMP_COOKIE)?.value;
+  if (!impId) return { active: false, merchant: null };
+  const admin = getSupabaseAdmin();
+  if (!admin) return { active: false, merchant: null };
+  const { data } = await admin
+    .from("merchants")
+    .select("*")
+    .eq("id", impId)
+    .maybeSingle();
+  return { active: !!data, merchant: (data as Merchant | null) ?? null };
 }
 
 // Funnel computed directly from escape_events, restricted to the test

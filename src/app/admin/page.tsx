@@ -4,6 +4,7 @@ import {
   createMerchantAsAdmin,
   deleteMerchantAsAdmin,
   assignMerchantToCurrentUser,
+  impersonateMerchant,
 } from "@/app/actions/admin";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,23 @@ export default async function AdminMerchants() {
     .select("id, name, domain, user_id, plan, created_at")
     .order("created_at", { ascending: false });
   const rows: Row[] = (data as Row[]) ?? [];
+
+  // Pull last-24h event counts per merchant for tracking status at a glance.
+  const since24 = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const eventCounts = new Map<string, number>();
+  const eventLastSeen = new Map<string, string>();
+  if (rows.length > 0) {
+    const { data: events } = await admin
+      .from("escape_events")
+      .select("merchant_id, created_at")
+      .gte("created_at", since24)
+      .in("merchant_id", rows.map((r) => r.id));
+    for (const e of (events ?? []) as { merchant_id: string; created_at: string }[]) {
+      eventCounts.set(e.merchant_id, (eventCounts.get(e.merchant_id) ?? 0) + 1);
+      const prev = eventLastSeen.get(e.merchant_id);
+      if (!prev || e.created_at > prev) eventLastSeen.set(e.merchant_id, e.created_at);
+    }
+  }
 
   return (
     <div className="min-h-dvh bg-[var(--color-bg)] text-[var(--color-fg)] grain">
@@ -95,7 +113,13 @@ export default async function AdminMerchants() {
         {/* Rows */}
         <div className="space-y-3">
           {rows.map((r) => (
-            <MerchantRow key={r.id} row={r} myUserId={user.id} />
+            <MerchantRow
+              key={r.id}
+              row={r}
+              myUserId={user.id}
+              eventsLast24h={eventCounts.get(r.id) ?? 0}
+              lastSeen={eventLastSeen.get(r.id) ?? null}
+            />
           ))}
         </div>
       </div>
@@ -103,10 +127,24 @@ export default async function AdminMerchants() {
   );
 }
 
-function MerchantRow({ row, myUserId }: { row: Row; myUserId: string }) {
+function MerchantRow({
+  row,
+  myUserId,
+  eventsLast24h,
+  lastSeen,
+}: {
+  row: Row;
+  myUserId: string;
+  eventsLast24h: number;
+  lastSeen: string | null;
+}) {
   const ownedByMe = row.user_id === myUserId;
   const unowned = !row.user_id;
-  const snippet = `<script src="https://escape-iab.vercel.app/s/${row.id}.js?v=8" async></script>`;
+  const snippet = `<script src="https://escape-iab.vercel.app/s/${row.id}.js?v=9"></script>`;
+  const tracking = eventsLast24h > 0;
+  const lastSeenLabel = lastSeen
+    ? `${Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000)}m ago`
+    : "—";
 
   return (
     <details className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-card)] overflow-hidden">
@@ -123,9 +161,12 @@ function MerchantRow({ row, myUserId }: { row: Row; myUserId: string }) {
             ) : (
               <span className="pill pill-muted">CLIENT</span>
             )}
+            <span className={tracking ? "pill pill-success" : "pill pill-muted"}>
+              {tracking ? `LIVE · ${eventsLast24h}` : "NO EVENTS 24h"}
+            </span>
           </div>
           <div className="mt-1 text-[11px] font-mono text-[var(--color-fg-muted)] tnum">
-            {row.id} · created {new Date(row.created_at).toLocaleString()}
+            {row.id} · last event {lastSeenLabel} · created {new Date(row.created_at).toLocaleDateString()}
           </div>
         </div>
         <span className="text-[11px] font-mono text-[var(--color-fg-muted)]">expand ▾</span>
@@ -140,11 +181,20 @@ function MerchantRow({ row, myUserId }: { row: Row; myUserId: string }) {
             {snippet}
           </pre>
           <div className="mt-1.5 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
-            Paste in their theme.liquid &lt;head&gt;. Bump the ?v= number any time to bust the merchant-side cache.
+            Paste in their theme.liquid &lt;head&gt;, no async. Bump ?v= to bust their cache after settings changes.
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <form action={impersonateMerchant}>
+            <input type="hidden" name="id" value={row.id} />
+            <button
+              type="submit"
+              className="text-[12px] px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] font-medium press lift focus-ring transition-colors"
+            >
+              View as →
+            </button>
+          </form>
           {unowned ? (
             <form action={assignMerchantToCurrentUser}>
               <input type="hidden" name="id" value={row.id} />

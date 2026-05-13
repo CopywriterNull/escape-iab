@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentMerchant } from "@/lib/db";
+import { getCurrentMerchant, getImpersonationStatus } from "@/lib/db";
 import { supabaseConfigured, getSupabaseServer } from "@/lib/supabase/server";
 import { brand } from "@/lib/branding";
 import { signOut } from "@/app/actions/auth";
+import { stopImpersonating } from "@/app/actions/admin";
 import { SidebarNav } from "./_components/sidebar-nav";
 import { PixelIcon } from "@/components/PixelIcon";
 
@@ -67,10 +68,31 @@ export default async function DashboardLayout({
   if (!user) redirect("/login");
 
   const merchant = await getCurrentMerchant();
+  const impersonation = await getImpersonationStatus();
   const live = merchant ? await getRecentForSidebar(merchant.id, 3) : [];
 
   return (
-    <div className="min-h-dvh flex flex-col md:flex-row bg-[var(--color-bg)] text-[var(--color-fg)]">
+    <>
+      {/* Impersonation banner — flows above the layout when admin is viewing as another merchant */}
+      {impersonation.active ? (
+        <div className="bg-[var(--color-accent)] text-white px-4 py-1.5 flex items-center justify-between gap-3 text-[12px] font-mono sticky top-0 z-50">
+          <span className="inline-flex items-center gap-2 min-w-0">
+            <span className="size-1.5 rounded-full bg-white animate-pulse shrink-0" />
+            <span>VIEWING AS</span>
+            <strong className="font-semibold truncate">{impersonation.merchant?.name ?? "merchant"}</strong>
+            <span className="opacity-70 truncate hidden sm:inline">· {impersonation.merchant?.domain ?? ""}</span>
+          </span>
+          <form action={stopImpersonating}>
+            <button
+              type="submit"
+              className="text-white/90 hover:text-white underline decoration-white/50 hover:decoration-white px-2 py-0.5 whitespace-nowrap"
+            >
+              Exit →
+            </button>
+          </form>
+        </div>
+      ) : null}
+      <div className="min-h-dvh flex flex-col md:flex-row bg-[var(--color-bg)] text-[var(--color-fg)]">
       {/* ─── Desktop sidebar ─── */}
       <aside className="hidden md:flex w-[220px] shrink-0 flex-col border-r border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/30 sticky top-0 h-dvh z-30">
         {/* Brand */}
@@ -220,6 +242,7 @@ export default async function DashboardLayout({
           Provisioning your merchant record…
         </div>
       ) : null}
-    </div>
+      </div>
+    </>
   );
 }
