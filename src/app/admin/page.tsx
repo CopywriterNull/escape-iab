@@ -213,13 +213,21 @@ function MerchantRow({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <a
+            href={`/install/${row.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[12px] px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] font-medium press lift focus-ring transition-colors"
+          >
+            Install guide →
+          </a>
           <form action={impersonateMerchant}>
             <input type="hidden" name="id" value={row.id} />
             <button
               type="submit"
-              className="text-[12px] px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] font-medium press lift focus-ring transition-colors"
+              className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-border-soft)] hover:bg-[var(--color-bg-elev)] press focus-ring transition-colors"
             >
-              View as →
+              View as
             </button>
           </form>
           {unowned ? (

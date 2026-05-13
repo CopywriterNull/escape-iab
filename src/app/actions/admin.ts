@@ -26,7 +26,7 @@ export async function createMerchantAsAdmin(formData: FormData) {
   const domain = String(formData.get("domain") ?? "").trim().slice(0, 120);
   if (!name || !domain) return;
 
-  await admin
+  const { data } = await admin
     .from("merchants")
     .insert({
       name,
@@ -34,9 +34,14 @@ export async function createMerchantAsAdmin(formData: FormData) {
       plan: "free",
       ab_enabled: true,
       fallback_button: true,
-    });
+    })
+    .select("id")
+    .single();
 
   revalidatePath("/admin");
+  // Drop straight into the install guide for this new merchant — copy the URL
+  // from the address bar, paste into a DM, you're done.
+  if (data?.id) redirect(`/install/${data.id}`);
 }
 
 export async function deleteMerchantAsAdmin(formData: FormData) {
