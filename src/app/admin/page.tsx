@@ -142,7 +142,7 @@ function MerchantRow({
 }) {
   const ownedByMe = row.user_id === myUserId;
   const unowned = !row.user_id;
-  const snippet = `<script src="https://escape-iab.vercel.app/s/${row.id}.js?v=9"></script>`;
+  const snippet = `<script src="https://getescapehatch.com/s/${row.id}.js?v=9"></script>`;
   const tracking = eventsLast24h > 0;
   const lastSeenLabel = lastSeen
     ? `${Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000)}m ago`

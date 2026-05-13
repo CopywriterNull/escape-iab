@@ -1252,7 +1252,7 @@ function Features() {
               </div>
               <div className="flex items-center gap-3 font-mono text-[12px] text-[var(--color-fg-muted)]">
                 <code className="px-2.5 py-1 rounded-md bg-[var(--color-bg-elev)] border border-[var(--color-border)]">
-                  s.yourshop.com → escapehatch.app
+                  s.yourshop.com → getescapehatch.com
                 </code>
               </div>
             </div>
@@ -1288,7 +1288,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function SnippetPreview() {
   const code = `<!-- Paste once, in <head>. That's it. -->
-<script src="https://escapehatch.app/s/YOUR-MERCHANT-ID.js" async></script>`;
+<script src="https://getescapehatch.com/s/YOUR-MERCHANT-ID.js"></script>`;
   return (
     <section className="relative">
       <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent" />
@@ -1620,7 +1620,7 @@ function Footer() {
       heading: "Company",
       links: [
         { label: "Sign in", href: "/login" },
-        { label: "Email", href: "mailto:hi@escapehatch.app" },
+        { label: "Email", href: "mailto:hi@getescapehatch.com" },
         { label: "Twitter / X", href: "https://x.com/escapehatchapp" },
       ],
     },

@@ -37,7 +37,7 @@ export default function PrivacyPage() {
           </Section>
           <Section title="GDPR / CCPA">
             <p>
-              The visitor data is non-personal under both regulations (IP-hashed, no identifier returned to client). You may classify {brand.name} as a &quot;functional&quot; tool in your consent banner. If you need a signed Data Processing Agreement (DPA), email <a href="mailto:hi@escapehatch.app" className="text-[var(--color-accent)]">hi@escapehatch.app</a> and we&apos;ll send one over.
+              The visitor data is non-personal under both regulations (IP-hashed, no identifier returned to client). You may classify {brand.name} as a &quot;functional&quot; tool in your consent banner. If you need a signed Data Processing Agreement (DPA), email <a href="mailto:hi@getescapehatch.com" className="text-[var(--color-accent)]">hi@getescapehatch.com</a> and we&apos;ll send one over.
             </p>
           </Section>
           <Section title="Right to delete">
@@ -47,7 +47,7 @@ export default function PrivacyPage() {
           </Section>
           <Section title="Contact">
             <p>
-              Privacy questions: <a href="mailto:hi@escapehatch.app" className="text-[var(--color-accent)]">hi@escapehatch.app</a>. Postal mail on request.
+              Privacy questions: <a href="mailto:hi@getescapehatch.com" className="text-[var(--color-accent)]">hi@getescapehatch.com</a>. Postal mail on request.
             </p>
           </Section>
 

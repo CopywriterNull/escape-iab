@@ -52,7 +52,7 @@ export default function TermsPage() {
           </Section>
           <Section title="Contact">
             <p>
-              Terms questions: <a href="mailto:hi@escapehatch.app" className="text-[var(--color-accent)]">hi@escapehatch.app</a>.
+              Terms questions: <a href="mailto:hi@getescapehatch.com" className="text-[var(--color-accent)]">hi@getescapehatch.com</a>.
             </p>
           </Section>
 

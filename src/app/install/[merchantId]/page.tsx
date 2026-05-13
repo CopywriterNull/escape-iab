@@ -35,12 +35,12 @@ export default async function InstallGuide({
   if (!data) notFound();
   const merchant = data as MerchantRow;
 
-  const snippet = `<script src="https://escape-iab.vercel.app/s/${merchant.id}.js?v=9"></script>`;
+  const snippet = `<script src="https://getescapehatch.com/s/${merchant.id}.js?v=9"></script>`;
   const pixel = buildShopifyPixel({
     merchantId: merchant.id,
-    ingestUrl: "https://escape-iab.vercel.app/api/track/funnel",
+    ingestUrl: "https://getescapehatch.com/api/track/funnel",
   });
-  const webhookUrl = "https://escape-iab.vercel.app/api/webhooks/shopify/orders";
+  const webhookUrl = "https://getescapehatch.com/api/webhooks/shopify/orders";
 
   return (
     <div className="min-h-dvh bg-[var(--color-bg)] text-[var(--color-fg)] grain">
@@ -143,11 +143,11 @@ export default async function InstallGuide({
             usually comes 5-14 days in, depending on traffic.
           </p>
           <a
-            href="mailto:hi@escapehatch.app"
+            href="mailto:hi@getescapehatch.com"
             className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-[13px] font-medium press lift focus-ring"
             style={{ boxShadow: "var(--shadow-cta)" }}
           >
-            hi@escapehatch.app
+            hi@getescapehatch.com
           </a>
         </Section>
 

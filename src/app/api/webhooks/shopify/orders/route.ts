@@ -8,7 +8,7 @@ import { type NextRequest } from "next/server";
 //   Settings → Notifications → Webhooks → Create webhook
 //   Event: "Order paid" (or "Order created")
 //   Format: JSON
-//   URL: https://escape-iab.vercel.app/api/webhooks/shopify/orders
+//   URL: https://getescapehatch.com/api/webhooks/shopify/orders
 //   API version: latest
 //   After creating, copy the webhook secret into Vercel env:
 //     SHOPIFY_WEBHOOK_SECRET=<value>

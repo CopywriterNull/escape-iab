@@ -1,6 +1,6 @@
 export const brand = {
   name: "EscapeHatch",
-  domain: "escapehatch.app",
+  domain: "getescapehatch.com",
   // Hero — names the problem and solution in two beats.
   tagline: "Your Instagram ads work. Your Instagram checkout doesn't.",
   subhead:
