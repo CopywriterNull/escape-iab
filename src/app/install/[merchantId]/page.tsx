@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { buildShopifyPixel } from "@/lib/pixel";
 import { CopyableCode } from "@/components/CopyableCode";
+import { InstallStatus } from "./_components/install-status";
 import { brand } from "@/lib/branding";
 
 export const dynamic = "force-dynamic";
@@ -70,9 +71,14 @@ export default async function InstallGuide({
           </h1>
           <p className="mt-4 text-[14.5px] text-[var(--color-fg-dim)] max-w-xl leading-relaxed">
             Three blocks to paste, in this order. Each one is scoped to your store — no
-            edits needed. When you're done, message us back and we&apos;ll verify it&apos;s
-            firing live.
+            edits needed. The card below will flip from gray to green the moment your first
+            event hits — you&apos;ll know it&apos;s working without leaving this page.
           </p>
+
+          {/* Live install status — polls every 4s. */}
+          <div className="mt-7">
+            <InstallStatus merchantId={merchant.id} />
+          </div>
         </div>
 
         {/* Step 1 — Snippet */}
