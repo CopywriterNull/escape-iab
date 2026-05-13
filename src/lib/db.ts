@@ -64,12 +64,18 @@ export async function getCurrentMerchant(): Promise<Merchant | null> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+  // Use limit(1) instead of maybeSingle() — maybeSingle returns null when
+  // there's more than one row, which silently breaks the dashboard if a
+  // user accidentally owns multiple merchants (e.g., manual INSERT during
+  // a client install). Return the oldest merchant (the original one).
   const { data } = await supabase
     .from("merchants")
     .select("*")
     .eq("user_id", user.id)
-    .maybeSingle();
-  return (data as Merchant | null) ?? null;
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (!data || data.length === 0) return null;
+  return data[0] as Merchant;
 }
 
 // Funnel computed directly from escape_events, restricted to the test
