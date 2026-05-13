@@ -25,6 +25,7 @@ type SnippetOpts = {
   fallbackButton?: boolean;
   escapeEnabled?: boolean;
   fallbackText?: string | null;
+  paidOnly?: boolean;
 };
 
 export function buildSnippet(opts: SnippetOpts): string {
@@ -38,10 +39,14 @@ export function buildSnippet(opts: SnippetOpts): string {
   const escapeEnabled = opts.escapeEnabled === false ? "false" : "true";
   // Custom fallback text — null/empty falls back to the base64-encoded default.
   const fallbackText = JSON.stringify(opts.fallbackText ?? "");
+  // Paid-only gate: when true (default), only escape Meta IAB visitors
+  // arriving via paid clicks. When false, escape any Meta IAB visitor
+  // including organic IG link-in-bio / story / DM traffic.
+  const paidOnly = opts.paidOnly === false ? "false" : "true";
 
   return `(function(){
 try{
-  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText};
+  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly};
   var u=navigator.userAgent||"";
   if(!/Mobile|iPhone|iPod|iPad|Android/i.test(u))return;
   var kind=null;
@@ -94,10 +99,11 @@ try{
   // post-escape impression here too — otherwise pixel events fired on the
   // Safari side can't join back to a bucket-A impression.
   var postEscape=qsP.get("opened_external_browser")==="true";
-  // Instagram and Threads both use the Meta extbrowser private scheme;
-  // include both in the paid-ad test population.
+  // Instagram and Threads both use the Meta extbrowser private scheme.
+  // When PO (paid-only) is true, gate the test population on paid signal.
+  // When false, escape any Meta IAB visitor (paid + organic).
   var isMetaIAB=(kind==="instagram"||kind==="threads");
-  var inTest=(isMetaIAB&&isPaidAd)||postEscape;
+  var inTest=(isMetaIAB&&(!PO||isPaidAd))||postEscape;
 
   function readSy(){try{return(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){return null;}}
   var sy=readSy();

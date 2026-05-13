@@ -26,13 +26,14 @@ export async function GET(
   let fallbackButton = true;
   let escapeEnabled = true;
   let fallbackText: string | null = null;
+  let paidOnly = true;
   let valid = isValidShape;
   if (isValidShape) {
     const admin = getSupabaseAdmin();
     if (admin) {
       const { data } = await admin
         .from("merchants")
-        .select("ab_enabled, fallback_button, escape_enabled, fallback_text")
+        .select("ab_enabled, fallback_button, escape_enabled, fallback_text, paid_only")
         .eq("id", merchantId)
         .maybeSingle();
       if (data) {
@@ -40,6 +41,7 @@ export async function GET(
         fallbackButton = data.fallback_button !== false;
         escapeEnabled = data.escape_enabled !== false;
         fallbackText = (data.fallback_text as string | null) ?? null;
+        paidOnly = data.paid_only !== false;
       } else {
         valid = false;
       }
@@ -65,6 +67,7 @@ export async function GET(
     fallbackButton,
     escapeEnabled,
     fallbackText,
+    paidOnly,
   });
   const body = await obfuscateSnippet(raw);
 

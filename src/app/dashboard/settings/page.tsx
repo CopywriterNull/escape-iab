@@ -45,6 +45,12 @@ export default async function SettingsPage() {
 
         <div className="border-t border-[var(--color-border-soft)] pt-7 space-y-5">
           <Toggle
+            name="paid_only"
+            defaultOn={merchant.paid_only ?? true}
+            label="Only escape paid Meta traffic"
+            hint="On: escape only fires when fbclid is present OR utm tags match a paid social campaign. Off: escape every IG/Threads in-app browser visitor (including organic link-in-bio, story link taps, DM shares)."
+          />
+          <Toggle
             name="ab_enabled"
             defaultOn={merchant.ab_enabled}
             label="A/B testing"

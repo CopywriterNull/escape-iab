@@ -25,6 +25,7 @@ export type Merchant = {
   fallback_button: boolean;
   escape_enabled?: boolean;
   fallback_text?: string | null;
+  paid_only?: boolean;
   created_at: string;
 };
 
