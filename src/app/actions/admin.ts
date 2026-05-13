@@ -68,6 +68,22 @@ export async function assignMerchantToCurrentUser(formData: FormData) {
   revalidatePath("/admin");
 }
 
+/** Set or clear a merchant's Shopify *.myshopify.com admin domain.
+ *  This is what the order webhook handler matches X-Shopify-Shop-Domain
+ *  against for multi-tenant routing.
+ */
+export async function setMerchantShopifyDomain(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const admin = getSupabaseAdmin();
+  if (!admin) return;
+  const id = String(formData.get("id") ?? "").trim();
+  const raw = String(formData.get("shopify_domain") ?? "").trim().toLowerCase();
+  if (!id) return;
+  const shopify_domain = raw || null;
+  await admin.from("merchants").update({ shopify_domain }).eq("id", id);
+  revalidatePath("/admin");
+}
+
 /** Set the impersonation cookie + jump into the dashboard as that merchant. */
 export async function impersonateMerchant(formData: FormData) {
   if (!(await requireAdmin())) return;

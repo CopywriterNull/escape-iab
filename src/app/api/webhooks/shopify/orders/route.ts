@@ -87,9 +87,9 @@ function findKey(order: Record<string, unknown>, key: string, max: number): stri
 
 export async function POST(req: NextRequest) {
   const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
-  const merchantId = process.env.SHOPIFY_WEBHOOK_MERCHANT_ID;
+  const fallbackMerchantId = process.env.SHOPIFY_WEBHOOK_MERCHANT_ID;
 
-  if (!secret || !merchantId) {
+  if (!secret) {
     return new Response(
       JSON.stringify({ ok: false, error: "webhook_not_configured" }),
       { status: 503, headers: { "content-type": "application/json" } },
@@ -103,6 +103,31 @@ export async function POST(req: NextRequest) {
       status: 401,
       headers: { "content-type": "application/json" },
     });
+  }
+
+  // Multi-tenant routing: look up the merchant by Shopify shop domain so
+  // every merchant can share this single webhook URL. Falls back to the
+  // env-var merchant ID (legacy single-merchant install for G FUEL) only
+  // if the header doesn't match any merchant row.
+  const shopDomain = req.headers.get("x-shopify-shop-domain")?.toLowerCase() ?? null;
+  let merchantId: string | null = null;
+  if (shopDomain) {
+    const admin = getSupabaseAdmin();
+    if (admin) {
+      const { data } = await admin
+        .from("merchants")
+        .select("id")
+        .eq("shopify_domain", shopDomain)
+        .maybeSingle();
+      if (data?.id) merchantId = data.id as string;
+    }
+  }
+  if (!merchantId) merchantId = fallbackMerchantId ?? null;
+  if (!merchantId) {
+    return new Response(
+      JSON.stringify({ ok: false, error: "unknown_shop_domain", shopDomain }),
+      { status: 404, headers: { "content-type": "application/json" } },
+    );
   }
 
   let order: Record<string, unknown>;

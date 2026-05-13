@@ -5,6 +5,7 @@ import {
   deleteMerchantAsAdmin,
   assignMerchantToCurrentUser,
   impersonateMerchant,
+  setMerchantShopifyDomain,
 } from "@/app/actions/admin";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ type Row = {
   id: string;
   name: string | null;
   domain: string | null;
+  shopify_domain: string | null;
   user_id: string | null;
   plan: string;
   created_at: string;
@@ -35,7 +37,7 @@ export default async function AdminMerchants() {
   if (!admin) return <Locked reason="Service role not configured" />;
   const { data } = await admin
     .from("merchants")
-    .select("id, name, domain, user_id, plan, created_at")
+    .select("id, name, domain, shopify_domain, user_id, plan, created_at")
     .order("created_at", { ascending: false });
   const rows: Row[] = (data as Row[]) ?? [];
 
@@ -173,6 +175,31 @@ function MerchantRow({
       </summary>
 
       <div className="border-t border-[var(--color-border-soft)] p-5 space-y-4">
+        <form action={setMerchantShopifyDomain} className="flex items-end gap-2 flex-wrap">
+          <input type="hidden" name="id" value={row.id} />
+          <div className="flex-1 min-w-[240px]">
+            <label className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+              Shopify admin domain
+            </label>
+            <input
+              type="text"
+              name="shopify_domain"
+              defaultValue={row.shopify_domain ?? ""}
+              placeholder="theirshop.myshopify.com"
+              className="mt-1.5 w-full px-3 py-2 rounded-md bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-[12.5px] font-mono focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
+            />
+            <div className="mt-1 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
+              Matches X-Shopify-Shop-Domain on incoming /api/webhooks/shopify/orders requests.
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="text-[12px] px-3 py-2 rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg-elev)] press transition-colors"
+          >
+            Save
+          </button>
+        </form>
+
         <div>
           <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)] mb-1.5">
             Install snippet
