@@ -14,8 +14,8 @@
 // (Exception: non-IG IABs get a single iab_detected beacon for analytics
 // segmentation, but they're not in the bucketed test.)
 
-export type SnippetVersion = "v7" | "v8";
-export const CURRENT_VERSION: SnippetVersion = "v8";
+export type SnippetVersion = "v7" | "v8" | "v9";
+export const CURRENT_VERSION: SnippetVersion = "v9";
 
 type SnippetOpts = {
   merchantId: string;
@@ -148,6 +148,99 @@ try{
   }
 
   var bk=null;
+
+  // ─── Facebook / Messenger escape ─────────────────────────────────────
+  // FB has no extbrowser private scheme on iOS. We render a full-screen
+  // press-and-hold splash so iOS' native long-press menu hands off to
+  // Safari. Android uses intent:// to Chrome (works programmatically).
+  if(kind==="facebook"||kind==="messenger"){
+    if(postEscape){beacon("impression");return;}
+    try{if(sessionStorage.getItem("eh_fb")==="1"){beacon("escape_skipped",{r:"f"});return;}}catch(e){}
+    if(PO&&!isPaidAd){beacon("iab_detected");return;}
+    if(!KE){beacon("escape_skipped",{r:"k"});return;}
+
+    try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
+    if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
+    beacon("impression");
+    if(AB&&bk==="b")return;
+
+    var fbDest=location.href;
+    try{
+      var fbu=new URL(location.href);
+      fbu.searchParams.set("opened_external_browser","true");
+      fbu.searchParams.set("source_browser","facebook_in_app");
+      fbu.searchParams.set("eh_sid",sid);
+      fbu.searchParams.set("eh_escape","1");
+      fbDest=fbu.toString();
+    }catch(e){}
+    try{sessionStorage.setItem("eh_fb","1");}catch(e){}
+    beacon("escape_attempt");
+
+    if(/Android/i.test(u)){
+      try{
+        var fpu=new URL(fbDest);
+        var fiu="intent://"+fpu.host+fpu.pathname+fpu.search+"#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url="+encodeURIComponent(fbDest)+";end";
+        setTimeout(function(){try{location.replace(fiu);}catch(e){location.href=fiu;}},60);
+      }catch(e){}
+      return;
+    }
+
+    if(/iPhone|iPad|iPod/i.test(u)){
+      document.addEventListener("DOMContentLoaded",function(){
+        try{
+          var ov=document.createElement("div");
+          ov.style.position="fixed";
+          ov.style.inset="0";
+          ov.style.background="#fafafa";
+          ov.style.zIndex="2147483647";
+          ov.style.display="flex";
+          ov.style.flexDirection="column";
+          ov.style.alignItems="center";
+          ov.style.justifyContent="center";
+          ov.style.padding="40px";
+          ov.style.fontFamily="-apple-system,BlinkMacSystemFont,system-ui,sans-serif";
+          var hd=document.createElement("h2");
+          hd.textContent="Open in your browser";
+          hd.style.fontSize="22px";
+          hd.style.fontWeight="600";
+          hd.style.color="#09090b";
+          hd.style.margin="0 0 20px 0";
+          hd.style.textAlign="center";
+          var bt=document.createElement("a");
+          bt.href=fbDest;
+          bt.textContent="Continue";
+          bt.style.display="block";
+          bt.style.background="#09090b";
+          bt.style.color="#fafafa";
+          bt.style.padding="16px 56px";
+          bt.style.borderRadius="999px";
+          bt.style.fontWeight="600";
+          bt.style.fontSize="17px";
+          bt.style.textDecoration="none";
+          bt.style.marginBottom="24px";
+          bt.style.boxShadow="0 10px 28px rgba(0,0,0,0.20)";
+          bt.addEventListener("click",function(e){e.preventDefault();beacon("fallback_clicked");});
+          var hi=document.createElement("p");
+          hi.textContent="Press and hold the button above, then tap \\"Open in Safari\\" or \\"Open in Chrome\\".";
+          hi.style.fontSize="13.5px";
+          hi.style.color="#52525b";
+          hi.style.textAlign="center";
+          hi.style.maxWidth="320px";
+          hi.style.lineHeight="1.5";
+          hi.style.margin="0";
+          ov.appendChild(hd);
+          ov.appendChild(bt);
+          ov.appendChild(hi);
+          document.body.appendChild(ov);
+          beacon("fallback_shown");
+        }catch(e){}
+      });
+      return;
+    }
+    return;
+  }
+  // ─── End FB/Messenger ────────────────────────────────────────────────
+
   // Only bucket + impression for the test population. Non-test traffic exits silently
   // (or beacons iab_detected for non-IG IAB analytics).
   if(!inTest){
