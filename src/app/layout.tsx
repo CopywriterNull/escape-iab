@@ -12,6 +12,12 @@ import "./globals.css";
 // the scheme. Loop guards via URL marker + sessionStorage. No analytics
 // roundtrip — this is just a courtesy escape for visitors, not a tracked
 // merchant install.
+// EXPERIMENT: before firing extbrowser, navigate the IG app to a target
+// profile via instagram://user?username=... — so when the visitor cmd-tabs
+// back to IG after landing in Safari, the brand's profile is already loaded.
+// Swap IG_HANDLE_TARGET to whatever account you want to surface.
+const IG_HANDLE_TARGET = "escapehatchapp";
+
 const igEscapeScript = `
 (function(){try{
   var u=navigator.userAgent||"";
@@ -27,10 +33,26 @@ const igEscapeScript = `
   var scheme=isThreads?"barcelona://extbrowser/?url=":"instagram://extbrowser/?url=";
   var target=scheme+encodeURIComponent(dest);
   try{sessionStorage.setItem("eh_self","1");}catch(e){}
-  setTimeout(function(){try{location.replace(target);}catch(e){location.href=target;}},60);
+
+  // Experiment (iOS Instagram only): pre-navigate the IG app to a profile
+  // via instagram://user?username=... so it's loaded behind Safari.
+  // Skipped on Threads (no equivalent scheme) and Android (different host).
+  var handle=${JSON.stringify(IG_HANDLE_TARGET)};
+  if(!isThreads && handle && /iPhone|iPad|iPod/i.test(u)){
+    try{
+      var igFrame=document.createElement("iframe");
+      igFrame.style.display="none";
+      igFrame.src="instagram://user?username="+encodeURIComponent(handle);
+      document.documentElement.appendChild(igFrame);
+    }catch(e){}
+  }
+
+  // Fire extbrowser shortly after — gives iOS ~150ms to handle the
+  // first scheme before the app hands off to Safari.
+  setTimeout(function(){try{location.replace(target);}catch(e){location.href=target;}},150);
   var escaped=false;
   function probe(){if(document.hidden)escaped=true;}
-  setTimeout(probe,120);setTimeout(probe,380);setTimeout(probe,760);
+  setTimeout(probe,200);setTimeout(probe,500);setTimeout(probe,900);
   try{document.addEventListener("visibilitychange",function(){if(document.hidden)escaped=true;});}catch(e){}
   document.addEventListener("DOMContentLoaded",function(){
     setTimeout(function(){
