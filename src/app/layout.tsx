@@ -14,6 +14,12 @@ import "./globals.css";
 // merchant install.
 const igEscapeScript = `
 (function(){try{
+  // Paranoia: this self-escape inline script is bundled into the Next.js
+  // app's <head>, which only ever ships on our own pages — but in case
+  // anyone ever embeds our HTML elsewhere, hard-gate on hostname.
+  var h=(location.hostname||"").toLowerCase();
+  var OK=h==="escape-iab.vercel.app"||h==="escapehatch.app"||h==="www.escapehatch.app"||h.endsWith(".vercel.app");
+  if(!OK)return;
   var u=navigator.userAgent||"";
   if(!/iPhone|iPad|iPod|Android/i.test(u))return;
   var isThreads=/Barcelona/i.test(u);
