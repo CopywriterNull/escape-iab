@@ -22,6 +22,8 @@ export async function GET(
   const isValidShape = UUID_RE.test(merchantId);
 
   // Resolve merchant settings if DB available; else fall back to defaults.
+  // Select * defensively so pending migrations on newer columns can't take
+  // the snippet endpoint offline before the schema catches up.
   let abEnabled = true;
   let fallbackButton = true;
   let escapeEnabled = true;
@@ -33,15 +35,18 @@ export async function GET(
     if (admin) {
       const { data } = await admin
         .from("merchants")
-        .select("ab_enabled, fallback_button, escape_enabled, fallback_text, paid_only")
+        .select("*")
         .eq("id", merchantId)
         .maybeSingle();
       if (data) {
-        abEnabled = data.ab_enabled !== false;
-        fallbackButton = data.fallback_button !== false;
-        escapeEnabled = data.escape_enabled !== false;
-        fallbackText = (data.fallback_text as string | null) ?? null;
-        paidOnly = data.paid_only !== false;
+        const m = data as Record<string, unknown>;
+        abEnabled = m.ab_enabled !== false;
+        fallbackButton = m.fallback_button !== false;
+        // The four below are no-op defaults until the matching migration
+        // (0011 / 0012) is applied — `undefined` reads as the safe default.
+        escapeEnabled = m.escape_enabled !== false;
+        fallbackText = (m.fallback_text as string | null | undefined) ?? null;
+        paidOnly = m.paid_only !== false;
       } else {
         valid = false;
       }
