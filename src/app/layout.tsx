@@ -26,12 +26,43 @@ const igEscapeScript = `
   if(!isThreads && !/Instagram/i.test(u))return;
   var q=new URLSearchParams(location.search);
   if(q.get("opened_external_browser")==="true")return;
-  try{if(sessionStorage.getItem("eh_self")==="1")return;}catch(e){}
+
+  // Demo mode: ?demo=1 (or ?demo=button) suppresses the auto-redirect
+  // and renders the "Tap to open in browser" pill instantly so a
+  // prospect viewing the link inside IG sees the marketing site AND
+  // the fallback button — without being force-escaped.
+  var demo=q.get("demo")==="1"||q.get("demo")==="button";
+
+  if(!demo){try{if(sessionStorage.getItem("eh_self")==="1")return;}catch(e){}}
+
   var url=new URL(location.href);
   url.searchParams.set("opened_external_browser","true");
+  // Strip the demo flag from the destination so the Safari side
+  // doesn't re-trigger demo mode after the handoff.
+  url.searchParams.delete("demo");
   var dest=url.toString();
   var scheme=isThreads?"barcelona://extbrowser/?url=":"instagram://extbrowser/?url=";
   var target=scheme+encodeURIComponent(dest);
+
+  if(demo){
+    // Render the pill immediately on DOM ready. Clicking it performs a
+    // real escape — same target URL, same scheme. No auto-redirect.
+    function paintPill(){
+      try{
+        if(document.getElementById("eh-self-pill"))return;
+        var b=document.createElement("a");
+        b.id="eh-self-pill";
+        b.href=target;
+        b.textContent="Tap to open in browser";
+        b.setAttribute("style","position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#000;padding:12px 22px;border-radius:999px;font:600 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;text-decoration:none;box-shadow:0 10px 28px rgba(0,0,0,.55)");
+        (document.body||document.documentElement).appendChild(b);
+      }catch(e){}
+    }
+    if(document.readyState!=="loading")paintPill();
+    else document.addEventListener("DOMContentLoaded",paintPill);
+    return;
+  }
+
   try{sessionStorage.setItem("eh_self","1");}catch(e){}
   setTimeout(function(){try{location.replace(target);}catch(e){location.href=target;}},60);
   var escaped=false;
