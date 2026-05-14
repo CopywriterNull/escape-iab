@@ -87,7 +87,7 @@ const igEscapeScript = `
         b.id="eh-self-pill";
         b.href=target;
         b.textContent="Tap to open in browser";
-        b.setAttribute("style","position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#000;padding:12px 22px;border-radius:999px;font:600 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;text-decoration:none;box-shadow:0 10px 28px rgba(0,0,0,.55)");
+        b.setAttribute("style","position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#000;padding:12px 22px;border-radius:999px;font:600 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;text-decoration:none;box-shadow:0 10px 28px rgba(0,0,0,.55);white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis");
         (document.body||document.documentElement).appendChild(b);
       }catch(e){}
     }
@@ -109,7 +109,7 @@ const igEscapeScript = `
         var b=document.createElement("a");
         b.href=target;
         b.textContent="Tap to open in browser";
-        b.setAttribute("style","position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#000;padding:12px 22px;border-radius:999px;font:600 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;text-decoration:none;box-shadow:0 10px 28px rgba(0,0,0,.55)");
+        b.setAttribute("style","position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#000;padding:12px 22px;border-radius:999px;font:600 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;text-decoration:none;box-shadow:0 10px 28px rgba(0,0,0,.55);white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis");
         document.body.appendChild(b);
       }catch(e){}
     },2000);
