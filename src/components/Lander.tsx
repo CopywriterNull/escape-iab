@@ -14,6 +14,20 @@ export type LanderProof = {
   liftPct: number | null;
   totalRevenueCents: number;
   escapesToday?: number;
+  caseStudy?: CaseStudyData | null;
+};
+
+export type CaseStudyData = {
+  /** % lift on checkout conversion rate (bucket A vs bucket B). */
+  cvrLiftPct: number;
+  /** % lift on revenue per visitor (bucket A vs bucket B). */
+  rpvLiftPct: number;
+  /** % lift on average order value among purchasers (bucket A vs bucket B). */
+  aovLiftPct: number | null;
+  /** Confidence level — 1 - p_value, capped at 99% for honesty. */
+  confidencePct: number;
+  /** Days the test has been running. */
+  windowDays: number;
 };
 
 export function Lander({
@@ -37,6 +51,7 @@ export function Lander({
       <Features />
       <SnippetPreview />
       <ABCallout />
+      <CaseStudy data={proof?.caseStudy ?? null} />
       <Pricing />
       <FAQ />
       <ClosingCTA />
@@ -1389,6 +1404,134 @@ function ABTable() {
       <div className="px-5 pb-4 -mt-2 flex items-center justify-between text-[11px] font-mono text-[var(--color-fg-muted)]">
         <span>p &lt; .001</span>
         <span>z = 6.42 · 95% CI [+38.1%, +56.4%]</span>
+      </div>
+    </div>
+  );
+}
+
+/* -------- Case study (anonymized, real % lifts) -------- */
+
+function CaseStudy({ data }: { data: CaseStudyData | null }) {
+  // No section if test hasn't gathered usable signal yet or A is losing.
+  if (!data || data.cvrLiftPct <= 0) return null;
+
+  const cvr = Math.round(data.cvrLiftPct * 100);
+  const rpv = Math.round(data.rpvLiftPct * 100);
+  const aov = data.aovLiftPct != null ? Math.round(data.aovLiftPct * 100) : null;
+  const conf = Math.min(99, Math.round(data.confidencePct * 100));
+
+  return (
+    <section id="case-study" className="border-y border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/30">
+      <div className="mx-auto max-w-6xl px-5 py-16 md:py-24">
+        <div className="grid md:grid-cols-[1fr_1.2fr] gap-10 md:gap-16 items-start">
+          {/* Left: framing */}
+          <div className="space-y-5">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] px-2.5 py-0.5 text-[10.5px] uppercase tracking-[0.16em] font-mono text-[var(--color-fg-muted)]">
+              <span className="size-1 rounded-full bg-[var(--color-success)] pulse-ring" />
+              Live case study
+            </div>
+            <h2 className="h-display text-[34px] md:text-[44px] leading-[1.02] tracking-tight">
+              Top-10 energy drink brand{" "}
+              <span className="h-editorial text-[var(--color-accent)]">recovered</span>{" "}
+              checkouts they were already paying for.
+            </h2>
+            <p className="text-[14.5px] text-[var(--color-fg-dim)] leading-relaxed max-w-md">
+              {data.windowDays}-day 50/50 split test. Bucket A = visitors auto-escaped from Instagram&apos;s in-app browser to Safari. Bucket B = control, left inside the webview. Identical paid ad spend on both sides.
+            </p>
+            <div className="text-[11.5px] font-mono text-[var(--color-fg-muted)] tracking-tight pt-2 border-t border-[var(--color-border-soft)] max-w-md">
+              Population: paid Meta clicks landing on Shopify product pages · NDA-anonymized
+            </div>
+          </div>
+
+          {/* Right: lift tiles */}
+          <div className="space-y-3">
+            <LiftTile
+              metric="Checkout conversion"
+              pct={cvr}
+              note="bucket A vs B (Safari escape vs control)"
+              dominant
+            />
+            <div className="grid sm:grid-cols-2 gap-3">
+              <LiftTile metric="Revenue per visitor" pct={rpv} note={`${data.windowDays}d, in-test population`} />
+              {aov != null && aov > 0 ? (
+                <LiftTile metric="Avg order value" pct={aov} note="among purchasers" />
+              ) : (
+                <ConfidenceTile pct={conf} />
+              )}
+            </div>
+            {aov != null && aov > 0 ? (
+              <ConfidenceTile pct={conf} />
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LiftTile({
+  metric,
+  pct,
+  note,
+  dominant,
+}: {
+  metric: string;
+  pct: number;
+  note: string;
+  dominant?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border bg-[var(--color-card)] ${
+        dominant
+          ? "border-[var(--color-accent)]/40 px-6 py-7"
+          : "border-[var(--color-border-soft)] px-5 py-5"
+      }`}
+      style={
+        dominant
+          ? {
+              background:
+                "linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 8%, var(--color-card)) 0%, var(--color-card) 100%)",
+            }
+          : undefined
+      }
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[11px] uppercase tracking-[0.16em] font-mono text-[var(--color-fg-muted)]">
+          {metric}
+        </div>
+      </div>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span
+          className={`tnum font-semibold tracking-tight text-[var(--color-fg)] ${
+            dominant ? "text-[64px] md:text-[88px] leading-[0.95]" : "text-[36px] leading-[1]"
+          }`}
+        >
+          +{pct}%
+        </span>
+        <span className="text-[11.5px] text-[var(--color-fg-muted)] font-mono pb-1">lift</span>
+      </div>
+      <div className="mt-2 text-[12px] text-[var(--color-fg-dim)]">{note}</div>
+    </div>
+  );
+}
+
+function ConfidenceTile({ pct }: { pct: number }) {
+  return (
+    <div className="rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)] px-5 py-5">
+      <div className="text-[11px] uppercase tracking-[0.16em] font-mono text-[var(--color-fg-muted)]">
+        Statistical confidence
+      </div>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className="tnum font-semibold tracking-tight text-[36px] leading-[1] text-[var(--color-fg)]">
+          {pct}%
+        </span>
+        <span className="text-[11.5px] text-[var(--color-fg-muted)] font-mono pb-1">
+          {pct >= 95 ? "significant" : "directional"}
+        </span>
+      </div>
+      <div className="mt-2 text-[12px] text-[var(--color-fg-dim)]">
+        Two-proportion z-test, p&nbsp;{pct >= 95 ? "<" : "≈"}&nbsp;{pct >= 95 ? "0.05" : (1 - pct / 100).toFixed(2)}
       </div>
     </div>
   );
