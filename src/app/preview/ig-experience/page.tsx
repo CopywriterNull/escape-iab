@@ -48,7 +48,7 @@ export default function IGExperiencePreview() {
             <Beat
               n="02"
               t="Snippet auto-fires"
-              d="Within ~60ms of paint, our snippet detects the IG webview UA and fires instagram://extbrowser/?url=… — iOS hands off to Safari, page reopens with cookies, Apple Pay, autofill all working."
+              d="Within ~60ms of paint, our snippet detects the IG webview and fires a handoff that Instagram itself recognizes. iOS swaps to Safari, page reopens with cookies, Apple Pay, autofill — everything working."
             />
             <Beat
               n="03"
