@@ -84,40 +84,45 @@ function PhoneShell({ children }: { children: React.ReactNode }) {
         className="rounded-[26px] overflow-hidden relative bg-[var(--color-bg)]"
         style={{ aspectRatio: "9 / 19.5" }}
       >
-        {/* iOS status bar */}
-        <div className="relative h-[26px] flex items-center justify-between px-4 text-[9.5px] font-semibold text-[var(--color-fg)]">
-          <span className="tnum">9:41</span>
-          <span aria-hidden className="absolute left-1/2 top-1 -translate-x-1/2 w-[60px] h-[16px] rounded-full bg-black" />
-          <span className="text-[9px] font-mono">5G</span>
-        </div>
-        {/* IG chrome */}
-        <div className="border-b border-black/10" style={{ background: "#1c1d24", color: "#fff" }}>
-          <div className="flex items-center gap-2 px-2.5 py-1.5">
-            <svg viewBox="0 0 16 16" className="size-2.5 text-white/90" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-              <path d="M3 3l10 10M13 3L3 13" />
-            </svg>
-            <div className="flex-1 min-w-0 text-center text-[10px] font-medium truncate">{brand.domain}</div>
-            <svg viewBox="0 0 16 16" className="size-3 text-white/90" fill="currentColor">
-              <circle cx="3" cy="8" r="1.2" />
-              <circle cx="8" cy="8" r="1.2" />
-              <circle cx="13" cy="8" r="1.2" />
-            </svg>
+        {/* Flex column for status bar + IG chrome + content + bottom toolbar */}
+        <div className="absolute inset-0 flex flex-col">
+          {/* iOS status bar */}
+          <div className="relative h-[26px] flex items-center justify-between px-4 text-[9.5px] font-semibold text-[var(--color-fg)] shrink-0">
+            <span className="tnum">9:41</span>
+            <span aria-hidden className="absolute left-1/2 top-1 -translate-x-1/2 w-[60px] h-[16px] rounded-full bg-black" />
+            <span className="text-[9px] font-mono">5G</span>
+          </div>
+          {/* IG top chrome */}
+          <div className="border-b border-black/10 shrink-0" style={{ background: "#1c1d24", color: "#fff" }}>
+            <div className="flex items-center gap-2 px-2.5 py-1.5">
+              <svg viewBox="0 0 16 16" className="size-2.5 text-white/90" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M3 3l10 10M13 3L3 13" />
+              </svg>
+              <div className="flex-1 min-w-0 text-center text-[10px] font-medium truncate">{brand.domain}</div>
+              <svg viewBox="0 0 16 16" className="size-3 text-white/90" fill="currentColor">
+                <circle cx="3" cy="8" r="1.2" />
+                <circle cx="8" cy="8" r="1.2" />
+                <circle cx="13" cy="8" r="1.2" />
+              </svg>
+            </div>
+          </div>
+          {/* Content fills remaining space */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <MockContent />
+          </div>
+          {/* IG bottom toolbar */}
+          <div
+            className="h-[24px] flex items-center justify-around text-white/70 text-[8px] shrink-0"
+            style={{ background: "#1c1d24", borderTop: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <span>‹</span><span>›</span><span>↗</span><span>○</span>
           </div>
         </div>
-        {/* Content */}
-        <div className="relative h-full">
-          <MockContent />
-          {/* Variant overlay */}
-          {children}
-        </div>
-        {/* IG bottom toolbar */}
-        <div
-          className="absolute left-0 right-0 bottom-0 h-[24px] flex items-center justify-around text-white/70 text-[8px]"
-          style={{ background: "#1c1d24", borderTop: "1px solid rgba(255,255,255,0.08)" }}
-        >
-          <span>‹</span><span>›</span><span>↗</span><span>○</span>
-        </div>
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-[3px] w-[60px] h-[2.5px] rounded-full bg-white/85" />
+        {/* Variant overlays — direct children of the outer screen so bottom/top
+            positioning measures from the actual screen edges, not an inner wrapper. */}
+        {children}
+        {/* Home indicator on top of everything */}
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-[3px] w-[60px] h-[2.5px] rounded-full bg-white/85 z-10 pointer-events-none" />
       </div>
     </div>
   );
@@ -125,7 +130,7 @@ function PhoneShell({ children }: { children: React.ReactNode }) {
 
 function MockContent() {
   return (
-    <div className="px-3 pt-3 pb-[60px] h-full overflow-hidden">
+    <div className="px-3 pt-3 pb-3 h-full overflow-hidden">
       <div className="flex justify-center mb-2.5">
         <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] px-1.5 py-[1px] text-[7.5px] text-[var(--color-fg-dim)]">
           <span className="size-[3px] rounded-full bg-[var(--color-success)]" />
@@ -202,9 +207,9 @@ const VARIANTS: Variant[] = [
     desc: "Slide-up sheet with a clear primary CTA. Most native-feeling. Reads as a polite system suggestion, not an ad.",
     render: () => (
       <>
-        <div className="absolute inset-0 bg-black/40" />
+        <div className="absolute left-0 right-0 top-0 bottom-[24px] bg-black/40" />
         <div
-          className="absolute left-0 right-0 bottom-0 bg-[var(--color-card)] rounded-t-2xl px-4 pt-3 pb-[36px] border-t border-[var(--color-border-soft)]"
+          className="absolute left-0 right-0 bottom-[24px] bg-[var(--color-card)] rounded-t-2xl px-4 pt-3 pb-4 border-t border-[var(--color-border-soft)]"
           style={{ boxShadow: "0 -20px 40px rgba(0,0,0,0.2)" }}
         >
           <div className="mx-auto w-8 h-1 rounded-full bg-[var(--color-fg-muted)]/40 mb-3" />
@@ -227,10 +232,10 @@ const VARIANTS: Variant[] = [
     name: "D · Top toast",
     desc: "Slim notification ribbon below IG chrome. Least intrusive — minimal visual weight, easy to dismiss. Lower conversion, highest brand trust.",
     render: () => (
-      <div className="absolute left-0 right-0 top-0">
+      <div className="absolute left-0 right-0 top-[56px]">
         <div
-          className="mx-3 mt-2 px-2.5 py-1.5 rounded-lg bg-[var(--color-fg)] text-[var(--color-bg)] flex items-center justify-between gap-2"
-          style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}
+          className="mx-3 px-2.5 py-1.5 rounded-lg bg-[var(--color-fg)] text-[var(--color-bg)] flex items-center justify-between gap-2"
+          style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.18)" }}
         >
           <div className="min-w-0">
             <div className="text-[9px] font-semibold tracking-tight truncate">For full features →</div>
