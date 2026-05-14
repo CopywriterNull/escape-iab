@@ -118,7 +118,7 @@ export function MerchantSwitcher({
               <span />
             )}
             <a
-              href="/admin"
+              href="/admin/merchants"
               className="px-3 py-2 text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] font-mono"
             >
               Manage →

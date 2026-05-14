@@ -1,310 +1,105 @@
-import { redirect } from "next/navigation";
-import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
-import {
-  createMerchantAsAdmin,
-  deleteMerchantAsAdmin,
-  assignMerchantToCurrentUser,
-  impersonateMerchant,
-  renameMerchantAsAdmin,
-  setMerchantShopifyDomain,
-} from "@/app/actions/admin";
+import Link from "next/link";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
-
-type Row = {
-  id: string;
-  name: string | null;
-  domain: string | null;
-  shopify_domain: string | null;
-  user_id: string | null;
-  plan: string;
-  created_at: string;
-};
-
-export default async function AdminMerchants() {
-  const supabase = await getSupabaseServer();
-  if (!supabase) return <Locked reason="Backend not configured" />;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  if (user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-    return <Locked reason={`Admin only. Signed in as ${user.email}.`} />;
-  }
-
+export default async function AdminOverview() {
   const admin = getSupabaseAdmin();
-  if (!admin) return <Locked reason="Service role not configured" />;
-  const { data } = await admin
-    .from("merchants")
-    .select("id, name, domain, shopify_domain, user_id, plan, created_at")
-    .order("created_at", { ascending: false });
-  const rows: Row[] = (data as Row[]) ?? [];
-
-  // Pull last-24h event counts per merchant for tracking status at a glance.
   const since24 = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const eventCounts = new Map<string, number>();
-  const eventLastSeen = new Map<string, string>();
-  if (rows.length > 0) {
-    const { data: events } = await admin
-      .from("escape_events")
-      .select("merchant_id, created_at")
-      .gte("created_at", since24)
-      .in("merchant_id", rows.map((r) => r.id));
-    for (const e of (events ?? []) as { merchant_id: string; created_at: string }[]) {
-      eventCounts.set(e.merchant_id, (eventCounts.get(e.merchant_id) ?? 0) + 1);
-      const prev = eventLastSeen.get(e.merchant_id);
-      if (!prev || e.created_at > prev) eventLastSeen.set(e.merchant_id, e.created_at);
-    }
-  }
+
+  const [merchantsRes, events24Res, purchases24Res] = await Promise.all([
+    admin!.from("merchants").select("id, name, created_at", { count: "exact" }),
+    admin!.from("escape_events").select("merchant_id, event_type", { count: "exact", head: false }).gte("created_at", since24),
+    admin!.from("escape_events").select("value_cents", { head: false }).eq("event_type", "purchase").gte("created_at", since24),
+  ]);
+
+  const merchantCount = merchantsRes.count ?? 0;
+  const eventRows = (events24Res.data ?? []) as { merchant_id: string }[];
+  const events24 = eventRows.length;
+  const liveMerchants = new Set(eventRows.map((e) => e.merchant_id)).size;
+  const purchaseRows = (purchases24Res.data ?? []) as { value_cents: number | null }[];
+  const purchases24 = purchaseRows.length;
+  const revenue24 = purchaseRows.reduce((sum, r) => sum + (r.value_cents ?? 0), 0);
+
+  // Most recent merchants
+  const recent = ((merchantsRes.data as { id: string; name: string | null; created_at: string }[]) ?? [])
+    .slice()
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 5);
 
   return (
-    <div className="min-h-dvh bg-[var(--color-bg)] text-[var(--color-fg)] grain">
-      <div className="mx-auto max-w-5xl px-6 py-10 space-y-8">
-        <div className="flex items-baseline justify-between">
-          <div>
-            <div className="eyebrow">Admin</div>
-            <h1 className="mt-2 h-display text-[32px] tracking-tight">Merchants</h1>
-            <p className="mt-1 text-[12.5px] text-[var(--color-fg-muted)] font-mono">
-              {rows.length} total · signed in as {user.email}
-            </p>
-          </div>
-          <a
-            href="/dashboard"
-            className="text-[12px] font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
-          >
-            ← dashboard
-          </a>
-        </div>
-
-        {/* Create form */}
-        <form
-          action={createMerchantAsAdmin}
-          className="rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)] p-5 space-y-4"
-        >
-          <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
-            New merchant
-          </div>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <input
-              type="text"
-              name="name"
-              placeholder="Store name (e.g. G FUEL)"
-              required
-              maxLength={80}
-              className="px-3.5 py-2.5 rounded-lg bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-sm focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
-            />
-            <input
-              type="text"
-              name="domain"
-              placeholder="storedomain.com"
-              required
-              maxLength={120}
-              className="px-3.5 py-2.5 rounded-lg bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-sm font-mono focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
-            />
-          </div>
-          <button
-            type="submit"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-sm font-medium press lift focus-ring"
-            style={{ boxShadow: "var(--shadow-cta)" }}
-          >
-            Create merchant
-          </button>
-        </form>
-
-        {/* Rows */}
-        <div className="space-y-3">
-          {rows.map((r) => (
-            <MerchantRow
-              key={r.id}
-              row={r}
-              myUserId={user.id}
-              eventsLast24h={eventCounts.get(r.id) ?? 0}
-              lastSeen={eventLastSeen.get(r.id) ?? null}
-            />
-          ))}
-        </div>
+    <div className="space-y-7">
+      <div>
+        <div className="eyebrow">Admin · Overview</div>
+        <h1 className="mt-2 h-display text-[28px] tracking-tight">Operator dashboard</h1>
+        <p className="mt-1 text-[13px] text-[var(--color-fg-dim)] max-w-xl">
+          Bird&apos;s-eye view of the platform. Manage merchants, troubleshoot installs, and run diagnostics from the sidebar.
+        </p>
       </div>
-    </div>
-  );
-}
 
-function MerchantRow({
-  row,
-  myUserId,
-  eventsLast24h,
-  lastSeen,
-}: {
-  row: Row;
-  myUserId: string;
-  eventsLast24h: number;
-  lastSeen: string | null;
-}) {
-  const ownedByMe = row.user_id === myUserId;
-  const unowned = !row.user_id;
-  const snippet = `<script src="https://getescapehatch.com/s/${row.id}.js?v=9"></script>`;
-  const tracking = eventsLast24h > 0;
-  const lastSeenLabel = lastSeen
-    ? `${Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000)}m ago`
-    : "—";
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Stat label="Merchants" value={merchantCount.toString()} />
+        <Stat label="Live (24h)" value={liveMerchants.toString()} sub={`${events24} events`} />
+        <Stat label="Purchases (24h)" value={purchases24.toString()} />
+        <Stat label="Revenue (24h)" value={`$${(revenue24 / 100).toFixed(0)}`} mono />
+      </div>
 
-  return (
-    <details className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-card)] overflow-hidden">
-      <summary className="cursor-pointer list-none px-5 py-3 flex items-center justify-between gap-4 hover:bg-[var(--color-bg-elev)]/40">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[14px] font-medium tracking-tight">{row.name ?? "(unnamed)"}</span>
-            <span className="text-[var(--color-fg-muted)]">·</span>
-            <span className="text-[12.5px] font-mono text-[var(--color-fg-dim)]">{row.domain ?? "—"}</span>
-            {ownedByMe ? (
-              <span className="pill pill-info">YOURS</span>
-            ) : unowned ? (
-              <span className="pill pill-warn">UNOWNED</span>
-            ) : (
-              <span className="pill pill-muted">CLIENT</span>
-            )}
-            <span className={tracking ? "pill pill-success" : "pill pill-muted"}>
-              {tracking ? `LIVE · ${eventsLast24h}` : "NO EVENTS 24h"}
-            </span>
-          </div>
-          <div className="mt-1 text-[11px] font-mono text-[var(--color-fg-muted)] tnum">
-            {row.id} · last event {lastSeenLabel} · created {new Date(row.created_at).toLocaleDateString()}
-          </div>
-        </div>
-        <span className="text-[11px] font-mono text-[var(--color-fg-muted)]">expand ▾</span>
-      </summary>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Card href="/admin/merchants" title="Merchants" desc="Create, rename, configure shopify domain, view-as, claim, delete." cta="Manage merchants →" />
+        <Card href="/admin/guides" title="Guides" desc="Install gotchas, cache busting, kill switch, paid-only mode, pixel + webhook setup." cta="Open guides →" />
+        <Card href="/admin/diagnostics" title="Diagnostics" desc="Live config snapshot per merchant — kill switch state, paid-only, last event, webhook routing." cta="Run diagnostics →" />
+        <Card href="/dashboard" title="My dashboard" desc="Jump back to the operator-side dashboard (impersonate via the workspace switcher)." cta="Back to dashboard →" />
+      </div>
 
-      <div className="border-t border-[var(--color-border-soft)] p-5 space-y-4">
-        <form action={renameMerchantAsAdmin} className="grid sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
-          <input type="hidden" name="id" value={row.id} />
-          <div>
-            <label className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
-              Name
-            </label>
-            <input
-              type="text"
-              name="name"
-              required
-              maxLength={80}
-              defaultValue={row.name ?? ""}
-              className="mt-1.5 w-full px-3 py-2 rounded-md bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-[12.5px] focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
-            />
-          </div>
-          <div>
-            <label className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
-              Domain
-            </label>
-            <input
-              type="text"
-              name="domain"
-              maxLength={120}
-              defaultValue={row.domain ?? ""}
-              className="mt-1.5 w-full px-3 py-2 rounded-md bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-[12.5px] font-mono focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
-            />
-          </div>
-          <button
-            type="submit"
-            className="h-[34px] text-[12px] px-3 rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg-elev)] press transition-colors"
-          >
-            Rename
-          </button>
-        </form>
-
-        <form action={setMerchantShopifyDomain} className="flex items-end gap-2 flex-wrap">
-          <input type="hidden" name="id" value={row.id} />
-          <div className="flex-1 min-w-[240px]">
-            <label className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
-              Shopify admin domain
-            </label>
-            <input
-              type="text"
-              name="shopify_domain"
-              defaultValue={row.shopify_domain ?? ""}
-              placeholder="theirshop.myshopify.com"
-              className="mt-1.5 w-full px-3 py-2 rounded-md bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-[12.5px] font-mono focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
-            />
-            <div className="mt-1 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
-              Matches X-Shopify-Shop-Domain on incoming /api/webhooks/shopify/orders requests.
+      {recent.length > 0 ? (
+        <div className="rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)] overflow-hidden">
+          <div className="px-5 py-3 border-b border-[var(--color-border-soft)] flex items-center justify-between">
+            <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+              Recent merchants
             </div>
+            <Link href="/admin/merchants" className="text-[11px] font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">
+              all →
+            </Link>
           </div>
-          <button
-            type="submit"
-            className="text-[12px] px-3 py-2 rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg-elev)] press transition-colors"
-          >
-            Save
-          </button>
-        </form>
-
-        <div>
-          <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)] mb-1.5">
-            Install snippet
-          </div>
-          <pre className="text-[11.5px] font-mono bg-[var(--color-bg-elev)] border border-[var(--color-border-soft)] rounded-md p-3 overflow-x-auto whitespace-pre-wrap break-all">
-            {snippet}
-          </pre>
-          <div className="mt-1.5 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
-            Paste in their theme.liquid &lt;head&gt;, no async. Bump ?v= to bust their cache after settings changes.
-          </div>
+          <ul>
+            {recent.map((m) => (
+              <li key={m.id} className="px-5 py-2.5 border-b border-[var(--color-border-soft)] last:border-b-0 flex items-center justify-between gap-3 text-[12.5px]">
+                <span className="font-medium truncate">{m.name ?? "(unnamed)"}</span>
+                <span className="text-[10.5px] font-mono text-[var(--color-fg-muted)] tnum">
+                  {new Date(m.created_at).toLocaleDateString()}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <a
-            href={`/install/${row.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[12px] px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] font-medium press lift focus-ring transition-colors"
-          >
-            Install guide →
-          </a>
-          <form action={impersonateMerchant}>
-            <input type="hidden" name="id" value={row.id} />
-            <button
-              type="submit"
-              className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-border-soft)] hover:bg-[var(--color-bg-elev)] press focus-ring transition-colors"
-            >
-              View as
-            </button>
-          </form>
-          {unowned ? (
-            <form action={assignMerchantToCurrentUser}>
-              <input type="hidden" name="id" value={row.id} />
-              <button
-                type="submit"
-                className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-border-soft)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-elev)] press transition-colors"
-              >
-                Claim for myself
-              </button>
-            </form>
-          ) : null}
-          <form action={deleteMerchantAsAdmin}>
-            <input type="hidden" name="id" value={row.id} />
-            <button
-              type="submit"
-              className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-danger)]/30 text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] press transition-colors"
-            >
-              Delete merchant
-            </button>
-          </form>
-        </div>
-      </div>
-    </details>
+      ) : null}
+    </div>
   );
 }
 
-function Locked({ reason }: { reason: string }) {
+function Stat({ label, value, sub, mono }: { label: string; value: string; sub?: string; mono?: boolean }) {
   return (
-    <div className="min-h-dvh grid place-items-center px-5 bg-[var(--color-bg)] text-[var(--color-fg)]">
-      <div className="max-w-md p-8 rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)]">
-        <h1 className="h-display text-[24px] tracking-tight">Admin only</h1>
-        <p className="mt-2 text-[13px] text-[var(--color-fg-dim)]">{reason}</p>
-        <a
-          href="/dashboard"
-          className="mt-4 inline-block text-sm text-[var(--color-accent)] link-grow"
-        >
-          ← dashboard
-        </a>
-      </div>
+    <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-card)] px-4 py-3">
+      <div className="text-[10px] uppercase tracking-[0.14em] font-mono text-[var(--color-fg-muted)]">{label}</div>
+      <div className={`mt-1 text-[22px] tracking-tight ${mono ? "font-mono tnum" : "font-semibold"}`}>{value}</div>
+      {sub ? <div className="mt-0.5 text-[10.5px] font-mono text-[var(--color-fg-muted)]">{sub}</div> : null}
     </div>
+  );
+}
+
+function Card({ href, title, desc, cta }: { href: string; title: string; desc: string; cta: string }) {
+  return (
+    <Link
+      href={href}
+      className="block rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-card)] p-5 hover:border-[var(--color-border)] transition-colors group"
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[14px] font-semibold tracking-tight">{title}</div>
+      </div>
+      <p className="mt-1.5 text-[12.5px] text-[var(--color-fg-dim)] leading-relaxed">{desc}</p>
+      <div className="mt-3 text-[11.5px] font-mono text-[var(--color-fg-muted)] group-hover:text-[var(--color-fg)] transition-colors">
+        {cta}
+      </div>
+    </Link>
   );
 }
