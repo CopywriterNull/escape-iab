@@ -23,30 +23,63 @@ const igEscapeScript = `
   var u=navigator.userAgent||"";
   if(!/iPhone|iPad|iPod|Android/i.test(u))return;
   var isThreads=/Barcelona/i.test(u);
-  if(!isThreads && !/Instagram/i.test(u))return;
+  var isIG=/Instagram/i.test(u);
+  // Facebook / Messenger detection (FBAN/FBAV are the canonical UA tokens).
+  var isFB=/FBAN|FBAV/i.test(u) && !isIG;
+  if(!isThreads && !isIG && !isFB)return;
   var q=new URLSearchParams(location.search);
   if(q.get("opened_external_browser")==="true")return;
 
-  // Demo mode: ?demo=1 (or ?demo=button) suppresses the auto-redirect
-  // and renders the "Tap to open in browser" pill instantly so a
-  // prospect viewing the link inside IG sees the marketing site AND
-  // the fallback button — without being force-escaped.
+  // Demo mode: ?demo=1 suppresses auto-redirect on IG/Threads and renders
+  // the pill instantly. FB always behaves like demo mode (no auto-escape
+  // is possible on iOS FB — long-press is the only mechanism).
   var demo=q.get("demo")==="1"||q.get("demo")==="button";
+  var iOS=/iPhone|iPad|iPod/i.test(u);
+  var Android=/Android/i.test(u);
 
-  if(!demo){try{if(sessionStorage.getItem("eh_self")==="1")return;}catch(e){}}
+  if(!demo && !isFB){try{if(sessionStorage.getItem("eh_self")==="1")return;}catch(e){}}
 
   var url=new URL(location.href);
   url.searchParams.set("opened_external_browser","true");
-  // Strip the demo flag from the destination so the Safari side
-  // doesn't re-trigger demo mode after the handoff.
   url.searchParams.delete("demo");
   var dest=url.toString();
+
+  // ─── Facebook / Messenger ───────────────────────────────────────────
+  // No extbrowser scheme works on iOS FB — must render a press-and-hold
+  // pill so iOS's native long-press context menu can hand off to Safari.
+  // Android FB uses intent:// to Chrome (works programmatically).
+  if(isFB){
+    if(Android){
+      try{
+        var iu="intent://"+location.host+location.pathname+location.search+"#Intent;scheme="+location.protocol.replace(":","")+";package=com.android.chrome;S.browser_fallback_url="+encodeURIComponent(dest)+";end";
+        setTimeout(function(){try{location.replace(iu);}catch(e){location.href=iu;}},60);
+      }catch(e){}
+      return;
+    }
+    if(iOS){
+      function paintFBPill(){
+        try{
+          if(document.getElementById("eh-self-pill"))return;
+          var b=document.createElement("a");
+          b.id="eh-self-pill";
+          b.href=dest;
+          b.textContent="Press & hold to open in browser";
+          b.setAttribute("style","position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#000;padding:12px 22px;border-radius:999px;font:600 14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;text-decoration:none;box-shadow:0 10px 28px rgba(0,0,0,.55);max-width:calc(100% - 32px);white-space:nowrap;text-overflow:ellipsis;overflow:hidden");
+          (document.body||document.documentElement).appendChild(b);
+        }catch(e){}
+      }
+      if(document.readyState!=="loading")paintFBPill();
+      else document.addEventListener("DOMContentLoaded",paintFBPill);
+      return;
+    }
+    return;
+  }
+
+  // ─── Instagram / Threads (auto-escape via extbrowser) ───────────────
   var scheme=isThreads?"barcelona://extbrowser/?url=":"instagram://extbrowser/?url=";
   var target=scheme+encodeURIComponent(dest);
 
   if(demo){
-    // Render the pill immediately on DOM ready. Clicking it performs a
-    // real escape — same target URL, same scheme. No auto-redirect.
     function paintPill(){
       try{
         if(document.getElementById("eh-self-pill"))return;
