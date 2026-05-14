@@ -31,30 +31,41 @@ export type CaseStudyData = {
   windowDays: number;
 };
 
+export type LanderVariant = "v1" | "v2";
+
 export function Lander({
   theme = "light",
   proof,
+  variant = "v1",
 }: {
   theme?: Theme;
   proof?: LanderProof;
+  variant?: LanderVariant;
 }) {
+  const isV2 = variant === "v2";
   return (
     <div className="text-[var(--color-fg)] bg-[var(--color-bg)] grain relative overflow-x-clip">
       <div aria-hidden className="gradient-dotgrid" />
       <PointerTracker />
       <Nav theme={theme} escapesToday={proof?.escapesToday ?? 0} />
-      <Hero proof={proof} />
+      <Hero proof={proof} variant={variant} />
       <HowItWorks />
       <PlatformsSection />
-      <Problem />
-      <ComparisonStrip />
+      {isV2 ? (
+        <ProblemWithProof />
+      ) : (
+        <>
+          <Problem />
+          <ComparisonStrip />
+        </>
+      )}
       <CaseStudy data={proof?.caseStudy ?? null} />
       <DashboardPreview />
-      <Features />
+      {isV2 ? <FeaturesV2 /> : <Features />}
       <ABCallout />
       <SnippetPreview />
       <Pricing />
-      <FAQ />
+      <FAQ variant={variant} />
       <ClosingCTA />
       <Footer />
       <StickyMobileCTA />
@@ -175,7 +186,7 @@ function CTAButton({
 
 /* -------- Hero -------- */
 
-function Hero({ proof }: { proof?: LanderProof }) {
+function Hero({ proof, variant = "v1" }: { proof?: LanderProof; variant?: LanderVariant }) {
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 mesh-bg pointer-events-none" />
@@ -203,6 +214,19 @@ function Hero({ proof }: { proof?: LanderProof }) {
           <p className="mt-3 text-center text-xs text-[var(--color-fg-muted)]">
             From $300/mo · Pays for itself in week 1 · 60-second install
           </p>
+          {variant === "v2" ? (
+            <p className="mt-3 text-center">
+              <a
+                href="#how"
+                className="inline-flex items-center gap-1.5 text-[12.5px] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] transition-colors font-medium"
+              >
+                Watch how it works
+                <svg viewBox="0 0 12 12" className="size-2.5 mt-[1px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 5l3 3 3-3" />
+                </svg>
+              </a>
+            </p>
+          ) : null}
         </div>
         <div className="hero-enter hero-enter-6">
           <HeroProof proof={proof} />
@@ -885,6 +909,153 @@ function ComparisonStrip() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------- v2: Problem + comparison merged into one section -------- */
+
+function ProblemWithProof() {
+  const rows: { label: string; before: string; after: string }[] = [
+    { label: "Apple Pay", before: "Restricted, slow", after: "Works as expected" },
+    { label: "Shop Pay autofill", before: "Broken", after: "Single-tap return" },
+    { label: "Saved cart / session", before: "Lost", after: "Recognized" },
+    { label: "Checkout CVR (paid IG)", before: "0.83%", after: "2.84%" },
+    { label: "Cookie continuity", before: "Resets at checkout", after: "Bridged via cart-token" },
+  ];
+  return (
+    <section className="border-y border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/20">
+      <div className="mx-auto max-w-6xl px-5 py-24 md:py-28">
+        <div className="grid md:grid-cols-[1fr_1.2fr] gap-10 md:gap-16 items-start">
+          {/* Left: framing */}
+          <div>
+            <SectionLabel>The IG tax</SectionLabel>
+            <h2 className="mt-3 text-balance">
+              <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Your IG ads work.</span>
+              <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">
+                The in-app browser kills the sale.
+              </span>
+            </h2>
+            <p className="mt-6 text-[14.5px] text-[var(--color-fg-dim)] leading-relaxed">
+              Tap any link from inside Instagram — story, ad, profile, DM — and you don&apos;t get Safari. You get a stripped-down WebView with partitioned cookies, broken Shop Pay autofill, and no saved logins. Returning customers look like new visitors. Conversions crater. The customer doesn&apos;t blame Instagram. They blame you.
+            </p>
+            <p className="mt-4 text-[14.5px] text-[var(--color-fg-dim)] leading-relaxed">
+              EscapeHatch bounces them to their real browser before the page paints. They never see the in-app browser. Checkout works.
+            </p>
+          </div>
+
+          {/* Right: side-by-side comparison */}
+          <div className="rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)] overflow-hidden">
+            <div className="grid grid-cols-12 px-4 sm:px-5 py-3 border-b border-[var(--color-border-soft)] text-[10px] uppercase tracking-[0.16em] font-mono text-[var(--color-fg-muted)] font-medium">
+              <div className="col-span-4">Behavior</div>
+              <div className="col-span-4 flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-[var(--color-danger)]" />
+                <span className="hidden sm:inline">Without</span>
+                <span className="sm:hidden">No</span>
+              </div>
+              <div className="col-span-4 flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-[var(--color-success)]" />
+                <span className="hidden sm:inline">With EscapeHatch</span>
+                <span className="sm:hidden">Yes</span>
+              </div>
+            </div>
+            {rows.map((r) => (
+              <div key={r.label} className="px-4 sm:px-5 py-3 border-b border-[var(--color-border-soft)] last:border-b-0 grid grid-cols-12 items-baseline text-[12.5px] sm:text-[13.5px]">
+                <div className="col-span-4 font-medium tracking-tight">{r.label}</div>
+                <div className="col-span-4 flex items-center gap-1.5 text-[var(--color-fg-dim)]">
+                  <Cross />
+                  <span>{r.before}</span>
+                </div>
+                <div className="col-span-4 flex items-center gap-1.5 text-[var(--color-fg)]">
+                  <Check />
+                  <span>{r.after}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------- v2: Features framed as "what Pro gets you that a 5-min dev hack doesn't" -------- */
+
+function FeaturesV2() {
+  const rows = [
+    {
+      title: "Patch monitoring",
+      hack: "Ships once, breaks the next time Meta tweaks IAB internals. Nobody notices until conversions tank.",
+      ours: "We monitor for Meta-side changes. Patched snippet edge-cached for 5 minutes. Every customer auto-updates. Median deploy time: 38 minutes.",
+      stat: "14 patches shipped · 0 customer action",
+    },
+    {
+      title: "A/B test infra",
+      hack: "Hard-coded 100% redirect. Can't tell if it lifted CVR or hurt it. \"It feels better\" is the only data point.",
+      ours: "50/50 cookie bucket out of the box. Z-test, p-value, confidence interval, MDE. Lift is measured in your own data, not vendor case studies.",
+      stat: "Two-proportion z-test · 95% CI default",
+    },
+    {
+      title: "Pixel & attribution",
+      hack: "Redirect drops fbclid. Meta pixel double-counts the visitor. Triple Whale / Northbeam attribution diverges from Shopify reports.",
+      ours: "Full URL including fbclid + UTMs encoded into the handoff. Meta pixel dedupes via _fbp. Cart-token bridges the cookie reset at Shopify checkout.",
+      stat: "0 attribution drops · works with Shop Pay extensibility",
+    },
+    {
+      title: "Fallback when auto-escape fails",
+      hack: "Visitor sees nothing. Lost.",
+      ours: "Branded 'Open in Safari' overlay paints at 2s if iOS rejects the scheme. Works for FB / Messenger / TikTok / Snap where auto-escape isn't possible.",
+      stat: "Recovers ~70% of lift even on fallback",
+    },
+  ];
+  return (
+    <section id="features" className="relative">
+      <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent" />
+      <div className="mx-auto max-w-6xl px-5 py-24 md:py-28">
+        <div className="text-center max-w-2xl mx-auto">
+          <SectionLabel>What you&apos;re paying for</SectionLabel>
+          <h2 className="mt-3 text-balance">
+            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">The redirect is two lines.</span>
+            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">
+              The infrastructure isn&apos;t.
+            </span>
+          </h2>
+          <p className="mt-4 text-[14.5px] text-[var(--color-fg-dim)] leading-relaxed">
+            Anyone&apos;s engineer can ship a redirect in an afternoon. Then it breaks, and they own it forever. Here&apos;s what shipped redirect vs. shipped product looks like.
+          </p>
+        </div>
+        <div className="mt-12 grid sm:grid-cols-2 gap-3">
+          {rows.map((r) => (
+            <div
+              key={r.title}
+              className="rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)] p-5 md:p-6 flex flex-col"
+            >
+              <div className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-fg-muted)]">
+                {r.title}
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2.5">
+                <div className="rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/40 p-3">
+                  <div className="text-[9.5px] uppercase tracking-[0.14em] font-mono text-[var(--color-fg-muted)] flex items-center gap-1.5">
+                    <span className="size-1 rounded-full bg-[var(--color-danger)]" />
+                    5-min dev hack
+                  </div>
+                  <p className="mt-1.5 text-[12.5px] text-[var(--color-fg-dim)] leading-relaxed">{r.hack}</p>
+                </div>
+                <div className="rounded-lg border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5 p-3">
+                  <div className="text-[9.5px] uppercase tracking-[0.14em] font-mono text-[var(--color-accent)] flex items-center gap-1.5">
+                    <span className="size-1 rounded-full bg-[var(--color-accent)]" />
+                    EscapeHatch Pro
+                  </div>
+                  <p className="mt-1.5 text-[12.5px] text-[var(--color-fg)] leading-relaxed">{r.ours}</p>
+                </div>
+              </div>
+              <div className="mt-3 text-[10.5px] font-mono text-[var(--color-fg-muted)] tracking-tight">
+                {r.stat}
               </div>
             </div>
           ))}
@@ -1635,41 +1806,47 @@ function PricingCard({ tier }: { tier: { name: string; price: string; sub: strin
 
 /* -------- FAQ -------- */
 
-function FAQ() {
-  const items = [
-    {
+function FAQ({ variant = "v1" }: { variant?: LanderVariant }) {
+  const all = {
+    tos: {
       q: "Does this violate Instagram's terms?",
       a: "No. We use Instagram's own published deep-link scheme. Major link-in-bio platforms (Linktree, Linkfire, Beacons) use the same technique. No clause in Meta's developer terms or commerce policies prohibits it.",
     },
-    {
+    pixel: {
       q: "What about my Meta pixel and ad attribution?",
       a: "Fully preserved. We encode the entire URL — including fbclid — into the redirect. Meta's pixel dedupes by the _fbp cookie which is first-party on your domain, so the session is treated as continuous, not double-counted.",
     },
-    {
+    perf: {
       q: "Will it slow my site down?",
       a: "The snippet is ~1.1 KB and runs synchronously before anything else. Lighthouse impact is unmeasurable. On Pro, we serve from your own CNAME so there's zero cross-origin penalty.",
     },
-    {
-      q: "Does it work on TikTok, Snapchat, Facebook?",
-      a: "Instagram is the only IAB with a clean auto-escape (on iOS and Android). For TikTok / Snap / FB, EscapeHatch ships a polished one-tap \"Open in Safari\" overlay. Not as seamless, but recovers most of the lost conversions.",
-    },
-    {
-      q: "Does it work on Shopify Plus?",
-      a: "Yes. The snippet drops into theme.liquid same as any Shopify install. We've validated against checkout extensibility, Shop Pay, and the Plus B2B portal. Multi-store rollups are a Scale plan feature so a single dashboard covers every storefront.",
-    },
-    {
-      q: "Does it work outside Shopify — headless, custom, WooCommerce, BigCommerce?",
-      a: "Yes. EscapeHatch is platform-agnostic — paste the <script> tag in your <head> and it runs. Shopify, Shopify Plus, Hydrogen, Next.js Commerce, BigCommerce, WooCommerce, Medusa, custom-built — the detection + redirect logic is pure client-side JavaScript and doesn't depend on Liquid or any specific stack.",
-    },
-    {
+    fast: {
       q: "How fast will I see results?",
       a: "First escapes fire within minutes of installing. After that it depends entirely on your IG traffic volume — high-spend brands see meaningful lift in 5–24 hours, smaller stores take a couple of days to reach a clean A/B read. The dashboard surfaces lift + p-value the moment you have enough sample.",
     },
-    {
+    privacy: {
       q: "Is the snippet GDPR / CCPA compliant?",
       a: "We don't set cookies, we don't fingerprint, we don't ship analytics off your domain. The only data we collect is an IP-hashed event row per escape — no PII, no third-party trackers. Add us under \"functional\" in your consent banner if you have one.",
     },
-  ];
+    platforms: {
+      q: "Does it work on TikTok, Snapchat, Facebook?",
+      a: "Instagram is the only IAB with a clean auto-escape (on iOS and Android). For TikTok / Snap / FB, EscapeHatch ships a polished one-tap \"Open in Safari\" overlay. Not as seamless, but recovers most of the lost conversions.",
+    },
+    plus: {
+      q: "Does it work on Shopify Plus?",
+      a: "Yes. The snippet drops into theme.liquid same as any Shopify install. We've validated against checkout extensibility, Shop Pay, and the Plus B2B portal. Multi-store rollups are a Scale plan feature so a single dashboard covers every storefront.",
+    },
+    headless: {
+      q: "Does it work outside Shopify — headless, custom, WooCommerce, BigCommerce?",
+      a: "Yes. EscapeHatch is platform-agnostic — paste the <script> tag in your <head> and it runs. Shopify, Shopify Plus, Hydrogen, Next.js Commerce, BigCommerce, WooCommerce, Medusa, custom-built — the detection + redirect logic is pure client-side JavaScript and doesn't depend on Liquid or any specific stack.",
+    },
+  };
+
+  // v2 = priority objections first (compliance, attribution, performance,
+  // time-to-results, privacy), then platform/edge questions.
+  const items = variant === "v2"
+    ? [all.tos, all.pixel, all.perf, all.fast, all.privacy, all.platforms, all.plus, all.headless]
+    : [all.tos, all.pixel, all.perf, all.platforms, all.plus, all.headless, all.fast, all.privacy];
   return (
     <section id="faq" className="relative">
       <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent" />
