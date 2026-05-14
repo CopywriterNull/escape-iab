@@ -5,6 +5,7 @@ import {
   deleteMerchantAsAdmin,
   assignMerchantToCurrentUser,
   impersonateMerchant,
+  renameMerchantAsAdmin,
   setMerchantShopifyDomain,
 } from "@/app/actions/admin";
 
@@ -175,6 +176,41 @@ function MerchantRow({
       </summary>
 
       <div className="border-t border-[var(--color-border-soft)] p-5 space-y-4">
+        <form action={renameMerchantAsAdmin} className="grid sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+          <input type="hidden" name="id" value={row.id} />
+          <div>
+            <label className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+              Name
+            </label>
+            <input
+              type="text"
+              name="name"
+              required
+              maxLength={80}
+              defaultValue={row.name ?? ""}
+              className="mt-1.5 w-full px-3 py-2 rounded-md bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-[12.5px] focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+              Domain
+            </label>
+            <input
+              type="text"
+              name="domain"
+              maxLength={120}
+              defaultValue={row.domain ?? ""}
+              className="mt-1.5 w-full px-3 py-2 rounded-md bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-[12.5px] font-mono focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
+            />
+          </div>
+          <button
+            type="submit"
+            className="h-[34px] text-[12px] px-3 rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg-elev)] press transition-colors"
+          >
+            Rename
+          </button>
+        </form>
+
         <form action={setMerchantShopifyDomain} className="flex items-end gap-2 flex-wrap">
           <input type="hidden" name="id" value={row.id} />
           <div className="flex-1 min-w-[240px]">

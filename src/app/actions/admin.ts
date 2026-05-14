@@ -73,6 +73,22 @@ export async function assignMerchantToCurrentUser(formData: FormData) {
   revalidatePath("/admin");
 }
 
+/** Rename a merchant (name + domain). For fixing miskeyed/overwritten rows. */
+export async function renameMerchantAsAdmin(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const admin = getSupabaseAdmin();
+  if (!admin) return;
+  const id = String(formData.get("id") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim().slice(0, 80);
+  const domain = String(formData.get("domain") ?? "").trim().slice(0, 120);
+  if (!id || !name) return;
+  await admin
+    .from("merchants")
+    .update({ name, domain: domain || null })
+    .eq("id", id);
+  revalidatePath("/admin");
+}
+
 /** Set or clear a merchant's Shopify *.myshopify.com admin domain.
  *  This is what the order webhook handler matches X-Shopify-Shop-Domain
  *  against for multi-tenant routing.

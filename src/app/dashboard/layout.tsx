@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentMerchant, getImpersonationStatus } from "@/lib/db";
-import { supabaseConfigured, getSupabaseServer } from "@/lib/supabase/server";
+import { supabaseConfigured, getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { brand } from "@/lib/branding";
 import { signOut } from "@/app/actions/auth";
 import { stopImpersonating } from "@/app/actions/admin";
 import { SidebarNav } from "./_components/sidebar-nav";
+import { MerchantSwitcher, type SwitcherRow } from "./_components/merchant-switcher";
 import { PixelIcon } from "@/components/PixelIcon";
+
+const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
 
 type LiveRow = {
   event_type: string;
@@ -70,6 +73,27 @@ export default async function DashboardLayout({
   const merchant = await getCurrentMerchant();
   const impersonation = await getImpersonationStatus();
   const live = merchant ? await getRecentForSidebar(merchant.id, 3) : [];
+
+  // Admin-only: fetch all merchants for the workspace switcher dropdown.
+  const isAdmin = user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  let switcherRows: SwitcherRow[] = [];
+  if (isAdmin) {
+    const admin = getSupabaseAdmin();
+    if (admin) {
+      const { data } = await admin
+        .from("merchants")
+        .select("id, name, domain, user_id, created_at")
+        .order("created_at", { ascending: true });
+      switcherRows = (
+        (data ?? []) as { id: string; name: string | null; domain: string | null; user_id: string | null }[]
+      ).map((r) => ({
+        id: r.id,
+        name: r.name,
+        domain: r.domain,
+        ownedByMe: r.user_id === user.id,
+      }));
+    }
+  }
 
   return (
     <>
@@ -205,11 +229,20 @@ export default async function DashboardLayout({
             </span>
             {brand.name}
           </Link>
-          <nav className="flex items-center gap-1 text-[12px]">
-            <Link href="/dashboard" className="px-2 py-1 text-[var(--color-fg)] font-medium">Overview</Link>
-            <Link href="/dashboard/install" className="px-2 py-1 text-[var(--color-fg-muted)]">Install</Link>
-            <Link href="/dashboard/settings" className="px-2 py-1 text-[var(--color-fg-muted)]">Settings</Link>
-          </nav>
+          <div className="flex items-center gap-1 text-[12px]">
+            {isAdmin && switcherRows.length > 0 ? (
+              <MerchantSwitcher
+                current={merchant ? { id: merchant.id, name: merchant.name, domain: merchant.domain } : null}
+                rows={switcherRows}
+                impersonating={impersonation.active}
+              />
+            ) : null}
+            <nav className="flex items-center gap-1">
+              <Link href="/dashboard" className="px-2 py-1 text-[var(--color-fg)] font-medium">Overview</Link>
+              <Link href="/dashboard/install" className="px-2 py-1 text-[var(--color-fg-muted)]">Install</Link>
+              <Link href="/dashboard/settings" className="px-2 py-1 text-[var(--color-fg-muted)]">Settings</Link>
+            </nav>
+          </div>
         </div>
       </header>
 
@@ -219,7 +252,15 @@ export default async function DashboardLayout({
         <div className="hidden md:flex items-center justify-between gap-3 px-6 h-11 border-b border-[var(--color-border-soft)] bg-[var(--color-bg)]/85 backdrop-blur sticky top-0 z-20">
           <div className="flex items-center gap-2 text-[12.5px] min-w-0">
             <PixelIcon name="home" size={12} className="text-[var(--color-fg-muted)]" />
-            <span className="text-[var(--color-fg-muted)]">{merchant?.name ?? "Workspace"}</span>
+            {isAdmin && switcherRows.length > 0 ? (
+              <MerchantSwitcher
+                current={merchant ? { id: merchant.id, name: merchant.name, domain: merchant.domain } : null}
+                rows={switcherRows}
+                impersonating={impersonation.active}
+              />
+            ) : (
+              <span className="text-[var(--color-fg-muted)]">{merchant?.name ?? "Workspace"}</span>
+            )}
             <span className="text-[var(--color-fg-muted)]">/</span>
             <span className="font-medium">Overview</span>
             {merchant?.domain ? (
