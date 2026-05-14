@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 type Theme = "light" | "dark";
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
     const current = document.documentElement.getAttribute("data-theme") as Theme | null;
-    if (current === "dark") setTheme("dark");
+    setTheme(current === "dark" ? "dark" : "light");
   }, []);
 
   const toggle = () => {
@@ -71,20 +71,19 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
 /**
  * Inline script that runs before paint to apply theme.
  * Logic:
- *   - Explicit user preference ('dark' or 'light') always wins.
- *   - No preference + on the homepage ("/") → default to dark.
- *   - No preference + anywhere else → light (default).
+ *   - Explicit 'light' in localStorage wins (user opted out of dark).
+ *   - Anything else (null / 'dark' / parse error) → dark by default.
  * Drop into <head> in app/layout.tsx to avoid the FOUC flash.
  */
 export const themeBootScript = `
 (function(){
   try {
     var t = localStorage.getItem('eh-theme');
-    if (t === 'dark') {
-      document.documentElement.setAttribute('data-theme','dark');
-    } else if (t === null && location.pathname === '/') {
+    if (t !== 'light') {
       document.documentElement.setAttribute('data-theme','dark');
     }
-  } catch(e) {}
+  } catch(e) {
+    document.documentElement.setAttribute('data-theme','dark');
+  }
 })();
 `;
