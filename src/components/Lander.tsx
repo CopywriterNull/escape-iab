@@ -44,15 +44,15 @@ export function Lander({
       <PointerTracker />
       <Nav theme={theme} escapesToday={proof?.escapesToday ?? 0} />
       <Hero proof={proof} />
+      <HowItWorks />
       <PlatformsSection />
       <Problem />
       <ComparisonStrip />
-      <HowItWorks />
+      <CaseStudy data={proof?.caseStudy ?? null} />
       <DashboardPreview />
       <Features />
-      <SnippetPreview />
       <ABCallout />
-      <CaseStudy data={proof?.caseStudy ?? null} />
+      <SnippetPreview />
       <Pricing />
       <FAQ />
       <ClosingCTA />
@@ -1650,36 +1650,24 @@ function FAQ() {
       a: "The snippet is ~1.1 KB and runs synchronously before anything else. Lighthouse impact is unmeasurable. On Pro, we serve from your own CNAME so there's zero cross-origin penalty.",
     },
     {
-      q: "What if Instagram patches the technique?",
-      a: "We monitor for it actively. The snippet is edge-cached for 5 minutes — when we ship a fix, every customer auto-updates. If a fallback is ever the only option, the branded \"Open in Safari\" overlay still recovers most of the lift.",
-    },
-    {
       q: "Does it work on TikTok, Snapchat, Facebook?",
       a: "Instagram is the only IAB with a clean auto-escape (on iOS and Android). For TikTok / Snap / FB, EscapeHatch ships a polished one-tap \"Open in Safari\" overlay. Not as seamless, but recovers most of the lost conversions.",
     },
     {
-      q: "Why pay — can't my dev write it in 5 minutes?",
-      a: "They can. Then they have to build the dashboard, the A/B framework, the analytics pipeline, the fallback UI, the alerting when IG patches it, the Shopify App Embed, the CSP variants, and the multi-store admin. Or you spend $29 and have it tonight.",
-    },
-    {
       q: "Does it work on Shopify Plus?",
-      a: "Yes. The snippet drops into theme.liquid same as any Shopify install. We've validated against checkout extensibility, Shop Pay, and the Plus B2B portal. Multi-store rollups are a Pro plan feature so a single dashboard covers every storefront.",
+      a: "Yes. The snippet drops into theme.liquid same as any Shopify install. We've validated against checkout extensibility, Shop Pay, and the Plus B2B portal. Multi-store rollups are a Scale plan feature so a single dashboard covers every storefront.",
     },
     {
-      q: "What if my store is headless (Hydrogen / Next.js / custom)?",
-      a: "Drop the snippet into your root layout's <head>. The detection + redirect logic doesn't depend on Liquid — it runs purely client-side on first paint. Hydrogen, Next.js Commerce, Medusa, and custom-built stores all work.",
+      q: "Does it work outside Shopify — headless, custom, WooCommerce, BigCommerce?",
+      a: "Yes. EscapeHatch is platform-agnostic — paste the <script> tag in your <head> and it runs. Shopify, Shopify Plus, Hydrogen, Next.js Commerce, BigCommerce, WooCommerce, Medusa, custom-built — the detection + redirect logic is pure client-side JavaScript and doesn't depend on Liquid or any specific stack.",
     },
     {
       q: "How fast will I see results?",
-      a: "First escapes within minutes of installing. The A/B test reaches 95% statistical significance in 5-14 days for most stores spending $30k+/mo on Meta. Dashboard fires lift + p-value the moment you have enough sample.",
+      a: "First escapes fire within minutes of installing. After that it depends entirely on your IG traffic volume — high-spend brands see meaningful lift in 5–24 hours, smaller stores take a couple of days to reach a clean A/B read. The dashboard surfaces lift + p-value the moment you have enough sample.",
     },
     {
       q: "Is the snippet GDPR / CCPA compliant?",
       a: "We don't set cookies, we don't fingerprint, we don't ship analytics off your domain. The only data we collect is an IP-hashed event row per escape — no PII, no third-party trackers. Add us under \"functional\" in your consent banner if you have one.",
-    },
-    {
-      q: "What happens if Apple Pay actually works in the IAB someday?",
-      a: "We unmount cleanly — the snippet exits silently if it doesn't detect a broken IAB context. No customer-facing breakage. You can also flip the killswitch from your dashboard in case Instagram ever fixes things first.",
     },
   ];
   return (

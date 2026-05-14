@@ -111,7 +111,7 @@ function Stepper({ step, onSelect }: { step: Step; onSelect: (s: Step) => void }
 
 function PhoneDemo({ step }: { step: Step }) {
   return (
-    <div className="relative">
+    <div className="relative pb-12">
       {/* Phone shell */}
       <div
         className="relative rounded-[42px] p-2 mx-auto w-full max-w-[290px]"
@@ -154,9 +154,9 @@ function PhoneDemo({ step }: { step: Step }) {
         </div>
       </div>
 
-      {/* Outside-the-phone label */}
+      {/* Outside-the-phone label — sits fully below the phone, not overlapping the home indicator */}
       <div
-        className={`absolute -bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10.5px] font-mono tracking-wider whitespace-nowrap transition-all duration-300 ${
+        className={`absolute bottom-0 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10.5px] font-mono tracking-wider whitespace-nowrap transition-all duration-300 ${
           step === 0
             ? "bg-[var(--color-danger)]/15 text-[var(--color-danger)] border border-[var(--color-danger)]/30"
             : step === 1
