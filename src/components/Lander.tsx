@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/magic/ThemeToggle";
 import { PointerTracker } from "@/components/magic/PointerTracker";
 import { TextHighlighter } from "@/components/magic/TextHighlighter";
 import { StickyMobileCTAInner } from "@/components/magic/StickyMobileCTAInner";
+import { HowItWorksDemo } from "@/components/HowItWorksDemo";
 
 type Theme = "dark" | "light";
 
@@ -977,67 +978,25 @@ function Problem() {
 /* -------- How it works: vertical stepped flow with connector rail -------- */
 
 function HowItWorks() {
-  const steps = [
-    {
-      n: "01",
-      t: "Install in 60 seconds",
-      d: "Add via Shopify App Embed (one toggle, no theme code) or paste a single &lt;script&gt; tag. Survives theme upgrades.",
-      detail: "1.1 KB · async · zero dependencies",
-    },
-    {
-      n: "02",
-      t: "We detect & escape",
-      d: "Snippet runs as the first thing on the page. If the visitor is in IG&apos;s in-app browser, we fire a deep link Instagram itself recognizes. The page reopens in Safari — or Chrome on Android — before checkout even loads.",
-      detail: "iOS · Android · IG, FB, Messenger, TikTok",
-    },
-    {
-      n: "03",
-      t: "We measure the lift",
-      d: "50/50 A/B by default. Half your IG visitors get escaped, half don&apos;t. Your dashboard shows the CVR delta in your own data — not vendor case studies.",
-      detail: "Z-test · 95% CI · MDE 30%",
-    },
-  ];
   return (
     <section id="how" className="relative">
       <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent" />
-      <div className="mx-auto max-w-5xl px-5 py-28">
+      <div className="mx-auto max-w-6xl px-5 py-24 md:py-28">
         <div className="text-center max-w-2xl mx-auto">
           <SectionLabel>How it works</SectionLabel>
           <h2 className="mt-3 text-balance">
-            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">One snippet.</span>
+            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Watch it happen.</span>
             <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">
-              Three layers of recovery.
+              One script, three seconds.
             </span>
           </h2>
+          <p className="mt-4 text-[14.5px] text-[var(--color-fg-dim)] leading-relaxed">
+            One sentence: visitor lands in Instagram&apos;s broken in-app browser, our snippet detects it and re-opens the same page in Safari, your checkout works.
+          </p>
         </div>
-        <ol className="mt-16 relative">
-          <span
-            aria-hidden
-            className="absolute left-[19px] md:left-1/2 md:-translate-x-1/2 top-2 bottom-2 w-px bg-[var(--color-border)]"
-          />
-          {steps.map((s, i) => (
-            <li key={s.n} className={`relative pl-12 md:pl-0 md:grid md:grid-cols-2 md:gap-10 ${i > 0 ? "mt-10" : ""} ${i % 2 === 0 ? "md:[&>*:first-child]:order-1" : "md:[&>*:first-child]:order-2"}`}>
-              <span
-                aria-hidden
-                className="absolute left-0 md:left-1/2 md:-translate-x-1/2 top-1.5 size-10 rounded-full grid place-items-center bg-[var(--color-bg)] border border-[var(--color-border)] font-mono text-[12px] tracking-wider text-[var(--color-accent)] z-10"
-              >
-                {s.n}
-              </span>
-              <div className={`md:px-8 ${i % 2 === 0 ? "md:text-right" : "md:text-left"}`}>
-                <h3 className="text-xl md:text-2xl font-semibold tracking-tight">{s.t}</h3>
-                <p
-                  className="mt-2 text-[15px] leading-relaxed text-[var(--color-fg-dim)]"
-                  dangerouslySetInnerHTML={{ __html: s.d }}
-                />
-                <div className={`mt-3 inline-flex items-center gap-2 text-[11px] font-mono text-[var(--color-fg-muted)] ${i % 2 === 0 ? "md:flex-row-reverse" : ""}`}>
-                  <span className="size-1 rounded-full bg-[var(--color-accent)]" />
-                  {s.detail}
-                </div>
-              </div>
-              <div aria-hidden className="hidden md:block" />
-            </li>
-          ))}
-        </ol>
+        <div className="mt-14 md:mt-16">
+          <HowItWorksDemo />
+        </div>
       </div>
     </section>
   );
