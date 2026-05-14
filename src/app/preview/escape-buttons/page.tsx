@@ -265,19 +265,4 @@ const VARIANTS: Variant[] = [
       </div>
     ),
   },
-  {
-    key: "f-side-tab",
-    name: "F · Side tab",
-    desc: "Partial tab on the right edge — peeks in, very low-key. Mobile-platform-native pattern (Notion side tab style). Discreet, brand-on, but easy to miss.",
-    render: () => (
-      <div className="absolute top-1/2 -translate-y-1/2 right-0">
-        <div
-          className="bg-[var(--color-fg)] text-[var(--color-bg)] py-2.5 px-2 rounded-l-md flex items-center gap-1.5"
-          style={{ boxShadow: "-4px 4px 12px rgba(0,0,0,0.18)", writingMode: "vertical-rl", transform: "rotate(180deg)" }}
-        >
-          <span className="text-[8px] font-semibold tracking-wide whitespace-nowrap">OPEN IN BROWSER</span>
-        </div>
-      </div>
-    ),
-  },
 ];
