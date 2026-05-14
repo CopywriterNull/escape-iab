@@ -201,7 +201,7 @@ function Hero({ proof }: { proof?: LanderProof }) {
         <div className="hero-enter hero-enter-5">
           <Waitlist />
           <p className="mt-3 text-center text-xs text-[var(--color-fg-muted)]">
-            No credit card · 5,000 escapes/mo on free · Install in 60 seconds
+            From $300/mo · Pays for itself in week 1 · 60-second install
           </p>
         </div>
         <div className="hero-enter hero-enter-6">
@@ -921,7 +921,7 @@ function ClosingCTA() {
         Every paid IG click that lands in the in-app browser is a customer you already paid for. Recover them.
       </p>
       <RainbowButton href="#waitlist" className="mt-8 !h-12 !px-6">
-        Start free · 60-second install
+        Get started · 60-second install
         <span className="btn-icon">
           <ArrowRight />
         </span>
@@ -1510,40 +1510,47 @@ function Pricing() {
   };
   const tiers: Tier[] = [
     {
-      name: "Free",
-      price: "$0",
-      sub: "Forever. Test the waters.",
-      cta: { label: "Join waitlist", href: "#waitlist" },
-      features: ["5,000 escapes / month", "1 storefront", "Daily analytics", "Auto-update on patches"],
-    },
-    {
       name: "Pro",
-      price: "$29",
-      sub: "/mo — for one serious store.",
+      price: "$300",
+      sub: "/mo — for one serious storefront.",
       featured: true,
-      badge: "Most popular",
-      cta: { label: "Join waitlist", href: "#waitlist" },
+      badge: "Starts here",
+      cta: { label: "Get started", href: "#waitlist" },
       features: [
-        "100,000 escapes / month",
-        "Up to 3 storefronts",
+        "Up to 50,000 IG-IAB escapes / month",
+        "1 storefront",
         "Built-in A/B with confidence intervals",
-        "Branded fallback overlay (TikTok / Snap / FB)",
-        "Webhook to Klaviyo / Triple Whale / Northbeam",
+        "Branded fallback overlay (FB, Messenger, TikTok, Snap)",
+        "Real-time dashboard + raw event export",
         "Email support",
       ],
     },
     {
       name: "Scale",
-      price: "$99",
-      sub: "/mo — for portfolios & agencies.",
-      cta: { label: "Join waitlist", href: "#waitlist" },
+      price: "$900",
+      sub: "/mo — for brands doing real volume.",
+      cta: { label: "Get started", href: "#waitlist" },
       features: [
-        "Unlimited escapes",
-        "Unlimited storefronts",
+        "Up to 250,000 IG-IAB escapes / month",
+        "Up to 5 storefronts",
+        "Webhook to Klaviyo / Triple Whale / Northbeam",
         "First-party CNAME serving",
-        "CSP nonce variants",
-        "Priority Slack support",
-        "SLA & DPA",
+        "Priority response (next-business-day)",
+        "Quarterly performance review",
+      ],
+    },
+    {
+      name: "Enterprise",
+      price: "Custom",
+      sub: "500k+ escapes / mo · portfolio brands.",
+      cta: { label: "Talk to us", href: "mailto:hi@getescapehatch.com?subject=EscapeHatch%20Enterprise" },
+      features: [
+        "Unlimited escapes & storefronts",
+        "Dedicated infra + custom regions",
+        "CSP nonce variants & custom schemes",
+        "SLA, DPA, security review",
+        "Shared Slack channel",
+        "Onboarding + migration support",
       ],
     },
   ];
@@ -1555,10 +1562,10 @@ function Pricing() {
           <SectionLabel>Pricing</SectionLabel>
           <h2 className="mt-3 text-balance">
             <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Pays for itself</span>
-            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">on a single extra sale.</span>
+            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">in the first week.</span>
           </h2>
           <p className="mt-3 text-[var(--color-fg-dim)]">
-            Most stores recover the entire monthly cost in the first 24 hours.
+            Pricing scales with IG-IAB traffic. If you&apos;re running paid Meta, the first month of recovered checkouts covers the year.
           </p>
         </div>
         <div className="mt-14 grid md:grid-cols-3 gap-7 md:gap-4 items-stretch">
@@ -1567,7 +1574,7 @@ function Pricing() {
           ))}
         </div>
         <p className="mt-8 text-center text-[12px] text-[var(--color-fg-muted)]">
-          All plans include the dashboard, the test infra, and patch auto-updates. No annual lock-in.
+          All plans include the dashboard, A/B test infra, and patch auto-updates as Meta ships changes. Month-to-month, no annual lock-in. Overage on escapes is metered, not capped — your traffic keeps flowing.
         </p>
       </div>
     </section>
