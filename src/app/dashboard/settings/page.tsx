@@ -1,9 +1,9 @@
-import { getCurrentMerchant } from "@/lib/db";
+import { getCurrentMerchant, getImpersonationStatus } from "@/lib/db";
 import { updateMerchantSettings } from "@/app/actions/merchant";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ saved?: string }>;
+type SearchParams = Promise<{ saved?: string; err?: string }>;
 
 export default async function SettingsPage({
   searchParams,
@@ -11,7 +11,10 @@ export default async function SettingsPage({
   searchParams: SearchParams;
 }) {
   const merchant = await getCurrentMerchant();
-  const saved = (await searchParams).saved === "1";
+  const impersonation = await getImpersonationStatus();
+  const sp = await searchParams;
+  const saved = sp.saved === "1";
+  const err = sp.saved === "0" ? sp.err ?? "unknown" : null;
   if (!merchant) {
     return <div className="card p-8">No merchant yet — refresh in a moment.</div>;
   }
@@ -28,6 +31,29 @@ export default async function SettingsPage({
         </p>
       </div>
 
+      {/* Always show which row is being edited, especially during impersonation */}
+      <div className={`rounded-lg border px-4 py-2.5 text-[12px] font-mono flex items-center justify-between gap-3 ${
+        impersonation.active
+          ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/8 text-[var(--color-fg)]"
+          : "border-[var(--color-border-soft)] bg-[var(--color-card)] text-[var(--color-fg-dim)]"
+      }`}>
+        <span className="inline-flex items-center gap-2 min-w-0">
+          {impersonation.active ? (
+            <span className="size-1.5 rounded-full bg-[var(--color-accent)] animate-pulse shrink-0" />
+          ) : (
+            <span className="size-1.5 rounded-full bg-[var(--color-fg-muted)] shrink-0" />
+          )}
+          <span className="font-semibold tracking-tight text-[var(--color-fg)]">
+            {impersonation.active ? "Editing as admin:" : "Editing:"}
+          </span>
+          <span className="truncate text-[var(--color-fg)]">{merchant.name ?? "(unnamed)"}</span>
+          <span className="text-[var(--color-fg-muted)] truncate hidden sm:inline">· {merchant.domain ?? "—"}</span>
+        </span>
+        <span className="text-[10px] tnum text-[var(--color-fg-muted)] truncate hidden md:inline" title={merchant.id}>
+          {merchant.id.slice(0, 8)}…
+        </span>
+      </div>
+
       {saved ? (
         <div className="rounded-lg border border-[var(--color-success)]/30 bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] px-4 py-2.5 text-sm flex items-center gap-2.5">
           <span className="size-5 rounded-full bg-[var(--color-success)]/20 grid place-items-center shrink-0">
@@ -36,12 +62,20 @@ export default async function SettingsPage({
             </svg>
           </span>
           <span className="text-[var(--color-fg)]">
-            Saved. Bump <code className="font-mono text-[12px]">?v=</code> on the install snippet to bust the 5-min edge cache immediately.
+            Saved to <strong>{merchant.name ?? "this merchant"}</strong>. Bump <code className="font-mono text-[12px]">?v=</code> on the install snippet to bust the 5-min edge cache.
           </span>
+        </div>
+      ) : err ? (
+        <div className="rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger-soft)]/40 px-4 py-2.5 text-sm">
+          <strong className="text-[var(--color-danger)]">Save failed</strong>{" "}
+          <span className="text-[var(--color-fg-dim)]">— {err}. Refresh and try again. If this keeps happening, exit impersonation and back in.</span>
         </div>
       ) : null}
 
       <form action={updateMerchantSettings} className="card-hi p-7 space-y-7">
+        {/* Defensive id pin — server cross-checks against getCurrentMerchant
+            so the save can't drift to a different row mid-flow. */}
+        <input type="hidden" name="merchant_id" value={merchant.id} />
         <div className="grid md:grid-cols-2 gap-6">
           <Field label="Store name" hint="Shown only on this dashboard.">
             <input

@@ -8,21 +8,37 @@ import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
 
 export async function updateMerchantSettings(formData: FormData) {
-  // getCurrentMerchant honors the eh_imp_merchant_id impersonation cookie
-  // for admins, so this resolves the same row the settings page just rendered.
+  // Resolve which merchant the *current view* is showing (honors the
+  // impersonation cookie for admins). This is the ONLY merchant we will
+  // ever write to from this action.
   const merchant = await getCurrentMerchant();
-  if (!merchant) return;
+  if (!merchant) {
+    redirect("/dashboard/settings?saved=0&err=no_merchant");
+  }
+
+  // Defensive cross-check: the form embeds a hidden merchant_id snapshot
+  // of which row was rendered. If the cookie has shifted between render
+  // and submit (e.g. user opened settings, then "Exit impersonation"
+  // before saving), abort rather than write to the wrong row.
+  const formMerchantId = String(formData.get("merchant_id") ?? "").trim();
+  if (formMerchantId && formMerchantId !== merchant.id) {
+    redirect("/dashboard/settings?saved=0&err=merchant_mismatch");
+  }
 
   const supabase = await getSupabaseServer();
-  if (!supabase) return;
+  if (!supabase) {
+    redirect("/dashboard/settings?saved=0&err=no_supabase");
+  }
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) redirect("/login");
 
   const isAdmin = user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const owns = merchant.user_id === user.id;
-  if (!owns && !isAdmin) return;
+  if (!owns && !isAdmin) {
+    redirect("/dashboard/settings?saved=0&err=forbidden");
+  }
 
   const ab = formData.get("ab_enabled") === "on";
   const fb = formData.get("fallback_button") === "on";
@@ -32,13 +48,15 @@ export async function updateMerchantSettings(formData: FormData) {
   const domain = String(formData.get("domain") ?? "").trim().slice(0, 120) || null;
   const fallback = String(formData.get("fallback_text") ?? "").trim().slice(0, 60) || null;
 
-  // Admin updating a merchant they don't own (impersonation path) needs the
-  // service-role client to bypass RLS. Owner path uses their auth context so
-  // RLS still applies to non-admins.
+  // Service role only for the admin-impersonating-other-merchant path so
+  // RLS doesn't block writes on rows the admin doesn't own. Owners go
+  // through their auth context so RLS still governs regular users.
   const client = isAdmin && !owns ? getSupabaseAdmin() : supabase;
-  if (!client) return;
+  if (!client) {
+    redirect("/dashboard/settings?saved=0&err=no_client");
+  }
 
-  await client
+  const { error } = await client
     .from("merchants")
     .update({
       ab_enabled: ab,
@@ -51,7 +69,16 @@ export async function updateMerchantSettings(formData: FormData) {
     })
     .eq("id", merchant.id);
 
+  if (error) {
+    console.error("[updateMerchantSettings] update failed", { id: merchant.id, error });
+    redirect(`/dashboard/settings?saved=0&err=${encodeURIComponent(error.message)}`);
+  }
+
+  // Revalidate every surface that might display this merchant.
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  revalidatePath("/admin");
+  revalidatePath("/admin/merchants");
+  revalidatePath("/admin/diagnostics");
   redirect("/dashboard/settings?saved=1");
 }
