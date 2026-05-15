@@ -3,8 +3,15 @@ import { updateMerchantSettings } from "@/app/actions/merchant";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
+type SearchParams = Promise<{ saved?: string }>;
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const merchant = await getCurrentMerchant();
+  const saved = (await searchParams).saved === "1";
   if (!merchant) {
     return <div className="card p-8">No merchant yet — refresh in a moment.</div>;
   }
@@ -20,6 +27,19 @@ export default async function SettingsPage() {
           Per-store config. Changes apply on the next snippet fetch (~5 min edge cache).
         </p>
       </div>
+
+      {saved ? (
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] px-4 py-2.5 text-sm flex items-center gap-2.5">
+          <span className="size-5 rounded-full bg-[var(--color-success)]/20 grid place-items-center shrink-0">
+            <svg viewBox="0 0 16 16" className="size-3 text-[var(--color-success)]" fill="none" stroke="currentColor" strokeWidth="2.4">
+              <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span className="text-[var(--color-fg)]">
+            Saved. Bump <code className="font-mono text-[12px]">?v=</code> on the install snippet to bust the 5-min edge cache immediately.
+          </span>
+        </div>
+      ) : null}
 
       <form action={updateMerchantSettings} className="card-hi p-7 space-y-7">
         <div className="grid md:grid-cols-2 gap-6">
