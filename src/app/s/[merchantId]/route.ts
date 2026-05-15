@@ -28,7 +28,9 @@ export async function GET(
   let fallbackButton = true;
   let escapeEnabled = true;
   let fallbackText: string | null = null;
-  let paidOnly = true;
+  // Default mode = escape every Meta IAB visitor (organic + paid). Brands
+  // that want to restrict to paid clicks only must opt in via settings.
+  let paidOnly = false;
   let valid = isValidShape;
   if (isValidShape) {
     const admin = getSupabaseAdmin();
@@ -46,7 +48,9 @@ export async function GET(
         // (0011 / 0012) is applied — `undefined` reads as the safe default.
         escapeEnabled = m.escape_enabled !== false;
         fallbackText = (m.fallback_text as string | null | undefined) ?? null;
-        paidOnly = m.paid_only !== false;
+        // Only an explicit `true` in the DB keeps paid-only on. Missing
+        // column or `false`/null reads as escape-all (the new default).
+        paidOnly = m.paid_only === true;
       } else {
         valid = false;
       }

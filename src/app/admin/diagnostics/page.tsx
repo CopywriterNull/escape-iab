@@ -25,7 +25,7 @@ export default async function AdminDiagnostics() {
       domain: (m.domain as string | null) ?? null,
       shopify_domain: (m.shopify_domain as string | null) ?? null,
       escape_enabled: m.escape_enabled === false ? false : true,
-      paid_only: m.paid_only === false ? false : true,
+      paid_only: m.paid_only === true,
       ab_enabled: m.ab_enabled === false ? false : true,
       fallback_button: m.fallback_button === false ? false : true,
       user_id: (m.user_id as string | null) ?? null,
