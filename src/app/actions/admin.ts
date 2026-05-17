@@ -23,12 +23,16 @@ async function requireAdmin(): Promise<boolean> {
   return user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
 }
 
-function revalidateMerchantSurfaces() {
+function revalidateMerchantSurfaces(merchantId?: string) {
   revalidatePath("/admin");
   revalidatePath("/admin/merchants");
   revalidatePath("/admin/diagnostics");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
+  // Per-merchant snippet route lives behind a 1h edge cache. Invalidate
+  // explicitly when the merchant's config could have changed so the new
+  // body is served on the next pageview instead of waiting for TTL.
+  if (merchantId) revalidatePath(`/s/${merchantId}.js`);
 }
 
 export async function createMerchantAsAdmin(formData: FormData) {
@@ -52,7 +56,7 @@ export async function createMerchantAsAdmin(formData: FormData) {
     .select("id")
     .single();
 
-  revalidateMerchantSurfaces();
+  revalidateMerchantSurfaces(data?.id);
   if (data?.id) redirect(`/install/${data.id}`);
 }
 
@@ -65,7 +69,7 @@ export async function deleteMerchantAsAdmin(formData: FormData) {
   if (!UUID_RE.test(id)) return;
 
   await admin.from("merchants").delete().eq("id", id);
-  revalidateMerchantSurfaces();
+  revalidateMerchantSurfaces(id);
 }
 
 export async function assignMerchantToCurrentUser(formData: FormData) {
@@ -82,7 +86,7 @@ export async function assignMerchantToCurrentUser(formData: FormData) {
   if (!UUID_RE.test(id)) return;
 
   await admin.from("merchants").update({ user_id: user.id }).eq("id", id);
-  revalidateMerchantSurfaces();
+  revalidateMerchantSurfaces(id);
 }
 
 /** Rename a merchant (name + domain). For fixing miskeyed/overwritten rows.
@@ -100,7 +104,7 @@ export async function renameMerchantAsAdmin(formData: FormData) {
     .from("merchants")
     .update({ name, domain: domain || null })
     .eq("id", id);
-  revalidateMerchantSurfaces();
+  revalidateMerchantSurfaces(id);
 }
 
 /** Set or clear a merchant's Shopify *.myshopify.com admin domain. */
@@ -113,7 +117,7 @@ export async function setMerchantShopifyDomain(formData: FormData) {
   if (!UUID_RE.test(id)) return;
   const shopify_domain = raw || null;
   await admin.from("merchants").update({ shopify_domain }).eq("id", id);
-  revalidateMerchantSurfaces();
+  revalidateMerchantSurfaces(id);
 }
 
 /** Set the impersonation cookie + jump into the dashboard as that merchant. */

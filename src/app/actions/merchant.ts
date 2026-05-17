@@ -87,5 +87,8 @@ export async function updateMerchantSettings(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/merchants");
   revalidatePath("/admin/diagnostics");
+  // Invalidate the served snippet so config changes propagate within
+  // seconds instead of waiting for the 1h edge cache TTL.
+  revalidatePath(`/s/${merchant.id}.js`);
   redirect("/dashboard/settings?saved=1");
 }

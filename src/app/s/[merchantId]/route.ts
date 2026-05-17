@@ -94,8 +94,11 @@ export async function GET(
     status: 200,
     headers: {
       "content-type": "application/javascript; charset=utf-8",
-      // Short edge cache so we can ship fixes fast (e.g., when IG patches).
-      "cache-control": "public, max-age=300, s-maxage=300",
+      // 1 hour edge cache. Settings changes trigger explicit revalidation
+      // from updateMerchantSettings + admin actions, so propagation stays
+      // fast despite the longer TTL. Saves ~12x function invocations on
+      // /s/[id].js at steady state vs the previous 5-min cache.
+      "cache-control": "public, max-age=3600, s-maxage=3600",
       "x-eh-version": CURRENT_VERSION,
       "access-control-allow-origin": "*",
     },
