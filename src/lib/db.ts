@@ -30,6 +30,8 @@ export type Merchant = {
   escape_enabled?: boolean;
   fallback_text?: string | null;
   paid_only?: boolean;
+  /** Percent of in-test traffic placed in bucket A (escape). 50 = even. */
+  ab_split_pct?: number;
   created_at: string;
 };
 

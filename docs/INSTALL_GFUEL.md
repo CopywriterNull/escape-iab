@@ -25,10 +25,12 @@ Your merchant ID looks like `7beaa60e-2b77-4ef2-a30c-d1d4edc28b04`.
 3. Paste:
 
 ```liquid
-<script src="https://escapehatch.app/s/{{ MERCHANT_ID }}.js" async></script>
+<script src="https://getescapehatch.com/s/{{ MERCHANT_ID }}.js?v=13"></script>
 ```
 
 (Replace `{{ MERCHANT_ID }}` with your real ID. The snippet URL is what's shown on the install page — copy that.)
+
+**Do NOT add `async` or `defer`.** The IG IAB redirect has to fire before Instagram's webview commits to rendering — once it paints, the `extbrowser` scheme is silently dropped. The tag must be synchronous. Some Shopify apps (Edgemesh, theme optimizers) auto-add `async` to scripts in `<head>` — disable that for this tag specifically.
 
 4. Open **Layout → `theme.liquid`**. Find the `<head>` tag. As the **very first child** of `<head>`, add:
 

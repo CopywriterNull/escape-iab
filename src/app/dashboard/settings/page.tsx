@@ -1,5 +1,6 @@
 import { getCurrentMerchant, getImpersonationStatus } from "@/lib/db";
 import { updateMerchantSettings } from "@/app/actions/merchant";
+import { SplitSlider } from "./_components/split-slider";
 
 export const dynamic = "force-dynamic";
 
@@ -108,7 +109,14 @@ export default async function SettingsPage({
             name="ab_enabled"
             defaultOn={merchant.ab_enabled}
             label="A/B testing"
-            hint="50/50 split: bucket A escapes, bucket B is control. Disable once you've measured the lift."
+            hint="Split traffic between an escape arm (bucket A) and a silent control (bucket B) so the dashboard can compute lift with statistical confidence. Disable to escape 100%."
+          />
+          <SplitSlider
+            defaultPct={
+              typeof merchant.ab_split_pct === "number" && Number.isFinite(merchant.ab_split_pct)
+                ? Math.min(99, Math.max(1, Math.round(merchant.ab_split_pct)))
+                : 50
+            }
           />
           <Toggle
             name="fallback_button"

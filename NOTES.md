@@ -43,7 +43,11 @@ A SaaS that escapes Instagram's in-app browser, redirecting paid-Meta-ad visitor
 - `<SampleSizeCard>` — progress bar toward MDE@95%
 - `<ActivityCard>` + `<ActivityRow>` — recent funnel events with PURCHASE/ESCAPE/CHECKOUT/ATC pill chips
 
-## Snippet contract (current: v7)
+## Snippet contract (current: v10)
+
+> v10 adds a runtime async-detection self-diagnostic. If the install `<script>` has `async` or `defer`, the snippet `console.warn`s and stamps `as:1` on every `/api/track` beacon — operationally critical for catching the recurring async-install bug. See "Recurring incident: snippet installed with `async`" below.
+
+
 
 Storefront snippet (`src/lib/snippet.ts`) runs on every pageview. Logic in order:
 
@@ -200,6 +204,41 @@ Local dev: `vercel env pull .env.local --environment production --yes`. Override
 - **`uv` / `uvx`** installed at `~/.local/bin` via Astral installer.
 - **Taste skills** from `Leonxlnx/taste-skill` package — 12 design-focused skills at `~/.agents/skills/` (design-taste-frontend, high-end-visual-design, redesign-existing-projects, minimalist-ui, gpt-taste, stitch-design-taste, imagegen-frontend-web/mobile, brandkit, image-to-code, industrial-brutalist-ui, full-output-enforcement). Invoke via `Skill` tool.
 - **`andrej-karpathy-skills:karpathy-guidelines`** — available. Use for nontrivial code reviews.
+
+## Recurring incident: snippet installed with `async` (and how we fixed it for good)
+
+**Pattern:** new merchant pastes install tag → snippet loads but zero escapes → debug → "remove `async`" → next new merchant repeats. Hit on G FUEL twice and andar.com (2026-05).
+
+**Mechanics:** the `instagram://extbrowser/?url=...` scheme only hands off if `location.replace` fires BEFORE Instagram's WebView calls `didCommit` and paints. With `async`/`defer`, the parser races past our `<script src>`, IG commits the navigation, and the scheme is silently dropped. Snippet then sets `sessionStorage.eh_a=1`, so every subsequent reload in that WebView silently exits with `escape_skipped, r:"s"`. The scheme itself is fine — proven by `src/app/layout.tsx`'s inline self-escape on our own marketing site.
+
+**Root cause:** install-tag template drift across five surfaces:
+
+| Surface | Status before 2026-05-14 |
+| --- | --- |
+| `/install/[id]` (post-signup) | correct (no async + explicit warning) |
+| `/admin/merchants` | correct |
+| `/admin/guides` | correct (warns against async in copy) |
+| **`/dashboard/install`** | **had `async` — highest-trafficked surface** |
+| `docs/INSTALL_GFUEL.md` | had `async` |
+
+The wrong-est surface was the one merchants actually used after login. Every new install pulled `async`. Every debug session re-derived the same "remove async" fix.
+
+**Fixes shipped 2026-05-14:**
+
+1. `/dashboard/install/page.tsx` — generated tag is now sync. Added red callout warning + note about Edgemesh / theme-optimizer apps that auto-add `async` to scripts in `<head>`.
+2. `docs/INSTALL_GFUEL.md` — async example removed, no-async warning added.
+3. **Snippet v10** (`src/lib/snippet.ts`) — runtime self-diagnostic:
+   - Reads `document.currentScript.async / .defer` on boot.
+   - If true: `console.warn("[EscapeHatch] script loaded with async/defer — IG IAB redirect will be silently dropped...")` so desktop QA catches it.
+   - Stamps `as: 1` on every `/api/track` beacon. **To find any merchant installed with async, grep Vercel runtime logs for `as:1`.**
+
+**Structural risk (not yet fixed):** the install-tag template is hand-written in five places. Should be one shared source (e.g. `src/lib/snippet-tag.ts`) that every page/doc imports — otherwise next refactor reintroduces the drift.
+
+**When a merchant reports "snippet installed but no escape":**
+1. `curl 'https://getescapehatch.com/s/MERCHANT_ID.js?v=$(date +%s)' | tail -c 400` — confirm the redirect path is present (look for `setTimeout(...location.replace(s)...)`). If you see `return void w("escape_skipped",{r:"k"})` instead, the kill switch is on.
+2. Ask: which page did they grab the tag from? If `/dashboard/install` and they have a pre-v10 tag, suspect `async` first.
+3. Tell them: remove `async`, bump `?v=` on the install tag (busts the 5-min `s-maxage=300` Vercel edge cache).
+4. After they redeploy: in Vercel runtime logs, grep `/api/track` for that merchant ID. `as:1` = async still on (likely a Shopify app re-adding it). `as:0` + `t:"impression"` + `t:"escape_attempt"` = working.
 
 ## Known issues / structural limits
 

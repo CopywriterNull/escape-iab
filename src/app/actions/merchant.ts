@@ -47,6 +47,12 @@ export async function updateMerchantSettings(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim().slice(0, 80) || null;
   const domain = String(formData.get("domain") ?? "").trim().slice(0, 120) || null;
   const fallback = String(formData.get("fallback_text") ?? "").trim().slice(0, 60) || null;
+  // A/B split — value is the % of in-test traffic placed in bucket A.
+  // Parse defensively; clamp to [1, 99] to match DB check + snippet builder.
+  const rawSplit = parseInt(String(formData.get("ab_split_pct") ?? ""), 10);
+  const abSplitPct = Number.isFinite(rawSplit)
+    ? Math.min(99, Math.max(1, rawSplit))
+    : 50;
 
   // Service role only for the admin-impersonating-other-merchant path so
   // RLS doesn't block writes on rows the admin doesn't own. Owners go
@@ -63,6 +69,7 @@ export async function updateMerchantSettings(formData: FormData) {
       fallback_button: fb,
       escape_enabled: escape,
       paid_only: paidOnly,
+      ab_split_pct: abSplitPct,
       fallback_text: fallback,
       name,
       domain,

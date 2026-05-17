@@ -14,10 +14,16 @@ export default async function InstallPage() {
   const proto = hdrs.get("x-forwarded-proto") ?? "http";
   const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "localhost:3000";
   const origin = `${proto}://${host}`;
-  const snippetUrl = `${origin}/s/${merchant.id}.js`;
+  // Bump the ?v= when you ship a config change so Vercel's 5-min edge cache
+  // on /s/[id].js doesn't keep serving the old baked-in flags.
+  const snippetUrl = `${origin}/s/${merchant.id}.js?v=13`;
 
-  const html = `<script src="${snippetUrl}" async></script>`;
-  const liquid = `{% comment %} EscapeHatch — IG IAB redirect {% endcomment %}\n${html}`;
+  // CRITICAL: no `async`, no `defer`. The IG IAB redirect must fire before
+  // Instagram's webview commits to rendering — once it paints, the
+  // extbrowser scheme is silently dropped. We've been bitten by this on
+  // multiple merchant installs. The install tag is intentionally sync.
+  const html = `<script src="${snippetUrl}"></script>`;
+  const liquid = `{% comment %} EscapeHatch — IG IAB redirect (must be SYNC — no async/defer) {% endcomment %}\n${html}`;
   const pixelJs = buildShopifyPixel({
     merchantId: merchant.id,
     ingestUrl: `${origin}/api/track/funnel`,
@@ -57,9 +63,15 @@ export default async function InstallPage() {
       <Section
         n="01"
         title="Storefront snippet"
-        sub="Drop in the top of <head> on every page. Detects paid IG visitors, buckets them 50/50, and escapes Bucket A out of the in-app browser."
+        sub="Drop in the top of <head> on every page. Detects IG/Threads visitors and reopens them in Safari/Chrome before checkout breaks."
       >
         <CodeBlock title="theme.liquid · top of <head>" lang="liquid" code={liquid} />
+        <div className="rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger-soft)]/30 px-4 py-3 text-[12.5px] leading-relaxed">
+          <strong className="text-[var(--color-danger)]">No <code className="font-mono">async</code>, no <code className="font-mono">defer</code>.</strong>{" "}
+          <span className="text-[var(--color-fg-dim)]">
+            The redirect must fire <em>before</em> Instagram&apos;s webview commits to rendering. With <code className="font-mono">async</code> the browser paints first and IG silently drops the <code className="font-mono">extbrowser</code> scheme — snippet looks installed, nothing escapes. Some Shopify apps (Edgemesh, theme optimizers) auto-add <code className="font-mono">async</code> to scripts in <code className="font-mono">&lt;head&gt;</code>; if yours does, disable that for this tag.
+          </span>
+        </div>
         <details className="text-sm text-[var(--color-fg-dim)]">
           <summary className="cursor-pointer link-grow inline-block">For non-Shopify storefronts</summary>
           <div className="mt-3"><CodeBlock title="any storefront · &lt;head&gt;" lang="html" code={html} /></div>

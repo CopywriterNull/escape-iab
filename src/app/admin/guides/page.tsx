@@ -122,6 +122,27 @@ where id = 'MERCHANT_ID';
 
         <Guide
           tag="qa"
+          title="Force a bucket for testing (?eh_force=a|b)"
+          summary="Bypass AB / paid_only / eh_a sticky guard for QA, without polluting real visitor data."
+        >
+          <p>
+            Hitting a merchant URL with <code className="font-mono">?eh_force=a</code> pins this pageview to bucket A: escape fires regardless of the AB toggle, paid_only setting, or the sessionStorage <code className="font-mono">eh_a</code> sticky guard. Use this when AB is on (50% of normal traffic is silent control — looks like &quot;broken&quot; to QA) or when you don&apos;t have paid UTMs handy.
+          </p>
+          <p>
+            <code className="font-mono">?eh_force=b</code> pins bucket B — silent control. Use to preview what a non-escaped visitor sees, even if AB is off in the DB.
+          </p>
+          <Code>{`# escape will fire on this visit, fresh phone, AB doesn't matter
+https://merchant.com/?eh_force=a
+
+# silent control preview (no escape, no fallback)
+https://merchant.com/?eh_force=b`}</Code>
+          <p className="text-[12px] text-[var(--color-fg-muted)]">
+            Forced visits don&apos;t write the <code className="font-mono">eh_b</code> cookie, so QA traffic doesn&apos;t permanently bucket the tester&apos;s device. Every beacon for these visits has <code className="font-mono">forced:1</code> in the payload — filter on that field to keep QA out of dashboard metrics.
+          </p>
+        </Guide>
+
+        <Guide
+          tag="qa"
           title="QA checklist before handing off install"
           summary="curl the snippet, check tail for redirect path, log a test impression."
         >

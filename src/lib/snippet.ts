@@ -14,8 +14,8 @@
 // (Exception: non-IG IABs get a single iab_detected beacon for analytics
 // segmentation, but they're not in the bucketed test.)
 
-export type SnippetVersion = "v7" | "v8" | "v9";
-export const CURRENT_VERSION: SnippetVersion = "v9";
+export type SnippetVersion = "v7" | "v8" | "v9" | "v10";
+export const CURRENT_VERSION: SnippetVersion = "v10";
 
 type SnippetOpts = {
   merchantId: string;
@@ -26,6 +26,10 @@ type SnippetOpts = {
   escapeEnabled?: boolean;
   fallbackText?: string | null;
   paidOnly?: boolean;
+  /** Percent of in-test traffic placed in bucket A (escape arm). 50 =
+   *  legacy even split. Clamped to [1, 99] — 0 and 100 defeat the
+   *  purpose of an A/B. */
+  abSplitPct?: number;
 };
 
 export function buildSnippet(opts: SnippetOpts): string {
@@ -43,10 +47,28 @@ export function buildSnippet(opts: SnippetOpts): string {
   // arriving via paid clicks. When false, escape any Meta IAB visitor
   // including organic IG link-in-bio / story / DM traffic.
   const paidOnly = opts.paidOnly === false ? "false" : "true";
+  // A/B split percent (bucket A share). Defaults to 50 for legacy
+  // behavior; clamped to [1, 99]. Bake the threshold (0.01–0.99) into
+  // the snippet so terser can constant-fold for cheap dispatch.
+  const rawSplit = typeof opts.abSplitPct === "number" ? opts.abSplitPct : 50;
+  const clampedSplit = Math.min(99, Math.max(1, Math.round(rawSplit)));
+  const splitThreshold = (clampedSplit / 100).toFixed(2); // string for embed
 
   return `(function(){
 try{
-  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly};
+  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold};
+  // Self-diagnostic: if our own <script> tag has async/defer, the redirect
+  // path is structurally broken (IG webview paints before we run). Log a
+  // visible warning so desktop QA catches it; stamp a flag on every beacon
+  // so operators can see the misconfig in /api/track logs (look for as:1).
+  var ASYNC=0;
+  try{
+    var sc=document.currentScript;
+    if(sc&&(sc.async||sc.defer)){
+      ASYNC=1;
+      try{console.warn("[EscapeHatch] script loaded with async/defer — IG IAB redirect will be silently dropped. Remove the attribute from <script src=\\""+(sc.src||"")+"\\"></script>.");}catch(e){}
+    }
+  }catch(e){}
   var u=navigator.userAgent||"";
   if(!/Mobile|iPhone|iPod|iPad|Android/i.test(u))return;
   var kind=null;
@@ -90,6 +112,13 @@ try{
 
   var qsP=new URLSearchParams(location.search);
   var us=qsP.get("utm_source")||null,um=qsP.get("utm_medium")||null,uc=qsP.get("utm_campaign")||null,uct=qsP.get("utm_content")||null,ut=qsP.get("utm_term")||null,fc=qsP.get("fbclid")||null;
+  // QA force flag: ?eh_force=a pins bucket A (escape fires regardless of
+  // AB/PO/eh_a state). ?eh_force=b pins bucket B (silent-return, lets you
+  // preview control behavior). Forced visits do NOT write the eh_b cookie
+  // and stamp forced:1 on every beacon so dashboards can filter QA traffic.
+  var ehForceRaw=qsP.get("eh_force");
+  var FORCED=(ehForceRaw==="a"||ehForceRaw==="b")?1:0;
+  var ehForce=FORCED?ehForceRaw:null;
   var paidSrc=us&&/^(facebook|instagram|fb|ig|meta)$/i.test(us);
   var paidMed=um&&/^(paid|cpc|ad)$/i.test(um);
   var isPaidAd=!!fc||(paidSrc&&paidMed);
@@ -103,7 +132,10 @@ try{
   // When PO (paid-only) is true, gate the test population on paid signal.
   // When false, escape any Meta IAB visitor (paid + organic).
   var isMetaIAB=(kind==="instagram"||kind==="threads");
-  var inTest=(isMetaIAB&&(!PO||isPaidAd))||postEscape;
+  // FORCED bypasses the paid_only gate so QA testers without paid UTMs
+  // still land in the test population. Still requires being inside an IG
+  // or Threads webview — the scheme handoff only works there.
+  var inTest=(isMetaIAB&&(FORCED||!PO||isPaidAd))||postEscape;
 
   function readSy(){try{return(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){return null;}}
   var sy=readSy();
@@ -124,7 +156,7 @@ try{
 
   function beacon(t,extra){
     try{
-      var p={m:M,v:V,t:t,b:bk||"",k:kind,sy:sy,sid:sid,ig:isMetaIAB?1:0,it:inTest?1:0,u:location.href,r:document.referrer||"",us:us,um:um,uc:uc,uct:uct,ut:ut,fc:fc,ts:Date.now()};
+      var p={m:M,v:V,t:t,b:bk||"",k:kind,sy:sy,sid:sid,ig:isMetaIAB?1:0,it:inTest?1:0,as:ASYNC,forced:FORCED,u:location.href,r:document.referrer||"",us:us,um:um,uc:uc,uct:uct,ut:ut,fc:fc,ts:Date.now()};
       if(extra)for(var key in extra)p[key]=extra[key];
       var body=JSON.stringify(p);
       var sent=false;
@@ -155,14 +187,19 @@ try{
   // Safari. Android uses intent:// to Chrome (works programmatically).
   if(kind==="facebook"||kind==="messenger"){
     if(postEscape){beacon("impression");return;}
-    try{if(sessionStorage.getItem("eh_fb")==="1"){beacon("escape_skipped",{r:"f"});return;}}catch(e){}
-    if(PO&&!isPaidAd){beacon("iab_detected");return;}
-    if(!KE){beacon("escape_skipped",{r:"k"});return;}
+    if(!FORCED){try{if(sessionStorage.getItem("eh_fb")==="1"){beacon("escape_skipped",{r:"f"});return;}}catch(e){}}
+    if(PO&&!isPaidAd&&!FORCED){beacon("iab_detected");return;}
+    if(!KE&&!FORCED){beacon("escape_skipped",{r:"k"});return;}
 
-    try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
-    if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
+    if(FORCED){bk=ehForce;}
+    else{
+      try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
+      if(!bk){bk=(Math.random()<SPLIT)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
+    }
     beacon("impression");
-    if(AB&&bk==="b")return;
+    // FORCED treats "b" as silent-return regardless of AB toggle, so QA
+    // can preview control behavior even with AB off.
+    if((AB||FORCED)&&bk==="b")return;
 
     var fbDest=location.href;
     try{
@@ -173,7 +210,7 @@ try{
       fbu.searchParams.set("eh_escape","1");
       fbDest=fbu.toString();
     }catch(e){}
-    try{sessionStorage.setItem("eh_fb","1");}catch(e){}
+    if(!FORCED){try{sessionStorage.setItem("eh_fb","1");}catch(e){}}
     beacon("escape_attempt");
 
     if(/Android/i.test(u)){
@@ -251,11 +288,16 @@ try{
     return;
   }
 
-  try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
-  // Post-escape Safari side: force bucket A (we know this visitor was escaped
-  // from bucket A in the IAB; we don't want to randomly re-bucket them).
-  if(postEscape){bk="a";try{document.cookie="eh_b=a;path=/;max-age=2592000;samesite=Lax";}catch(e){}}
-  else if(!bk){bk=(Math.random()<0.5)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
+  // FORCED pins bucket from the URL flag without writing the eh_b cookie,
+  // so QA traffic doesn't permanently bucket the tester's device.
+  if(FORCED){bk=ehForce;}
+  else{
+    try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
+    // Post-escape Safari side: force bucket A (we know this visitor was escaped
+    // from bucket A in the IAB; we don't want to randomly re-bucket them).
+    if(postEscape){bk="a";try{document.cookie="eh_b=a;path=/;max-age=2592000;samesite=Lax";}catch(e){}}
+    else if(!bk){bk=(Math.random()<SPLIT)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
+  }
 
   // Touch the Shopify cart: write eh_sid attribute AND capture cart_token.
   // cart_token is the ONLY identifier that survives every Shopify checkout flow
@@ -300,11 +342,14 @@ try{
 
   var attempted=false;
   try{attempted=sessionStorage.getItem("eh_a")==="1";}catch(e){}
-  if(attempted){beacon("escape_skipped",{r:"s"});return;}
-  if(AB&&bk==="b")return;
+  // FORCED bypasses every silent-exit so the tester can re-fire the
+  // redirect repeatedly. Bucket-B is the one exception below: force-b is
+  // the documented way to preview control, so we honor it.
+  if(attempted&&!FORCED){beacon("escape_skipped",{r:"s"});return;}
+  if((AB||FORCED)&&bk==="b")return;
   // Kill switch: skip the redirect entirely but keep tracking (impression
   // already fired above, so we still see traffic + the test population).
-  if(!KE){beacon("escape_skipped",{r:"k"});return;}
+  if(!KE&&!FORCED){beacon("escape_skipped",{r:"k"});return;}
 
   var dest=location.href;
   try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");nu.searchParams.set("eh_sid",sid);nu.searchParams.set("eh_escape","1");dest=nu.toString();}catch(e){}
@@ -314,7 +359,9 @@ try{
     ?atob("YmFyY2Vsb25hOi8vZXh0YnJvd3Nlci8/dXJsPQ==")
     :atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==");
   var s=schemePrefix+encodeURIComponent(dest);
-  try{sessionStorage.setItem("eh_a","1");}catch(e){}
+  // Don't write the sticky eh_a flag for forced QA visits so the tester
+  // can refresh and re-trigger the redirect without clearing storage.
+  if(!FORCED){try{sessionStorage.setItem("eh_a","1");}catch(e){}}
   beacon("escape_attempt");
   setTimeout(function(){try{location.replace(s);}catch(e){location.href=s;}},60);
 

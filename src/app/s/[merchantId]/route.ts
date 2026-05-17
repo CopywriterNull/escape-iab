@@ -31,6 +31,9 @@ export async function GET(
   // Default mode = escape every Meta IAB visitor (organic + paid). Brands
   // that want to restrict to paid clicks only must opt in via settings.
   let paidOnly = false;
+  // Default A/B split = 50/50 (legacy). Per-merchant override via the
+  // ab_split_pct column (migration 0016). Clamped server-side too.
+  let abSplitPct = 50;
   let valid = isValidShape;
   if (isValidShape) {
     const admin = getSupabaseAdmin();
@@ -51,6 +54,12 @@ export async function GET(
         // Only an explicit `true` in the DB keeps paid-only on. Missing
         // column or `false`/null reads as escape-all (the new default).
         paidOnly = m.paid_only === true;
+        // ab_split_pct lands as a number when migration 0016 is applied;
+        // until then, fall back to 50 so the snippet keeps serving.
+        const rawSplit = m.ab_split_pct;
+        if (typeof rawSplit === "number" && Number.isFinite(rawSplit)) {
+          abSplitPct = Math.min(99, Math.max(1, Math.round(rawSplit)));
+        }
       } else {
         valid = false;
       }
@@ -77,6 +86,7 @@ export async function GET(
     escapeEnabled,
     fallbackText,
     paidOnly,
+    abSplitPct,
   });
   const body = await obfuscateSnippet(raw);
 
