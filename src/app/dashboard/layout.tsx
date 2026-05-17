@@ -69,31 +69,39 @@ export default async function DashboardLayout({
     data: { user },
   } = await supabase!.auth.getUser();
   if (!user) redirect("/login");
-
-  const merchant = await getCurrentMerchant();
-  const impersonation = await getImpersonationStatus();
-  const live = merchant ? await getRecentForSidebar(merchant.id, 3) : [];
-
-  // Admin-only: fetch all merchants for the workspace switcher dropdown.
   const isAdmin = user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
-  let switcherRows: SwitcherRow[] = [];
-  if (isAdmin) {
-    const admin = getSupabaseAdmin();
-    if (admin) {
-      const { data } = await admin
-        .from("merchants")
-        .select("id, name, domain, user_id, created_at")
-        .order("created_at", { ascending: true });
-      switcherRows = (
-        (data ?? []) as { id: string; name: string | null; domain: string | null; user_id: string | null }[]
-      ).map((r) => ({
-        id: r.id,
-        name: r.name,
-        domain: r.domain,
-        ownedByMe: r.user_id === user.id,
-      }));
-    }
-  }
+  const adminClient = isAdmin ? getSupabaseAdmin() : null;
+
+  // Parallelize the four independent fetches that previously ran serial
+  // on every dashboard navigation. Live activity still depends on merchant
+  // so it's chained inside the same promise — the chain still runs in
+  // parallel with the impersonation + switcher fetches. Cuts ~4 round
+  // trips down to ~2.
+  const [merchantAndLive, impersonation, switcherDataRaw] = await Promise.all([
+    (async () => {
+      const merchant = await getCurrentMerchant();
+      const live = merchant ? await getRecentForSidebar(merchant.id, 3) : [];
+      return { merchant, live };
+    })(),
+    getImpersonationStatus(),
+    adminClient
+      ? adminClient
+          .from("merchants")
+          .select("id, name, domain, user_id, created_at")
+          .order("created_at", { ascending: true })
+          .then((r: { data: unknown }) => r.data)
+      : Promise.resolve(null),
+  ]);
+  const { merchant, live } = merchantAndLive;
+
+  const switcherRows: SwitcherRow[] = (
+    (switcherDataRaw ?? []) as { id: string; name: string | null; domain: string | null; user_id: string | null }[]
+  ).map((r) => ({
+    id: r.id,
+    name: r.name,
+    domain: r.domain,
+    ownedByMe: r.user_id === user.id,
+  }));
 
   return (
     <>

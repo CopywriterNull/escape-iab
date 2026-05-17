@@ -23,15 +23,18 @@ type Row = {
 export default async function AdminMerchants() {
   const supabase = await getSupabaseServer();
   const admin = getSupabaseAdmin();
-  const {
-    data: { user },
-  } = await supabase!.auth.getUser();
 
-  const { data } = await admin!
-    .from("merchants")
-    .select("id, name, domain, shopify_domain, user_id, plan, created_at")
-    .order("created_at", { ascending: false });
-  const rows: Row[] = (data as Row[]) ?? [];
+  // Auth check and merchants list don't depend on each other — fetch both
+  // in parallel. Events query has to wait for rows but is downstream anyway.
+  const [authRes, merchantsRes] = await Promise.all([
+    supabase!.auth.getUser(),
+    admin!
+      .from("merchants")
+      .select("id, name, domain, shopify_domain, user_id, plan, created_at")
+      .order("created_at", { ascending: false }),
+  ]);
+  const user = authRes.data.user;
+  const rows: Row[] = (merchantsRes.data as Row[]) ?? [];
 
   const since24 = new Date(Date.now() - 24 * 3600_000).toISOString();
   const eventCounts = new Map<string, number>();

@@ -62,19 +62,37 @@ export async function updateMerchantSettings(formData: FormData) {
     redirect("/dashboard/settings?saved=0&err=no_client");
   }
 
-  const { error } = await client
+  // Base set of fields that have existed since the earliest migrations.
+  // Everything in here is safe to write on any deployed schema.
+  const baseUpdate = {
+    ab_enabled: ab,
+    fallback_button: fb,
+    escape_enabled: escape,
+    paid_only: paidOnly,
+    fallback_text: fallback,
+    name,
+    domain,
+  };
+
+  let { error } = await client
     .from("merchants")
-    .update({
-      ab_enabled: ab,
-      fallback_button: fb,
-      escape_enabled: escape,
-      paid_only: paidOnly,
-      ab_split_pct: abSplitPct,
-      fallback_text: fallback,
-      name,
-      domain,
-    })
+    .update({ ...baseUpdate, ab_split_pct: abSplitPct })
     .eq("id", merchant.id);
+
+  // Postgres SQLSTATE 42703 = undefined_column. If migration 0016 isn't
+  // applied yet on this environment, gracefully degrade: write everything
+  // except ab_split_pct so the rest of the settings save isn't blocked.
+  // Operator sees a console warning but the save still succeeds.
+  if (
+    error &&
+    (error as { code?: string }).code === "42703" &&
+    /ab_split_pct/i.test(error.message ?? "")
+  ) {
+    console.warn(
+      "[updateMerchantSettings] ab_split_pct column missing — skipping that field. Apply migration 0016.",
+    );
+    ({ error } = await client.from("merchants").update(baseUpdate).eq("id", merchant.id));
+  }
 
   if (error) {
     console.error("[updateMerchantSettings] update failed", { id: merchant.id, error });

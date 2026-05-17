@@ -11,9 +11,13 @@ export default async function SettingsPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const merchant = await getCurrentMerchant();
-  const impersonation = await getImpersonationStatus();
-  const sp = await searchParams;
+  // Independent fetches — run in parallel so settings nav doesn't pay
+  // the round-trip cost three times.
+  const [merchant, impersonation, sp] = await Promise.all([
+    getCurrentMerchant(),
+    getImpersonationStatus(),
+    searchParams,
+  ]);
   const saved = sp.saved === "1";
   const err = sp.saved === "0" ? sp.err ?? "unknown" : null;
   if (!merchant) {
