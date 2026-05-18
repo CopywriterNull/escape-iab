@@ -312,7 +312,7 @@ export function TraceRunner({ merchants }: { merchants: Merchant[] }) {
   const defaultMerchant = merchants[0]?.id ?? "";
   const [merchantId, setMerchantId] = useState(defaultMerchant);
   const [uaId, setUaId] = useState("ig-ios");
-  const [targetPath, setTargetPath] = useState("/products/example?utm_source=ig&utm_medium=paid&fbclid=test");
+  const [targetInput, setTargetInput] = useState("/products/example?utm_source=ig&utm_medium=paid&fbclid=test");
   const [cookiesRaw, setCookiesRaw] = useState("");
   const [ehForce, setEhForce] = useState<"" | "a" | "b">("");
   const [asyncTag, setAsyncTag] = useState(false);
@@ -336,13 +336,24 @@ export function TraceRunner({ merchants }: { merchants: Merchant[] }) {
       if (!res.ok) throw new Error(`Snippet fetch failed: ${res.status}`);
       const body = await res.text();
 
-      // Build target URL — merchant domain + path. Default to https.
-      const host = merchant?.domain || "example.com";
-      let pathAndQuery = targetPath.trim() || "/";
-      if (!pathAndQuery.startsWith("/")) pathAndQuery = `/${pathAndQuery}`;
-      let targetUrl = `https://${host}${pathAndQuery}`;
+      // Build target URL. Two input modes:
+      //   1. Full URL ("https://anywhere.com/path?x=1") — used as-is. Lets
+      //      you point at a merchant's actual storefront route, or even a
+      //      domain other than the selected merchant's (useful for testing
+      //      what the snippet does on staging / preview / a different host).
+      //   2. Path only ("/products/x?utm=…") — joined with the selected
+      //      merchant's domain.
+      const raw = targetInput.trim();
+      let targetUrl: string;
+      if (/^https?:\/\//i.test(raw)) {
+        targetUrl = raw;
+      } else {
+        const host = merchant?.domain || "example.com";
+        const pathAndQuery = raw.startsWith("/") ? raw : `/${raw || ""}`;
+        targetUrl = `https://${host}${pathAndQuery}`;
+      }
       if (ehForce) {
-        targetUrl += (pathAndQuery.includes("?") ? "&" : "?") + `eh_force=${ehForce}`;
+        targetUrl += (targetUrl.includes("?") ? "&" : "?") + `eh_force=${ehForce}`;
       }
 
       // Parse cookies field — "k=v; k=v" pairs.
@@ -415,14 +426,35 @@ export function TraceRunner({ merchants }: { merchants: Merchant[] }) {
           </div>
         </Field>
 
-        <Field label="Path + query" hint="Appended to the merchant's domain. Use to test UTM / fbclid / utm_source variants.">
+        <Field
+          label="URL or path"
+          hint="Full URL (https://anywhere.com/path) — used as-is. Or a path (/products/x?…) — joined with the selected merchant's domain. Tip: paste a real ad-clicked URL to reproduce exactly what a paid visitor sees."
+        >
           <input
             type="text"
-            value={targetPath}
-            onChange={(e) => setTargetPath(e.target.value)}
-            placeholder="/products/example?utm_source=ig"
+            value={targetInput}
+            onChange={(e) => setTargetInput(e.target.value)}
+            placeholder="https://andar.com/products/x  —or—  /products/example?utm_source=ig"
             className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-[12.5px] font-mono"
           />
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {[
+              { l: "Paid IG ad", v: "/?utm_source=ig&utm_medium=paid&fbclid=test" },
+              { l: "Organic IG", v: "/?utm_source=ig" },
+              { l: "Product page", v: "/products/example" },
+              { l: "Cart", v: "/cart" },
+              { l: "Post-escape", v: "/?opened_external_browser=true" },
+            ].map((preset) => (
+              <button
+                key={preset.l}
+                type="button"
+                onClick={() => setTargetInput(preset.v)}
+                className="px-2 py-0.5 rounded text-[10.5px] font-mono bg-[var(--color-bg-elev)] border border-[var(--color-border-soft)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:border-[var(--color-border)] transition-colors"
+              >
+                {preset.l}
+              </button>
+            ))}
+          </div>
         </Field>
 
         <Field label="eh_force override" hint="Forces bucket regardless of AB / paid_only state. Adds the param to the URL.">
@@ -448,14 +480,48 @@ export function TraceRunner({ merchants }: { merchants: Merchant[] }) {
           </div>
         </Field>
 
-        <Field label="Cookies" hint='Format: "eh_b=a; eh_sid=...". Pre-loads the synthetic visitor with these cookies.'>
-          <input
-            type="text"
-            value={cookiesRaw}
-            onChange={(e) => setCookiesRaw(e.target.value)}
-            placeholder="eh_b=a"
-            className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-[12.5px] font-mono"
-          />
+        <Field
+          label="Cookies"
+          hint='Format: "eh_b=a; eh_sid=…". Pre-loads the synthetic visitor with these cookies. Leave blank for a true first-time visitor.'
+        >
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={cookiesRaw}
+              onChange={(e) => setCookiesRaw(e.target.value)}
+              placeholder="eh_b=a"
+              className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-[12.5px] font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => setCookiesRaw("")}
+              disabled={cookiesRaw.length === 0}
+              className="px-3 py-2 rounded-lg text-[11px] font-mono text-[var(--color-fg-dim)] bg-[var(--color-bg-elev)] border border-[var(--color-border-soft)] hover:text-[var(--color-fg)] hover:border-[var(--color-border)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Clear cookie field"
+            >
+              clear
+            </button>
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {[
+              { l: "Bucket A pinned", v: "eh_b=a" },
+              { l: "Bucket B pinned", v: "eh_b=b" },
+              { l: "Returning + sid", v: "eh_b=a; eh_sid=abc-123" },
+              { l: "Shopify visitor", v: "_shopify_y=shopify-y-value" },
+            ].map((preset) => (
+              <button
+                key={preset.l}
+                type="button"
+                onClick={() => setCookiesRaw(preset.v)}
+                className="px-2 py-0.5 rounded text-[10.5px] font-mono bg-[var(--color-bg-elev)] border border-[var(--color-border-soft)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:border-[var(--color-border)] transition-colors"
+              >
+                {preset.l}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 text-[10.5px] text-[var(--color-fg-muted)] font-mono leading-snug">
+            Each run starts from a clean slate — fresh sessionStorage, fresh snippet fetch (no-cache), cookies = only what&apos;s in this field at run time. Nothing carries over from prior runs.
+          </div>
         </Field>
 
         <label className="flex items-center gap-2.5 cursor-pointer">
