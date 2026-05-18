@@ -4,9 +4,13 @@ import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
 const IMP_COOKIE = "eh_imp_merchant_id";
 
-/** Total escape_attempt events since UTC midnight for the given merchant. */
+/** Total escape_attempt events since UTC midnight for the given merchant.
+ *  Uses the service-role admin client (no cookies) so callers like the
+ *  marketing lander stay static-renderable. RLS on escape_events blocks the
+ *  anon role, and the lander is anonymous — admin bypasses that without
+ *  opting the page into dynamic rendering. */
 export async function getEscapesToday(merchantId: string): Promise<number> {
-  const supabase = await getSupabaseServer();
+  const supabase = getSupabaseAdmin();
   if (!supabase) return 0;
   const midnight = new Date();
   midnight.setUTCHours(0, 0, 0, 0);
@@ -165,7 +169,9 @@ export async function getTestFunnel(
     purchases: { a: 0, b: 0 },
     revenue_cents: { a: 0, b: 0 },
   };
-  const supabase = await getSupabaseServer();
+  // Service-role client (no cookies) so the marketing lander stays
+  // static-renderable. The eh_test_funnel RPC is not granted to anon.
+  const supabase = getSupabaseAdmin();
   if (!supabase) return empty;
   const since = new Date(Date.now() - days * 86400_000).toISOString();
   // Aggregate server-side via RPC to avoid the PostgREST 1000-row cap.
