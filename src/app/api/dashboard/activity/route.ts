@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentMerchant } from "@/lib/db";
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   if (!merchant) {
     return NextResponse.json({ rows: [] }, { status: 401 });
   }
-  const supabase = await getSupabaseServer();
+  const supabase = getSupabaseAdmin() ?? (await getSupabaseServer());
   if (!supabase) return NextResponse.json({ rows: [] });
 
   const url = new URL(req.url);

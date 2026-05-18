@@ -14,7 +14,7 @@ import {
   type PeriodDelta,
   type SourceRow,
 } from "@/lib/db";
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
 import {
   ActivitySkeleton,
   BannerSkeleton,
@@ -94,7 +94,7 @@ const fetchActivity = cache(async function fetchActivity(
   days: number,
   limit = 12,
 ): Promise<ActivityRow[]> {
-  const supabase = await getSupabaseServer();
+  const supabase = getSupabaseAdmin() ?? (await getSupabaseServer());
   if (!supabase) return [];
   const since = new Date(Date.now() - days * 86400_000).toISOString();
   const { data } = await supabase

@@ -4,6 +4,17 @@
 
 > Single review-and-action document. The "do this first" sits at the top; deeper architecture / history lives in [`NOTES.md`](./NOTES.md) and session-level details in [`HANDOFF.md`](./HANDOFF.md).
 
+## 2026-05-18 Codex update
+
+The previous top-priority notes about `0016_ab_split_pct.sql` being pending are stale. Live Supabase already has `merchants.ab_split_pct`, `eh_test_funnel`, and `eh_test_sources`, and telemetry is actively arriving.
+
+What was actually causing the slow/blank dashboard:
+- **Admin impersonation data blanking:** several dashboard reads used the cookie-auth Supabase client after `getCurrentMerchant()` had already resolved an impersonated merchant. RLS then hid rows for merchants not owned by the admin user.
+- **Slow aggregate reads:** `eh_test_funnel` and `eh_test_sources` were timing out against the growing `escape_events` table. New concurrent indexes are live, and both RPCs now force custom plans so Postgres uses those indexes.
+- **Docs drift:** `HANDOFF.md` still reflects the earlier pre-deploy state. Treat this dated note as the fresher operational state.
+
+New migration file on disk: `supabase/migrations/0017_dashboard_perf_and_rls.sql`.
+
 ---
 
 ## ⚡ DO THESE NOW (top priority)

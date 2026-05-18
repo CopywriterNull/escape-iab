@@ -18,7 +18,7 @@ type LiveRow = {
 };
 
 async function getRecentForSidebar(merchantId: string, limit = 3): Promise<LiveRow[]> {
-  const supabase = await getSupabaseServer();
+  const supabase = getSupabaseAdmin() ?? (await getSupabaseServer());
   if (!supabase) return [];
   const { data } = await supabase
     .from("escape_events")

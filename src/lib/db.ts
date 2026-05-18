@@ -4,6 +4,10 @@ import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
 const IMP_COOKIE = "eh_imp_merchant_id";
 
+async function getTelemetryClient() {
+  return getSupabaseAdmin() ?? (await getSupabaseServer());
+}
+
 /** Total escape_attempt events since UTC midnight for the given merchant.
  *  Uses the service-role admin client (no cookies) so callers like the
  *  marketing lander stay static-renderable. RLS on escape_events blocks the
@@ -222,7 +226,7 @@ export async function getRollups(
   merchantId: string,
   days = 14,
 ): Promise<DailyRollup[]> {
-  const supabase = await getSupabaseServer();
+  const supabase = await getTelemetryClient();
   if (!supabase) return [];
   const since = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
   const { data } = await supabase
@@ -301,7 +305,7 @@ export async function getPeriodDelta(
   merchantId: string,
   days: number,
 ): Promise<PeriodDelta> {
-  const supabase = await getSupabaseServer();
+  const supabase = await getTelemetryClient();
   if (!supabase || days < 1) {
     // daily_rollups is day-grain; sub-day ranges can't compare cleanly.
     return {
@@ -360,7 +364,7 @@ export async function getSourceBreakdown(
   days = 14,
   limit = 10,
 ): Promise<SourceRow[]> {
-  const supabase = await getSupabaseServer();
+  const supabase = await getTelemetryClient();
   if (!supabase) return [];
   const since = new Date(Date.now() - days * 86400_000).toISOString();
   const { data, error } = await supabase.rpc("eh_test_sources", {
@@ -391,7 +395,7 @@ export async function getIabBreakdown(
   merchantId: string,
   days = 14,
 ): Promise<Record<IabKind, number>> {
-  const supabase = await getSupabaseServer();
+  const supabase = await getTelemetryClient();
   const empty: Record<IabKind, number> = {
     instagram: 0,
     facebook: 0,
@@ -472,7 +476,7 @@ export async function getUnattributedPurchaseStats(
   merchantId: string,
   days = 14,
 ): Promise<{ count: number; revenue_cents: number }> {
-  const supabase = await getSupabaseServer();
+  const supabase = await getTelemetryClient();
   if (!supabase) return { count: 0, revenue_cents: 0 };
   const since = new Date(Date.now() - days * 86400_000).toISOString();
   const { data } = await supabase

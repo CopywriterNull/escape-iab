@@ -4,6 +4,8 @@ Where we left off after a multi-day push to make andar.com escape correctly, har
 
 For the canonical state of the project (stack, schema, attribution architecture, known issues) **read `NOTES.md` first.** This doc is the live "what just happened + what's next" overlay.
 
+> **2026-05-18 update:** parts of this handoff are stale. `0016_ab_split_pct.sql` is already applied in live Supabase, v10-era code is no longer sitting uncommitted, and the immediate dashboard issue was traced to RLS-hidden admin impersonation reads plus slow `escape_events` aggregates. See the top of `MASTER.md` and migration `0017_dashboard_perf_and_rls.sql`.
+
 ---
 
 ## ✅ What's working
