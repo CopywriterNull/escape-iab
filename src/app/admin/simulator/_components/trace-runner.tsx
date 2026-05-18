@@ -92,6 +92,34 @@ type TraceResult = {
   asyncFlag: boolean;
 };
 
+/** Server-side install verification: did we find the snippet tag in the
+ *  target URL's real HTML, and is it deployed correctly (no async/defer,
+ *  in <head>, pointing at the right merchant). */
+type InstallCheck =
+  | { ok: false; stage?: string; error: string; url?: string }
+  | {
+      ok: true;
+      url: string;
+      finalUrl: string;
+      status: number;
+      bytesRead: number;
+      truncated: boolean;
+      expectedMerchantId: string;
+      snippetFound: boolean;
+      tag: string | null;
+      hasAsync: boolean;
+      hasDefer: boolean;
+      position: "head" | "body" | "unknown" | null;
+      wrongMerchantTags: Array<{
+        tag: string;
+        merchantId: string;
+        hasAsync: boolean;
+        hasDefer: boolean;
+        position: "head" | "body" | "unknown";
+      }>;
+      anyEscapeHatchTag: boolean;
+    };
+
 function safeJsonParse(s: unknown): Record<string, unknown> {
   if (typeof s !== "string") return { _raw: String(s) };
   try {
@@ -317,6 +345,8 @@ export function TraceRunner({ merchants }: { merchants: Merchant[] }) {
   const [ehForce, setEhForce] = useState<"" | "a" | "b">("");
   const [asyncTag, setAsyncTag] = useState(false);
   const [result, setResult] = useState<TraceResult | null>(null);
+  const [installCheck, setInstallCheck] = useState<InstallCheck | null>(null);
+  const [installLoading, setInstallLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -326,8 +356,10 @@ export function TraceRunner({ merchants }: { merchants: Merchant[] }) {
   async function onRun() {
     if (!merchantId) return;
     setLoading(true);
+    setInstallLoading(true);
     setError(null);
     setResult(null);
+    setInstallCheck(null);
     try {
       // Fetch the production snippet body. Bust any CDN cache with a
       // unique query so we always trace the latest deployed code.
@@ -374,8 +406,32 @@ export function TraceRunner({ merchants }: { merchants: Merchant[] }) {
         asyncTag,
       });
       setResult(r);
+
+      // Kick off the live install check in the background — independent of
+      // the synthetic trace. Tells the operator whether the snippet is
+      // actually deployed at the target URL (the synthetic trace assumes
+      // it would run; this verifies it actually exists in the HTML).
+      void (async () => {
+        try {
+          const ic = await fetch("/api/admin/install-check", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: targetUrl, merchantId }),
+          });
+          const data = (await ic.json()) as InstallCheck;
+          setInstallCheck(data);
+        } catch (e) {
+          setInstallCheck({
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        } finally {
+          setInstallLoading(false);
+        }
+      })();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setInstallLoading(false);
     } finally {
       setLoading(false);
     }
@@ -562,6 +618,10 @@ export function TraceRunner({ merchants }: { merchants: Merchant[] }) {
             <strong className="text-[var(--color-danger)]">Trace failed</strong>{" "}
             <span className="text-[var(--color-fg-dim)] font-mono">— {error}</span>
           </div>
+        ) : null}
+
+        {installLoading || installCheck ? (
+          <InstallCheckPanel data={installCheck} loading={installLoading} />
         ) : null}
 
         {result ? (
@@ -812,6 +872,156 @@ function EventRow({ event, index }: { event: TraceEvent; index: number }) {
       {idx}
       <span className="px-1.5 py-0.5 rounded bg-[var(--color-danger)]/15 text-[var(--color-danger)] text-[10.5px] mr-2">fatal</span>
       <span className="text-[var(--color-danger)] break-all">{event.message}</span>
+    </div>
+  );
+}
+
+/** Live install verification panel. Distinct from the synthetic trace —
+ *  the trace says "would the snippet escape if it ran"; this says "is
+ *  the snippet actually deployed at this URL". Both are necessary. */
+function InstallCheckPanel({ data, loading }: { data: InstallCheck | null; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-card)] px-5 py-4">
+        <div className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-fg-muted)]">
+          Live install check
+        </div>
+        <div className="mt-2 text-[12.5px] text-[var(--color-fg-dim)] font-mono flex items-center gap-2">
+          <span className="size-1.5 rounded-full bg-[var(--color-accent)] animate-pulse" />
+          Fetching {/* target URL would be nice here but we don't have it in scope */} target HTML…
+        </div>
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  if (!data.ok) {
+    return (
+      <div className="rounded-xl border border-[var(--color-danger)]/40 bg-[var(--color-danger-soft)]/30 px-5 py-4">
+        <div className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-danger)]">
+          Live install check — failed
+        </div>
+        <div className="mt-1.5 text-[13px] font-semibold tracking-tight text-[var(--color-fg)]">
+          Couldn&apos;t fetch the target page
+        </div>
+        <div className="mt-1 text-[12px] text-[var(--color-fg-dim)] font-mono break-all">
+          {data.stage ? `[${data.stage}] ` : ""}{data.error}
+        </div>
+        <div className="mt-2 text-[11px] text-[var(--color-fg-muted)] leading-snug">
+          Common causes: target URL is unreachable (DNS, 5xx), anti-bot blocked our fetch (rare with IG UA),
+          or the URL itself is invalid. The synthetic trace below is still valid —
+          it just tests the snippet&apos;s logic, not deployment.
+        </div>
+      </div>
+    );
+  }
+
+  // Three verdict states: installed correctly / installed with async problem / not installed
+  const installed = data.snippetFound;
+  const problem = installed && (data.hasAsync || data.hasDefer);
+
+  if (!installed && data.anyEscapeHatchTag) {
+    // Snippet present BUT pointed at a different merchant ID — install mistake.
+    return (
+      <div className="rounded-xl border border-[var(--color-danger)]/40 bg-[var(--color-danger-soft)]/30 px-5 py-4 space-y-2">
+        <div className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-danger)]">
+          Live install check — wrong merchant ID
+        </div>
+        <div className="text-[15px] font-semibold tracking-tight text-[var(--color-fg)]">
+          EscapeHatch is installed on this URL, but with the wrong merchant ID
+        </div>
+        <div className="text-[12px] text-[var(--color-fg-dim)] leading-snug">
+          Expected{" "}
+          <code className="font-mono text-[11.5px] bg-[var(--color-bg-elev)] px-1 py-0.5 rounded">
+            {data.expectedMerchantId}
+          </code>
+          {" "}— found{" "}
+          {data.wrongMerchantTags.map((t, i) => (
+            <span key={i}>
+              <code className="font-mono text-[11.5px] bg-[var(--color-bg-elev)] px-1 py-0.5 rounded">
+                {t.merchantId}
+              </code>
+              {i < data.wrongMerchantTags.length - 1 ? ", " : ""}
+            </span>
+          ))}
+          .
+        </div>
+        <div className="text-[11px] text-[var(--color-fg-muted)] font-mono break-all">
+          {data.finalUrl} · {data.status} · {(data.bytesRead / 1024).toFixed(0)} KB
+        </div>
+      </div>
+    );
+  }
+
+  if (!installed) {
+    return (
+      <div className="rounded-xl border border-[var(--color-danger)]/40 bg-[var(--color-danger-soft)]/30 px-5 py-4 space-y-2">
+        <div className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-danger)]">
+          Live install check — NOT INSTALLED
+        </div>
+        <div className="text-[15px] font-semibold tracking-tight text-[var(--color-fg)]">
+          Snippet not found in this URL&apos;s HTML
+        </div>
+        <div className="text-[12.5px] text-[var(--color-fg-dim)] leading-snug">
+          The synthetic trace below assumes the snippet runs. It doesn&apos;t — there&apos;s no{" "}
+          <code className="font-mono text-[11.5px] bg-[var(--color-bg-elev)] px-1 py-0.5 rounded">
+            &lt;script src=&quot;https://getescapehatch.com/s/{data.expectedMerchantId}.js&quot;&gt;
+          </code>
+          {" "}in the served HTML. Until the merchant installs it, real IG visitors will see the broken IAB.
+        </div>
+        <div className="text-[11px] text-[var(--color-fg-muted)] font-mono break-all">
+          {data.finalUrl} · {data.status} · {(data.bytesRead / 1024).toFixed(0)} KB scanned
+          {data.truncated ? " (truncated at 3MB)" : ""}
+        </div>
+      </div>
+    );
+  }
+
+  if (problem) {
+    return (
+      <div className="rounded-xl border border-[var(--color-danger)]/40 bg-[var(--color-danger-soft)]/30 px-5 py-4 space-y-3">
+        <div className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-danger)]">
+          Live install check — async/defer detected
+        </div>
+        <div className="text-[15px] font-semibold tracking-tight text-[var(--color-fg)]">
+          Snippet is installed but will be silently dropped by Instagram
+        </div>
+        <div className="text-[12.5px] text-[var(--color-fg-dim)] leading-snug">
+          The script tag has{" "}
+          {data.hasAsync ? <code className="font-mono text-[11.5px] bg-[var(--color-bg-elev)] px-1 py-0.5 rounded">async</code> : null}
+          {data.hasAsync && data.hasDefer ? " + " : null}
+          {data.hasDefer ? <code className="font-mono text-[11.5px] bg-[var(--color-bg-elev)] px-1 py-0.5 rounded">defer</code> : null}
+          {" "}— the IG WebView commits to rendering before our snippet runs, and the{" "}
+          <code className="font-mono text-[11.5px] bg-[var(--color-bg-elev)] px-1 py-0.5 rounded">extbrowser</code>{" "}
+          scheme is silently dropped. Remove the attribute. Check whether Edgemesh or a theme-optimizer app is auto-adding it.
+        </div>
+        <details className="text-[10.5px] font-mono text-[var(--color-fg-muted)]">
+          <summary className="cursor-pointer">found tag</summary>
+          <pre className="mt-1 whitespace-pre-wrap break-all">{data.tag}</pre>
+        </details>
+        <div className="text-[11px] text-[var(--color-fg-muted)] font-mono break-all">
+          {data.finalUrl} · {data.status} · position: {data.position ?? "?"}
+        </div>
+      </div>
+    );
+  }
+
+  // Happy path
+  return (
+    <div className="rounded-xl border border-[var(--color-success)]/40 bg-[color-mix(in_srgb,var(--color-success)_8%,transparent)] px-5 py-4 space-y-2">
+      <div className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-success)]">
+        Live install check — installed correctly
+      </div>
+      <div className="text-[15px] font-semibold tracking-tight text-[var(--color-fg)]">
+        Snippet found, sync, in {data.position === "head" ? <>{"<head>"}</> : <>the document</>}
+      </div>
+      <details className="text-[10.5px] font-mono text-[var(--color-fg-muted)]">
+        <summary className="cursor-pointer">found tag</summary>
+        <pre className="mt-1 whitespace-pre-wrap break-all">{data.tag}</pre>
+      </details>
+      <div className="text-[11px] text-[var(--color-fg-muted)] font-mono break-all">
+        {data.finalUrl} · {data.status} · {(data.bytesRead / 1024).toFixed(0)} KB scanned
+      </div>
     </div>
   );
 }

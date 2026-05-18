@@ -18,12 +18,11 @@ export default async function AdminSimulator() {
         <div className="eyebrow">Admin · Simulator</div>
         <h1 className="mt-2 h-display text-[28px] tracking-tight">Snippet trace runner</h1>
         <p className="mt-1 text-[13px] text-[var(--color-fg-dim)] max-w-2xl leading-relaxed">
-          Run the deployed snippet against a synthetic visitor — pick a merchant, a user-agent preset, a URL, and any cookies the test visitor should already have. The compiled JS executes in a sandboxed scope where every beacon, cookie write, sessionStorage write, and{" "}
-          <code className="font-mono">location.replace</code> is captured into a step-by-step trace.
+          Two independent checks every run: (1) <strong>live install check</strong> — server-side fetches the target URL with an IG iOS UA and grep&apos;s the HTML for the snippet tag. Answers &quot;is it actually deployed.&quot; (2) <strong>synthetic trace</strong> — the production snippet body executes in a sandboxed scope against the chosen UA + URL + cookies. Answers &quot;would it escape if it ran.&quot;
         </p>
         <p className="mt-2 text-[12px] text-[var(--color-fg-muted)] max-w-2xl leading-relaxed">
-          Tests every gate up to the redirect call — paid_only / kill switch / bucket assignment / eh_force / eh_a sticky / async detection. The one thing it <em>can&apos;t</em> verify is whether iOS actually honors the{" "}
-          <code className="font-mono">instagram://extbrowser/?url=…</code> handoff once we fire it; that&apos;s an OS-level behavior, not snippet logic.
+          Together they cover every gate up to the redirect call — install status, async/defer detection, paid_only / kill switch / bucket assignment / eh_force / eh_a sticky. The one thing they <em>can&apos;t</em> verify is whether iOS actually honors the{" "}
+          <code className="font-mono">instagram://extbrowser/?url=…</code> handoff once we fire it; that&apos;s OS-level, needs one real-phone test per build.
         </p>
       </div>
 
