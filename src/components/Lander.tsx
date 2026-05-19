@@ -8,6 +8,7 @@ import { PointerTracker } from "@/components/magic/PointerTracker";
 import { TextHighlighter } from "@/components/magic/TextHighlighter";
 import { StickyMobileCTAInner } from "@/components/magic/StickyMobileCTAInner";
 import { HowItWorksDemo } from "@/components/HowItWorksDemo";
+import { EarlyAccessForm } from "@/components/EarlyAccessForm";
 
 type Theme = "dark" | "light";
 
@@ -271,26 +272,7 @@ function HeroProof({ proof }: { proof?: LanderProof }) {
 }
 
 function Waitlist() {
-  return (
-    <form
-      id="waitlist"
-      action="/login"
-      method="GET"
-      className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-2.5 max-w-md mx-auto"
-    >
-      <input
-        type="email"
-        name="email"
-        required
-        placeholder="you@yourstore.com"
-        className="w-full sm:flex-1 px-4 py-3 rounded-full bg-[var(--color-card)] border border-[var(--color-border)] text-sm placeholder:text-[var(--color-fg-muted)] focus:outline-none focus:border-[var(--color-accent)]/60 focus:ring-2 focus:ring-[color-mix(in_srgb,var(--color-accent)_20%,transparent)]"
-      />
-      <RainbowButton type="submit" className="w-full sm:w-auto group !h-[46px] !px-5 !text-sm">
-        <span>Get early access</span>
-        <span className="btn-icon"><ArrowRight /></span>
-      </RainbowButton>
-    </form>
-  );
+  return <EarlyAccessForm />;
 }
 
 /* -------- Hero visual: side-by-side phones -------- */
