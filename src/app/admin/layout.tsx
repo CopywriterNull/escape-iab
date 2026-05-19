@@ -84,6 +84,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <nav className="flex items-center gap-1 text-[12px]">
             <Link href="/admin" className="px-2 py-1 text-[var(--color-fg-muted)]">Overview</Link>
             <Link href="/admin/merchants" className="px-2 py-1 text-[var(--color-fg-muted)]">Merchants</Link>
+            <Link href="/admin/health" className="px-2 py-1 text-[var(--color-fg-muted)]">Health</Link>
             <Link href="/admin/guides" className="px-2 py-1 text-[var(--color-fg-muted)]">Guides</Link>
             <Link href="/admin/diagnostics" className="px-2 py-1 text-[var(--color-fg-muted)]">Diag</Link>
           </nav>
