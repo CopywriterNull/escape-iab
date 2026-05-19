@@ -5,21 +5,27 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminOverview() {
   const admin = getSupabaseAdmin();
-  const since24 = new Date(Date.now() - 24 * 3600_000).toISOString();
 
-  const [merchantsRes, events24Res, purchases24Res] = await Promise.all([
-    admin!.from("merchants").select("id, name, created_at", { count: "exact" }),
-    admin!.from("escape_events").select("merchant_id, event_type", { count: "exact", head: false }).gte("created_at", since24),
-    admin!.from("escape_events").select("value_cents", { head: false }).eq("event_type", "purchase").gte("created_at", since24),
+  const [merchantsRes, platformRes] = await Promise.all([
+    admin!.from("merchants").select("id, name, created_at"),
+    admin!.rpc("eh_admin_platform_24h"),
   ]);
 
-  const merchantCount = merchantsRes.count ?? 0;
-  const eventRows = (events24Res.data ?? []) as { merchant_id: string }[];
-  const events24 = eventRows.length;
-  const liveMerchants = new Set(eventRows.map((e) => e.merchant_id)).size;
-  const purchaseRows = (purchases24Res.data ?? []) as { value_cents: number | null }[];
-  const purchases24 = purchaseRows.length;
-  const revenue24 = purchaseRows.reduce((sum, r) => sum + (r.value_cents ?? 0), 0);
+  const platform = Array.isArray(platformRes.data)
+    ? (platformRes.data[0] as {
+        merchant_count: number | string;
+        events_24h: number | string;
+        live_merchants_24h: number | string;
+        purchases_24h: number | string;
+        revenue_cents_24h: number | string;
+      } | undefined)
+    : undefined;
+
+  const merchantCount = toInt(platform?.merchant_count) || ((merchantsRes.data as unknown[] | null) ?? []).length;
+  const events24 = toInt(platform?.events_24h);
+  const liveMerchants = toInt(platform?.live_merchants_24h);
+  const purchases24 = toInt(platform?.purchases_24h);
+  const revenue24 = toInt(platform?.revenue_cents_24h);
 
   // Most recent merchants
   const recent = ((merchantsRes.data as { id: string; name: string | null; created_at: string }[]) ?? [])
@@ -76,6 +82,15 @@ export default async function AdminOverview() {
       ) : null}
     </div>
   );
+}
+
+function toInt(v: number | string | null | undefined): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
 }
 
 function Stat({ label, value, sub, mono }: { label: string; value: string; sub?: string; mono?: boolean }) {

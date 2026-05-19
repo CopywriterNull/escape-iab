@@ -21,6 +21,13 @@ type Row = {
   created_at: string;
 };
 
+type ActivityRow = {
+  merchant_id: string;
+  events_24h: number | string;
+  last_event_at: string | null;
+  last_event_type: string | null;
+};
+
 export default async function AdminMerchants() {
   const supabase = await getSupabaseServer();
   const admin = getSupabaseAdmin();
@@ -37,19 +44,13 @@ export default async function AdminMerchants() {
   const user = authRes.data.user;
   const rows: Row[] = (merchantsRes.data as Row[]) ?? [];
 
-  const since24 = new Date(Date.now() - 24 * 3600_000).toISOString();
   const eventCounts = new Map<string, number>();
   const eventLastSeen = new Map<string, string>();
-  if (rows.length > 0) {
-    const { data: events } = await admin!
-      .from("escape_events")
-      .select("merchant_id, created_at")
-      .gte("created_at", since24)
-      .in("merchant_id", rows.map((r) => r.id));
-    for (const e of (events ?? []) as { merchant_id: string; created_at: string }[]) {
-      eventCounts.set(e.merchant_id, (eventCounts.get(e.merchant_id) ?? 0) + 1);
-      const prev = eventLastSeen.get(e.merchant_id);
-      if (!prev || e.created_at > prev) eventLastSeen.set(e.merchant_id, e.created_at);
+  const { data: activity } = await admin!.rpc("eh_admin_merchant_activity_24h");
+  for (const row of (activity ?? []) as ActivityRow[]) {
+    eventCounts.set(row.merchant_id, toInt(row.events_24h));
+    if (row.last_event_at) {
+      eventLastSeen.set(row.merchant_id, row.last_event_at);
     }
   }
 
@@ -112,6 +113,15 @@ export default async function AdminMerchants() {
       </div>
     </div>
   );
+}
+
+function toInt(v: number | string | null | undefined): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
 }
 
 function MerchantRow({

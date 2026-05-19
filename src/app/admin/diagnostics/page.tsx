@@ -14,6 +14,13 @@ type Row = {
   user_id: string | null;
 };
 
+type ActivityRow = {
+  merchant_id: string;
+  events_24h: number | string;
+  last_event_at: string | null;
+  last_event_type: string | null;
+};
+
 export default async function AdminDiagnostics() {
   const admin = getSupabaseAdmin();
   const { data } = await admin!.from("merchants").select("*").order("created_at", { ascending: true });
@@ -32,20 +39,16 @@ export default async function AdminDiagnostics() {
     } satisfies Row;
   });
 
-  const since24 = new Date(Date.now() - 24 * 3600_000).toISOString();
   const lastEvent = new Map<string, { at: string; type: string }>();
   const eventCount = new Map<string, number>();
-  if (rows.length > 0) {
-    const { data: events } = await admin!
-      .from("escape_events")
-      .select("merchant_id, event_type, created_at")
-      .gte("created_at", since24)
-      .in("merchant_id", rows.map((r) => r.id))
-      .order("created_at", { ascending: false });
-    for (const e of (events ?? []) as { merchant_id: string; event_type: string; created_at: string }[]) {
-      eventCount.set(e.merchant_id, (eventCount.get(e.merchant_id) ?? 0) + 1);
-      const prev = lastEvent.get(e.merchant_id);
-      if (!prev || e.created_at > prev.at) lastEvent.set(e.merchant_id, { at: e.created_at, type: e.event_type });
+  const { data: activity } = await admin!.rpc("eh_admin_merchant_activity_24h");
+  for (const row of (activity ?? []) as ActivityRow[]) {
+    eventCount.set(row.merchant_id, toInt(row.events_24h));
+    if (row.last_event_at) {
+      lastEvent.set(row.merchant_id, {
+        at: row.last_event_at,
+        type: row.last_event_type ?? "event",
+      });
     }
   }
 
@@ -123,6 +126,15 @@ export default async function AdminDiagnostics() {
       </div>
     </div>
   );
+}
+
+function toInt(v: number | string | null | undefined): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
 }
 
 function Flag({

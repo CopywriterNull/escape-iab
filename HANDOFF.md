@@ -8,6 +8,8 @@ For the canonical state of the project (stack, schema, attribution architecture,
 
 > **2026-05-19 update:** latest production work is pushed to `main`. Dashboard impersonation/settings data loading is fixed, homepage proof language now uses percentage lift/RPV lift instead of recovered-dollar framing, homepage escape counter uses all merchants over the last rolling 24h, and the early-access CTA is now a lead form posting to `/api/early-access`. The form forwards to `EARLY_ACCESS_WEBHOOK_URL`, which still needs to be set in Vercel once the webhook URL is available.
 
+> **2026-05-19 report/ops update:** `/dashboard/report` is now the first client-report surface. It is still login/impersonation gated, but it packages the exact data we want to later expose through `/share/[token]`: validity status, RPV lift, CVR lift, projected revenue delta, funnel proof, source mix, and caveats. Shared validity math lives in `src/lib/test-validity.ts`. Admin overview/merchant/diagnostics event counts now use service-role-only summary RPCs from `supabase/migrations/0019_admin_summary_rpcs.sql` instead of pulling raw 24h event rows.
+
 ---
 
 ## 2026-05-19 operator notes
@@ -22,7 +24,7 @@ For the canonical state of the project (stack, schema, attribution architecture,
 
 ### Public / password-protected merchant share page
 Yes, this is doable. Recommended shape:
-- Add a public share route like `/share/[token]` or `/report/[merchantId]`.
+- Add a public share route like `/share/[token]` that reuses the `/dashboard/report` data/model.
 - Store share settings in a new table, e.g. `merchant_share_links` with `merchant_id`, `token_hash`, `enabled`, optional `password_hash`, optional `expires_at`, and allowed date range.
 - The public page should show a read-only, simplified version of dashboard metrics. Avoid raw event rows, install controls, settings, merchant IDs, or admin actions.
 - For password protection, require a password once, then set an httpOnly short-lived cookie scoped to that share route.

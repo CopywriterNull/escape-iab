@@ -262,6 +262,7 @@ export default async function DashboardLayout({
             ) : null}
             <nav className="flex items-center gap-1">
               <Link href="/dashboard" className="px-2 py-1 text-[var(--color-fg)] font-medium">Overview</Link>
+              <Link href="/dashboard/report" className="px-2 py-1 text-[var(--color-fg-muted)]">Report</Link>
               <Link href="/dashboard/install" className="px-2 py-1 text-[var(--color-fg-muted)]">Install</Link>
               <Link href="/dashboard/settings" className="px-2 py-1 text-[var(--color-fg-muted)]">Settings</Link>
             </nav>

@@ -36,8 +36,14 @@ Merchant user access state:
 - There is no invite-by-email UI yet. Manual assignment means updating `merchants.user_id` to the target Supabase Auth user id after they have logged in once.
 - Auth callback currently creates a blank merchant for first-time users without a merchant. A future invite flow should short-circuit that when a pending invite exists.
 
+New operator/reporting work:
+- `/dashboard/report` now exists as the logged-in client-report foundation. It packages the existing A/B funnel into a client-safe readout: validity status, RPV lift, CVR lift, projected revenue delta, funnel proof, source mix, and caveats.
+- `src/lib/test-validity.ts` is the reusable source of truth for report/test validity. Future public report routes should use it instead of re-implementing confidence/sample-size language.
+- New migration `0019_admin_summary_rpcs.sql` adds service-role-only admin summary RPCs so `/admin`, `/admin/merchants`, and `/admin/diagnostics` no longer pull raw 24h event rows to compute counts.
+- Supabase advisors were run after `0019`; new admin RPC warnings were resolved by explicitly revoking `anon` and `authenticated` execution. Remaining advisor warnings are pre-existing functions/auth settings.
+
 Client-facing share page idea:
-- Best v1: create `/share/[token]` with a `merchant_share_links` table.
+- Best v1: wrap the new `/dashboard/report` readout in `/share/[token]` with a `merchant_share_links` table.
 - Store only hashed tokens/passwords, `enabled`, optional `expires_at`, and `merchant_id`.
 - Render a read-only report/dashboard with summary metrics only. No settings, raw rows, install snippets, admin controls, or merchant UUIDs.
 - Password-protected shares can set an httpOnly route-scoped cookie after successful password entry.
