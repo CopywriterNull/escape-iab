@@ -203,22 +203,23 @@ function summarize(merchant: MerchantRow, events: EventRow[], counts: EventCount
   const lastIgImpression = events.find((e) => e.event_type === "impression" && e.iab_kind === "instagram") ?? null;
   const lastPixelEvent =
     events.find((e) => e.event_type === "checkout_started" || e.event_type === "add_to_cart") ?? null;
-  const oldPixelEvent = events.find((e) => e.event_type === "product_viewed") ?? null;
+  const lastProductViewed = events.find((e) => e.event_type === "product_viewed") ?? null;
   const lastPurchase = events.find((e) => e.event_type === "purchase") ?? null;
   const attributedPurchase = events.find(
     (e) => e.event_type === "purchase" && (e.in_test === true || !!e.cart_token || !!e.order_id),
   ) ?? null;
   const lastAnyEvent = events[0] ?? null;
 
-  const hasOldPixelNoise = counts.productViewed > 0 || !!oldPixelEvent;
-  const pixelTone: Tone = hasOldPixelNoise ? "warn" : lastPixelEvent ? "success" : "muted";
-  const pixelLabel = hasOldPixelNoise ? `${counts.productViewed} old PV` : lastPixelEvent ? ago(lastPixelEvent.created_at) : "No pixel events";
-  const pixelDetail = oldPixelEvent
-    ? "product_viewed seen recently"
-    : hasOldPixelNoise
-      ? "product_viewed seen in 30d"
-    : lastPixelEvent
+  const pixelTone: Tone = lastPixelEvent || lastProductViewed ? "success" : "muted";
+  const pixelLabel = lastPixelEvent
+    ? ago(lastPixelEvent.created_at)
+    : lastProductViewed
+      ? `${counts.productViewed} product views`
+      : "No pixel events";
+  const pixelDetail = lastPixelEvent
       ? "Checkout/ATC pixel is firing"
+      : lastProductViewed
+        ? "Product view pixel is firing"
       : "Waiting for add-to-cart or checkout";
 
   const purchaseTone: Tone = attributedPurchase ? "success" : lastPurchase ? "warn" : "muted";
@@ -240,7 +241,7 @@ function summarize(merchant: MerchantRow, events: EventRow[], counts: EventCount
   } else if (!merchant.domain || !lastIgImpression) {
     tone = "warn";
     label = "Needs traffic";
-  } else if (oldPixelEvent || (lastPurchase && !attributedPurchase)) {
+  } else if (lastPurchase && !attributedPurchase) {
     tone = "warn";
     label = "Review";
   }

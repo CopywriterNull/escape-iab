@@ -1,15 +1,11 @@
 // Generates the Shopify Custom Pixel JS that captures the conversion
-// funnel: product_added_to_cart, checkout_started, checkout_completed.
+// funnel: product_viewed, product_added_to_cart, checkout_started,
+// checkout_completed.
 // Each event is sent to /api/track/funnel as a GET with event type +
 // Shopify clientId + (where applicable) value/currency/order. Backend
 // joins each event back to the original impression by clientId to
 // recover the bucket assignment.
 //
-// product_viewed was previously subscribed too but was dropped: it fires
-// once per product page view (multiplied across browsing) without adding
-// signal beyond add_to_cart for the funnel chart. The cost (~50% of
-// pixel-side function invocations) wasn't justifying the use.
-
 type PixelOpts = {
   merchantId: string;
   ingestUrl: string; // absolute URL to /api/track/funnel
@@ -78,6 +74,25 @@ function ehSid(event) {
   } catch (e) {}
   return "";
 }
+
+analytics.subscribe("product_viewed", function (event) {
+  try {
+    var d = (event && event.data) || {};
+    var pv = d.productVariant || {};
+    var p = pv.product || {};
+    var price = pv.price || {};
+    var amount = 0;
+    if (typeof price.amount === "number") amount = price.amount;
+    else if (price.amount) amount = parseFloat(price.amount);
+    ehSend("product_viewed", {
+      sy: ehSy(event),
+      sid: ehSid(event),
+      v: amount || "",
+      cy: price.currencyCode || "",
+      pid: p.id != null ? String(p.id) : ""
+    });
+  } catch (e) {}
+});
 
 analytics.subscribe("product_added_to_cart", function (event) {
   try {

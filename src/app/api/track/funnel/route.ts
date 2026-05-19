@@ -113,16 +113,6 @@ async function processFunnel(
     return json({ ok: false, error: "bad_input" }, 400, origin);
   }
 
-  // Short-circuit product_viewed events. The new pixel build doesn't fire
-  // these, but G FUEL / andar still have older pixel versions live in their
-  // Shopify Customer Events that may keep firing until they re-paste. We
-  // accept and ack the beacon (so they don't retry) but skip the join +
-  // insert — drops DB write pressure + dashboard noise without breaking
-  // anything.
-  if (eventType === "product_viewed") {
-    return json({ ok: true, joined: false, reason: "deprecated_event" }, 200, origin);
-  }
-
   const admin = getSupabaseAdmin();
   if (!admin) {
     return json({ ok: true, joined: false, reason: "no_db" }, 200, origin);
