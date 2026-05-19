@@ -20,12 +20,13 @@ const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
 const IG_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 326.0.0.0.0";
 
-// Match `<script ... src="...getescapehatch.com/s/<uuid>.js..."></script>`.
-// Case-insensitive, allows extra attributes in any order, allows ?v= and
-// other querystrings on the src. We extract the full tag, the matched
-// merchant id, and async/defer flags from the attribute list.
-const SCRIPT_TAG_RE =
-  /<script\b[^>]*\bsrc\s*=\s*["']\s*https?:\/\/(?:www\.)?getescapehatch\.com\/s\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.js[^"']*["'][^>]*>\s*<\/script>/gi;
+// Parse script start tags inside <head> and read their src attributes. This
+// intentionally accepts cache-bust querystrings like ?v=9 / ?v12 and doesn't
+// require a closing </script> to be formatted a certain way.
+const SCRIPT_TAG_RE = /<script\b[^>]*>/gi;
+const SCRIPT_SRC_RE = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i;
+const EH_SRC_RE =
+  /^https?:\/\/(?:www\.)?getescapehatch\.com\/s\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.js(?:[?#][^"'<>]*)?$/i;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,10 +36,10 @@ const TIMEOUT_MS = 9_000;
 
 type Match = {
   tag: string;
+  src: string;
   merchantId: string;
   hasAsync: boolean;
   hasDefer: boolean;
-  position: "head" | "body" | "unknown";
 };
 
 function inspectTag(tag: string): { hasAsync: boolean; hasDefer: boolean } {
@@ -49,11 +50,24 @@ function inspectTag(tag: string): { hasAsync: boolean; hasDefer: boolean } {
   return { hasAsync, hasDefer };
 }
 
-function positionInDocument(html: string, tagIdx: number): "head" | "body" | "unknown" {
-  // Naive but good enough — find /head close tag, anything before it is head.
-  const headEnd = html.toLowerCase().indexOf("</head>");
-  if (headEnd < 0) return "unknown";
-  return tagIdx < headEnd ? "head" : "body";
+function extractHead(html: string): { html: string; foundHead: boolean } {
+  const lower = html.toLowerCase();
+  const headStart = lower.indexOf("<head");
+  const headOpenEnd = headStart >= 0 ? lower.indexOf(">", headStart) : -1;
+  const headEnd = lower.indexOf("</head>");
+
+  if (headOpenEnd >= 0 && headEnd > headOpenEnd) {
+    return { html: html.slice(headOpenEnd + 1, headEnd), foundHead: true };
+  }
+
+  const bodyStart = lower.indexOf("<body");
+  const fallbackEnd = bodyStart > 0 ? bodyStart : Math.min(html.length, 512_000);
+  return { html: html.slice(0, fallbackEnd), foundHead: false };
+}
+
+function getScriptSrc(tag: string): string | null {
+  const m = tag.match(SCRIPT_SRC_RE);
+  return (m?.[1] ?? m?.[2] ?? m?.[3] ?? null)?.trim() ?? null;
 }
 
 export async function POST(req: NextRequest) {
@@ -161,20 +175,27 @@ export async function POST(req: NextRequest) {
   }
   clearTimeout(timer);
 
-  // Scan for every EscapeHatch script tag in the body.
+  // Scan only the document head. The install guidance requires the tag in
+  // <head>, and checking the full document can produce confusing signals from
+  // deferred/body-injected scripts that won't run early enough for IG.
+  const head = extractHead(html);
   const matches: Match[] = [];
   let m: RegExpExecArray | null;
   SCRIPT_TAG_RE.lastIndex = 0;
-  while ((m = SCRIPT_TAG_RE.exec(html)) !== null) {
+  while ((m = SCRIPT_TAG_RE.exec(head.html)) !== null) {
     const tag = m[0];
-    const mid = m[1].toLowerCase();
+    const src = getScriptSrc(tag);
+    if (!src) continue;
+    const srcMatch = src.match(EH_SRC_RE);
+    if (!srcMatch) continue;
+    const mid = srcMatch[1].toLowerCase();
     const { hasAsync, hasDefer } = inspectTag(tag);
     matches.push({
       tag,
+      src,
       merchantId: mid,
       hasAsync,
       hasDefer,
-      position: positionInDocument(html, m.index),
     });
   }
 
@@ -188,18 +209,21 @@ export async function POST(req: NextRequest) {
     status: res.status,
     bytesRead: fetchedBytes,
     truncated: fetchedBytes >= MAX_BYTES,
+    scannedRegion: head.foundHead ? "head" : "head_fallback",
     expectedMerchantId: merchantId,
     snippetFound: !!expected,
     tag: expected?.tag ?? null,
+    src: expected?.src ?? null,
     hasAsync: expected?.hasAsync ?? false,
     hasDefer: expected?.hasDefer ?? false,
-    position: expected?.position ?? null,
+    position: expected ? "head" : null,
     wrongMerchantTags: wrongMerchant.map((x) => ({
       tag: x.tag,
+      src: x.src,
       merchantId: x.merchantId,
       hasAsync: x.hasAsync,
       hasDefer: x.hasDefer,
-      position: x.position,
+      position: "head",
     })),
     // True if any tag was found, regardless of which merchant.
     anyEscapeHatchTag: matches.length > 0,

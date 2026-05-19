@@ -104,14 +104,17 @@ type InstallCheck =
       status: number;
       bytesRead: number;
       truncated: boolean;
+      scannedRegion?: "head" | "head_fallback";
       expectedMerchantId: string;
       snippetFound: boolean;
       tag: string | null;
+      src?: string | null;
       hasAsync: boolean;
       hasDefer: boolean;
       position: "head" | "body" | "unknown" | null;
       wrongMerchantTags: Array<{
         tag: string;
+        src?: string;
         merchantId: string;
         hasAsync: boolean;
         hasDefer: boolean;
@@ -960,17 +963,17 @@ function InstallCheckPanel({ data, loading }: { data: InstallCheck | null; loadi
           Live install check — NOT INSTALLED
         </div>
         <div className="text-[15px] font-semibold tracking-tight text-[var(--color-fg)]">
-          Snippet not found in this URL&apos;s HTML
+          Snippet not found in this URL&apos;s head
         </div>
         <div className="text-[12.5px] text-[var(--color-fg-dim)] leading-snug">
           The synthetic trace below assumes the snippet runs. It doesn&apos;t — there&apos;s no{" "}
           <code className="font-mono text-[11.5px] bg-[var(--color-bg-elev)] px-1 py-0.5 rounded">
-            &lt;script src=&quot;https://getescapehatch.com/s/{data.expectedMerchantId}.js&quot;&gt;
+            &lt;script src=&quot;https://getescapehatch.com/s/{data.expectedMerchantId}.js?v=...&quot;&gt;
           </code>
-          {" "}in the served HTML. Until the merchant installs it, real IG visitors will see the broken IAB.
+          {" "}in the served <code className="font-mono">head</code>. Querystrings like <code className="font-mono">?v=9</code> are accepted.
         </div>
         <div className="text-[11px] text-[var(--color-fg-muted)] font-mono break-all">
-          {data.finalUrl} · {data.status} · {(data.bytesRead / 1024).toFixed(0)} KB scanned
+          {data.finalUrl} · {data.status} · scanned {data.scannedRegion === "head_fallback" ? "before body/head fallback" : "head"} · {(data.bytesRead / 1024).toFixed(0)} KB read
           {data.truncated ? " (truncated at 3MB)" : ""}
         </div>
       </div>
@@ -1020,7 +1023,7 @@ function InstallCheckPanel({ data, loading }: { data: InstallCheck | null; loadi
         <pre className="mt-1 whitespace-pre-wrap break-all">{data.tag}</pre>
       </details>
       <div className="text-[11px] text-[var(--color-fg-muted)] font-mono break-all">
-        {data.finalUrl} · {data.status} · {(data.bytesRead / 1024).toFixed(0)} KB scanned
+        {data.finalUrl} · {data.status} · scanned {data.scannedRegion === "head_fallback" ? "before body/head fallback" : "head"} · {data.src ?? "snippet src found"}
       </div>
     </div>
   );
