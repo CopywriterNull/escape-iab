@@ -1,5 +1,6 @@
 import { getCurrentMerchant, getImpersonationStatus } from "@/lib/db";
 import { updateMerchantSettings } from "@/app/actions/merchant";
+import { PlatformPresets } from "./_components/platform-presets";
 import { SplitSlider } from "./_components/split-slider";
 
 export const dynamic = "force-dynamic";
@@ -112,6 +113,7 @@ export default async function SettingsPage({
               Instagram is the clean baseline. Turn on additional surfaces only when the merchant wants those visitors included in escape behavior and reporting.
             </p>
           </div>
+          <PlatformPresets />
           <div className="grid gap-3 md:grid-cols-2">
             <ToggleCard
               name="escape_instagram"

@@ -12,6 +12,7 @@ import {
   sampleSizePerBucket,
   type DailyRollup,
   type Funnel,
+  type Merchant,
   type PeriodDelta,
   type SourceRow,
   type IabKind,
@@ -158,6 +159,8 @@ export default async function DashboardOverview({
         </Link>
       }
     >
+      <ScopeBanner merchant={merchant} />
+
       <Suspense key={`hero-${range.key}`} fallback={<HeroSkeleton />}>
         <HeroSection merchantId={m} days={d} rangeLabel={range.label} />
       </Suspense>
@@ -200,6 +203,60 @@ export default async function DashboardOverview({
 }
 
 /* -------- Section components — each owns its own fetch -------- */
+
+function ScopeBanner({ merchant }: { merchant: Merchant }) {
+  const platformLabels = getEnabledDashboardIabKinds(merchant).map(platformLabel);
+  const abPct =
+    typeof merchant.ab_split_pct === "number" && Number.isFinite(merchant.ab_split_pct)
+      ? Math.min(99, Math.max(1, Math.round(merchant.ab_split_pct)))
+      : 50;
+  const engine = merchant.escape_enabled === false ? "Paused" : "Live";
+  const split = merchant.ab_enabled ? `A/B ${abPct}/${100 - abPct}` : "100% escape";
+  const sourceMode = merchant.paid_only === true ? "Paid only" : "Paid + organic";
+
+  return (
+    <div className="rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-card)] px-4 py-3">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+            Reporting scope
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className={merchant.escape_enabled === false ? "pill pill-warn" : "pill pill-success"}>
+              {engine}
+            </span>
+            <span className="pill pill-info">{platformLabels.join(" + ")}</span>
+            <span className="pill pill-muted">{split}</span>
+            <span className="pill pill-muted">{sourceMode}</span>
+          </div>
+        </div>
+        <Link
+          href="/dashboard/settings"
+          className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] px-3 text-[12px] font-medium transition-colors hover:bg-[var(--color-bg-elev)] focus-ring"
+        >
+          Adjust scope
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function platformLabel(kind: IabKind): string {
+  switch (kind) {
+    case "instagram":
+      return "Instagram";
+    case "threads":
+      return "Threads";
+    case "facebook":
+      return "Facebook";
+    case "messenger":
+      return "Messenger";
+    case "discord":
+      return "Discord";
+    default:
+      return kind;
+  }
+}
 
 async function HeroSection({
   merchantId,
