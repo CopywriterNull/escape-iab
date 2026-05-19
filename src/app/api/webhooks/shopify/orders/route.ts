@@ -209,6 +209,7 @@ export async function POST(req: NextRequest) {
       .eq("merchant_id", merchantId)
       .eq("cart_token", cartToken)
       .eq("in_test", true)
+      .neq("event_type", "purchase")
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(1)
