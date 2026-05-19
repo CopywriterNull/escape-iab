@@ -24,6 +24,10 @@ export default async function SettingsPage({
   if (!merchant) {
     return <div className="card p-8">No merchant yet — refresh in a moment.</div>;
   }
+  const impersonationMismatch =
+    impersonation.active && impersonation.merchant?.id
+      ? impersonation.merchant.id !== merchant.id
+      : false;
 
   return (
     <div className="space-y-8">
@@ -39,7 +43,9 @@ export default async function SettingsPage({
 
       {/* Always show which row is being edited, especially during impersonation */}
       <div className={`rounded-lg border px-4 py-2.5 text-[12px] font-mono flex items-center justify-between gap-3 ${
-        impersonation.active
+        impersonationMismatch
+          ? "border-[var(--color-danger)]/45 bg-[var(--color-danger-soft)]/40 text-[var(--color-danger)]"
+          : impersonation.active
           ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/8 text-[var(--color-fg)]"
           : "border-[var(--color-border-soft)] bg-[var(--color-card)] text-[var(--color-fg-dim)]"
       }`}>
@@ -50,13 +56,13 @@ export default async function SettingsPage({
             <span className="size-1.5 rounded-full bg-[var(--color-fg-muted)] shrink-0" />
           )}
           <span className="font-semibold tracking-tight text-[var(--color-fg)]">
-            {impersonation.active ? "Editing as admin:" : "Editing:"}
+            {impersonationMismatch ? "Merchant mismatch:" : impersonation.active ? "Editing as admin:" : "Editing:"}
           </span>
           <span className="truncate text-[var(--color-fg)]">{merchant.name ?? "(unnamed)"}</span>
           <span className="text-[var(--color-fg-muted)] truncate hidden sm:inline">· {merchant.domain ?? "—"}</span>
         </span>
         <span className="text-[10px] tnum text-[var(--color-fg-muted)] truncate hidden md:inline" title={merchant.id}>
-          {merchant.id.slice(0, 8)}…
+          {merchant.id}
         </span>
       </div>
 

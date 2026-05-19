@@ -1,14 +1,21 @@
 import { headers } from "next/headers";
-import { getCurrentMerchant } from "@/lib/db";
+import { getCurrentMerchant, getImpersonationStatus } from "@/lib/db";
 import { buildShopifyPixel } from "@/lib/pixel";
 
 export const dynamic = "force-dynamic";
 
 export default async function InstallPage() {
-  const merchant = await getCurrentMerchant();
+  const [merchant, impersonation] = await Promise.all([
+    getCurrentMerchant(),
+    getImpersonationStatus(),
+  ]);
   if (!merchant) {
     return <div className="card p-8">No merchant yet — refresh in a moment.</div>;
   }
+  const impersonationMismatch =
+    impersonation.active && impersonation.merchant?.id
+      ? impersonation.merchant.id !== merchant.id
+      : false;
 
   const hdrs = await headers();
   const proto = hdrs.get("x-forwarded-proto") ?? "http";
@@ -49,6 +56,23 @@ export default async function InstallPage() {
         <p className="mt-2 text-sm text-[var(--color-fg-dim)] max-w-prose leading-relaxed">
           Drop the snippet on your storefront, drop the pixel in Shopify Customer Events. Total time: under 5 minutes.
         </p>
+      </div>
+
+      <div className={`rounded-lg border px-4 py-2.5 text-[12px] font-mono flex items-center justify-between gap-3 ${
+        impersonationMismatch
+          ? "border-[var(--color-danger)]/45 bg-[var(--color-danger-soft)]/40 text-[var(--color-danger)]"
+          : impersonation.active
+            ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/8 text-[var(--color-fg)]"
+            : "border-[var(--color-border-soft)] bg-[var(--color-card)] text-[var(--color-fg-dim)]"
+      }`}>
+        <span className="min-w-0 truncate">
+          {impersonationMismatch ? "Merchant mismatch:" : impersonation.active ? "Installing as admin:" : "Installing for:"}{" "}
+          <strong className="text-[var(--color-fg)]">{merchant.name ?? "(unnamed)"}</strong>
+          <span className="text-[var(--color-fg-muted)]"> · {merchant.domain ?? "—"}</span>
+        </span>
+        <span className="shrink-0 text-[10px] text-[var(--color-fg-muted)]" title={merchant.id}>
+          {merchant.id}
+        </span>
       </div>
 
       <div className="card-hi p-6 flex items-center gap-4">

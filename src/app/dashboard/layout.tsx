@@ -93,6 +93,10 @@ export default async function DashboardLayout({
       : Promise.resolve(null),
   ]);
   const { merchant, live } = merchantAndLive;
+  const impersonationMismatch =
+    impersonation.active && merchant?.id && impersonation.merchant?.id
+      ? merchant.id !== impersonation.merchant.id
+      : false;
 
   const switcherRows: SwitcherRow[] = (
     (switcherDataRaw ?? []) as { id: string; name: string | null; domain: string | null; user_id: string | null }[]
@@ -113,6 +117,7 @@ export default async function DashboardLayout({
             <span>VIEWING AS</span>
             <strong className="font-semibold truncate">{impersonation.merchant?.name ?? "merchant"}</strong>
             <span className="opacity-70 truncate hidden sm:inline">· {impersonation.merchant?.domain ?? ""}</span>
+            <span className="opacity-70 truncate hidden md:inline">· {impersonation.merchant?.id ?? ""}</span>
           </span>
           <form action={stopImpersonating}>
             <button
@@ -125,6 +130,11 @@ export default async function DashboardLayout({
         </div>
       ) : null}
       <div className="min-h-dvh flex flex-col md:flex-row bg-[var(--color-bg)] text-[var(--color-fg)]">
+      {impersonationMismatch ? (
+        <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[60] max-w-[calc(100vw-24px)] rounded-lg border border-[var(--color-danger)]/50 bg-[var(--color-danger-soft)] px-4 py-2 text-[12px] font-mono text-[var(--color-danger)] shadow-lg">
+          Merchant mismatch: current {merchant?.id} but impersonation cookie points to {impersonation.merchant?.id}. Exit impersonation and re-enter before editing.
+        </div>
+      ) : null}
       {/* ─── Desktop sidebar ─── */}
       <aside className="hidden md:flex w-[220px] shrink-0 flex-col border-r border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/30 sticky top-0 h-dvh z-30">
         {/* Brand */}
@@ -159,6 +169,11 @@ export default async function DashboardLayout({
           {merchant?.domain ? (
             <div className="mt-1 text-[10.5px] font-mono text-[var(--color-fg-muted)] truncate">
               {merchant.domain}
+            </div>
+          ) : null}
+          {merchant?.id ? (
+            <div className="mt-1 text-[10px] font-mono text-[var(--color-fg-muted)] truncate" title={merchant.id}>
+              {merchant.id.slice(0, 8)}…
             </div>
           ) : null}
         </div>
@@ -274,6 +289,11 @@ export default async function DashboardLayout({
             {merchant?.domain ? (
               <span className="hidden lg:inline text-[var(--color-fg-muted)] font-mono text-[11px] ml-2 truncate">
                 {merchant.domain}
+              </span>
+            ) : null}
+            {merchant?.id ? (
+              <span className="hidden xl:inline text-[var(--color-fg-muted)] font-mono text-[11px] truncate" title={merchant.id}>
+                {merchant.id.slice(0, 8)}…
               </span>
             ) : null}
           </div>

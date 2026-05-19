@@ -93,6 +93,9 @@ export function MerchantSwitcher({
                       <span className="block text-[10.5px] font-mono text-[var(--color-fg-muted)] truncate">
                         {r.domain ?? "—"}
                       </span>
+                      <span className="block text-[10px] font-mono text-[var(--color-fg-muted)]/80 truncate">
+                        {r.id.slice(0, 8)}…
+                      </span>
                     </span>
                     {r.ownedByMe ? (
                       <span className="text-[9px] px-1 py-0.5 rounded bg-[var(--color-fg)]/8 text-[var(--color-fg-muted)] font-mono tracking-wider shrink-0">
