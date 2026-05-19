@@ -30,6 +30,16 @@ type EventRow = {
   created_at: string;
 };
 
+type EventCounts = {
+  impressions: number;
+  igImpressions: number;
+  escapes: number;
+  checkouts: number;
+  addToCarts: number;
+  purchases: number;
+  productViewed: number;
+};
+
 type Tone = "success" | "warn" | "danger" | "muted";
 
 const EVENT_TYPES = [
@@ -40,6 +50,8 @@ const EVENT_TYPES = [
   "purchase",
   "product_viewed",
 ];
+
+const SAMPLE_LIMIT = 500;
 
 export default async function AdminHealth() {
   const admin = getSupabaseAdmin();
@@ -54,36 +66,27 @@ export default async function AdminHealth() {
       </div>
     );
   }
-  const { data: merchantData } = await admin
+  const { data: merchantData, error: merchantError } = await admin
     .from("merchants")
     .select("id,name,domain,shopify_domain,escape_enabled,ab_enabled,paid_only,escape_instagram,escape_threads,escape_facebook,escape_messenger,escape_discord,created_at")
     .order("created_at", { ascending: false });
 
-  const merchants = (merchantData ?? []) as MerchantRow[];
-  const since30 = new Date(Date.now() - 30 * 86400_000).toISOString();
-  const eventsByMerchant = new Map<string, EventRow[]>();
-
-  if (merchants.length > 0) {
-    const { data: eventData } = await admin
-      .from("escape_events")
-      .select("merchant_id,event_type,iab_kind,in_test,order_id,cart_token,created_at")
-      .in("merchant_id", merchants.map((m) => m.id))
-      .in("event_type", EVENT_TYPES)
-      .gte("created_at", since30)
-      .order("created_at", { ascending: false })
-      .limit(8000);
-
-    for (const event of (eventData ?? []) as EventRow[]) {
-      const rows = eventsByMerchant.get(event.merchant_id) ?? [];
-      rows.push(event);
-      eventsByMerchant.set(event.merchant_id, rows);
-    }
+  if (merchantError) {
+    return <HealthError title="Could not load merchants" message={merchantError.message} />;
   }
 
-  const summaries = merchants.map((merchant) => summarize(merchant, eventsByMerchant.get(merchant.id) ?? []));
+  const merchants = (merchantData ?? []) as MerchantRow[];
+  const since30 = new Date(Date.now() - 30 * 86400_000).toISOString();
+  const summaries = await Promise.all(
+    merchants.map(async (merchant) => {
+      const health = await loadMerchantHealth(admin, merchant.id, since30);
+      return summarize(merchant, health.events, health.counts, health.error);
+    }),
+  );
   const redCount = summaries.filter((s) => s.tone === "danger").length;
   const warnCount = summaries.filter((s) => s.tone === "warn").length;
   const liveCount = summaries.filter((s) => s.tone === "success").length;
+  const totalRecentEvents = summaries.reduce((sum, s) => sum + s.recentCount, 0);
 
   return (
     <div className="space-y-7">
@@ -93,6 +96,9 @@ export default async function AdminHealth() {
           <h1 className="mt-2 h-display text-[28px] tracking-tight">Install health center</h1>
           <p className="mt-1 text-[13px] text-[var(--color-fg-dim)] max-w-2xl">
             One place to check whether each merchant is installed, emitting IG traffic, sending pixel events, and attributing purchases.
+          </p>
+          <p className="mt-2 text-[11px] font-mono text-[var(--color-fg-muted)]">
+            Showing exact 30d counts plus the latest {SAMPLE_LIMIT} relevant rows per merchant · {totalRecentEvents.toLocaleString()} sampled rows loaded
           </p>
         </div>
         <Link
@@ -149,7 +155,13 @@ function MerchantHealthCard({ summary }: { summary: HealthSummary }) {
           label="Last IG impression"
           tone={summary.lastIgImpression ? "success" : "warn"}
           value={summary.lastIgImpression ? ago(summary.lastIgImpression.created_at) : "none in 30d"}
-          detail={summary.lastIgImpression ? "Snippet is firing on Instagram" : "Open a real IG link or check install"}
+          detail={
+            summary.lastIgImpression
+              ? "Snippet is firing on Instagram"
+              : summary.lastAnyEvent
+                ? `Latest event: ${summary.lastAnyEvent.event_type} ${ago(summary.lastAnyEvent.created_at)}`
+                : "Open a real IG link or check install"
+          }
         />
         <CheckTile
           label="Pixel"
@@ -167,16 +179,27 @@ function MerchantHealthCard({ summary }: { summary: HealthSummary }) {
 
       <div className="mt-3 grid gap-2 sm:grid-cols-3">
         <MiniMetric label="Escapes 30d" value={summary.escapeCount.toString()} />
+        <MiniMetric label="IG imps 30d" value={summary.igImpressionCount.toString()} />
         <MiniMetric label="Checkouts 30d" value={summary.checkoutCount.toString()} />
         <MiniMetric label="Purchases 30d" value={summary.purchaseCount.toString()} />
       </div>
+      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        <MiniMetric label="All imps 30d" value={summary.impressionCount.toString()} />
+        <MiniMetric label="ATC 30d" value={summary.addToCartCount.toString()} />
+        <MiniMetric label="Latest sample" value={`${summary.recentCount}/${SAMPLE_LIMIT}`} />
+      </div>
+      {summary.dataError ? (
+        <div className="mt-3 rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger-soft)]/30 px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          Supabase data issue: {summary.dataError}
+        </div>
+      ) : null}
     </section>
   );
 }
 
 type HealthSummary = ReturnType<typeof summarize>;
 
-function summarize(merchant: MerchantRow, events: EventRow[]) {
+function summarize(merchant: MerchantRow, events: EventRow[], counts: EventCounts, dataError: string | null) {
   const lastIgImpression = events.find((e) => e.event_type === "impression" && e.iab_kind === "instagram") ?? null;
   const lastPixelEvent =
     events.find((e) => e.event_type === "checkout_started" || e.event_type === "add_to_cart") ?? null;
@@ -185,14 +208,15 @@ function summarize(merchant: MerchantRow, events: EventRow[]) {
   const attributedPurchase = events.find(
     (e) => e.event_type === "purchase" && (e.in_test === true || !!e.cart_token || !!e.order_id),
   ) ?? null;
-  const escapeCount = events.filter((e) => e.event_type === "escape_attempt").length;
-  const checkoutCount = events.filter((e) => e.event_type === "checkout_started").length;
-  const purchaseCount = events.filter((e) => e.event_type === "purchase").length;
+  const lastAnyEvent = events[0] ?? null;
 
-  const pixelTone: Tone = oldPixelEvent ? "warn" : lastPixelEvent ? "success" : "muted";
-  const pixelLabel = oldPixelEvent ? "Old pixel noise" : lastPixelEvent ? ago(lastPixelEvent.created_at) : "No pixel events";
+  const hasOldPixelNoise = counts.productViewed > 0 || !!oldPixelEvent;
+  const pixelTone: Tone = hasOldPixelNoise ? "warn" : lastPixelEvent ? "success" : "muted";
+  const pixelLabel = hasOldPixelNoise ? `${counts.productViewed} old PV` : lastPixelEvent ? ago(lastPixelEvent.created_at) : "No pixel events";
   const pixelDetail = oldPixelEvent
     ? "product_viewed seen recently"
+    : hasOldPixelNoise
+      ? "product_viewed seen in 30d"
     : lastPixelEvent
       ? "Checkout/ATC pixel is firing"
       : "Waiting for add-to-cart or checkout";
@@ -207,7 +231,10 @@ function summarize(merchant: MerchantRow, events: EventRow[]) {
 
   let tone: Exclude<Tone, "muted"> = "success";
   let label = "Healthy";
-  if (merchant.escape_enabled === false) {
+  if (dataError) {
+    tone = "danger";
+    label = "Data issue";
+  } else if (merchant.escape_enabled === false) {
     tone = "danger";
     label = "Paused";
   } else if (!merchant.domain || !lastIgImpression) {
@@ -224,16 +251,110 @@ function summarize(merchant: MerchantRow, events: EventRow[]) {
     tone,
     label,
     lastIgImpression,
-    escapeCount,
-    checkoutCount,
-    purchaseCount,
+    lastAnyEvent,
+    recentCount: events.length,
+    impressionCount: counts.impressions,
+    igImpressionCount: counts.igImpressions,
+    escapeCount: counts.escapes,
+    checkoutCount: counts.checkouts,
+    addToCartCount: counts.addToCarts,
+    purchaseCount: counts.purchases,
+    productViewedCount: counts.productViewed,
     pixelTone,
     pixelLabel,
     pixelDetail,
     purchaseTone,
     purchaseLabel,
     purchaseDetail,
+    dataError,
   };
+}
+
+async function loadMerchantHealth(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  merchantId: string,
+  sinceIso: string,
+) {
+  const [eventsResult, countsResult] = await Promise.all([
+    admin
+      .from("escape_events")
+      .select("merchant_id,event_type,iab_kind,in_test,order_id,cart_token,created_at")
+      .eq("merchant_id", merchantId)
+      .in("event_type", EVENT_TYPES)
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(SAMPLE_LIMIT),
+    loadMerchantCounts(admin, merchantId, sinceIso),
+  ]);
+
+  const eventError = eventsResult.error?.message ?? null;
+  const countError = countsResult.error;
+
+  return {
+    events: ((eventsResult.data ?? []) as EventRow[]),
+    counts: countsResult.counts,
+    error: eventError ?? countError,
+  };
+}
+
+async function loadMerchantCounts(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  merchantId: string,
+  sinceIso: string,
+): Promise<{ counts: EventCounts; error: string | null }> {
+  const count = async (eventType: string, iabKind?: string) => {
+    let query = admin
+      .from("escape_events")
+      .select("id", { count: "exact", head: true })
+      .eq("merchant_id", merchantId)
+      .eq("event_type", eventType)
+      .gte("created_at", sinceIso);
+
+    if (iabKind) query = query.eq("iab_kind", iabKind);
+    const { count: n, error } = await query;
+    return { count: n ?? 0, error: error?.message ?? null };
+  };
+
+  const [impressions, igImpressions, escapes, checkouts, addToCarts, purchases, productViewed] =
+    await Promise.all([
+      count("impression"),
+      count("impression", "instagram"),
+      count("escape_attempt"),
+      count("checkout_started"),
+      count("add_to_cart"),
+      count("purchase"),
+      count("product_viewed"),
+    ]);
+
+  return {
+    counts: {
+      impressions: impressions.count,
+      igImpressions: igImpressions.count,
+      escapes: escapes.count,
+      checkouts: checkouts.count,
+      addToCarts: addToCarts.count,
+      purchases: purchases.count,
+      productViewed: productViewed.count,
+    },
+    error:
+      impressions.error ??
+      igImpressions.error ??
+      escapes.error ??
+      checkouts.error ??
+      addToCarts.error ??
+      purchases.error ??
+      productViewed.error,
+  };
+}
+
+function HealthError({ title, message }: { title: string; message: string }) {
+  return (
+    <div className="rounded-xl border border-[var(--color-danger)]/35 bg-[var(--color-danger-soft)]/30 p-6">
+      <div className="eyebrow">Admin · Health</div>
+      <h1 className="mt-2 h-display text-[24px] tracking-tight">{title}</h1>
+      <p className="mt-2 text-[13px] text-[var(--color-fg-dim)]">{message}</p>
+    </div>
+  );
 }
 
 function CheckTile({
