@@ -6,6 +6,33 @@ For the canonical state of the project (stack, schema, attribution architecture,
 
 > **2026-05-18 update:** parts of this handoff are stale. `0016_ab_split_pct.sql` is already applied in live Supabase, v10-era code is no longer sitting uncommitted, and the immediate dashboard issue was traced to RLS-hidden admin impersonation reads plus slow `escape_events` aggregates. See the top of `MASTER.md` and migration `0017_dashboard_perf_and_rls.sql`.
 
+> **2026-05-19 update:** latest production work is pushed to `main`. Dashboard impersonation/settings data loading is fixed, homepage proof language now uses percentage lift/RPV lift instead of recovered-dollar framing, homepage escape counter uses all merchants over the last rolling 24h, and the early-access CTA is now a lead form posting to `/api/early-access`. The form forwards to `EARLY_ACCESS_WEBHOOK_URL`, which still needs to be set in Vercel once the webhook URL is available.
+
+---
+
+## 2026-05-19 operator notes
+
+### Merchant assignment / invites
+- Current model is still one `merchants.user_id` owner per merchant.
+- `/admin/merchants` can **Claim for myself** only when a merchant is unowned. That assigns the merchant to the currently logged-in admin user.
+- `/admin/merchants` can **View as** any merchant through the impersonation cookie.
+- There is **not yet** an "invite by email" or "assign to another user" UI.
+- Manual workaround: after the target person logs in once, copy their Supabase Auth `user.id` and update `public.merchants.user_id` for the merchant.
+- Gotcha: `src/app/auth/callback/route.ts` auto-creates a blank merchant for first-time users who do not already own one. A proper invite flow should detect pending invites and attach the invited merchant instead of creating a blank row.
+
+### Public / password-protected merchant share page
+Yes, this is doable. Recommended shape:
+- Add a public share route like `/share/[token]` or `/report/[merchantId]`.
+- Store share settings in a new table, e.g. `merchant_share_links` with `merchant_id`, `token_hash`, `enabled`, optional `password_hash`, optional `expires_at`, and allowed date range.
+- The public page should show a read-only, simplified version of dashboard metrics. Avoid raw event rows, install controls, settings, merchant IDs, or admin actions.
+- For password protection, require a password once, then set an httpOnly short-lived cookie scoped to that share route.
+- For sales calls, a faster v1 could be a Vercel-protected preview route or a single password from env, but per-merchant share links are cleaner and safer.
+
+### Early access form
+- `src/components/EarlyAccessForm.tsx` collects work email, brand, website, monthly visitors, storefront platform, and notes.
+- `src/app/api/early-access/route.ts` validates fields and forwards JSON to `process.env.EARLY_ACCESS_WEBHOOK_URL`.
+- Until `EARLY_ACCESS_WEBHOOK_URL` is set in Vercel and redeployed, submissions return `webhook_not_configured`.
+
 ---
 
 ## ✅ What's working

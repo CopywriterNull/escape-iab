@@ -17,48 +17,49 @@ New migration file on disk: `supabase/migrations/0017_dashboard_perf_and_rls.sql
 
 ---
 
+## 2026-05-19 Codex update
+
+Latest production commits are pushed to `main`.
+
+What changed most recently:
+- Dashboard impersonation/data loading was fixed by moving impersonated dashboard reads to service-role paths where RLS was hiding rows.
+- Slow dashboard aggregate paths were optimized with live DB indexes/RPC updates in `0017_dashboard_perf_and_rls.sql`.
+- Homepage proof language no longer leads with recovered-dollar framing. It now emphasizes percentage lift, including revenue-per-visitor lift.
+- Homepage "escapes" proof now uses all merchants over a rolling last-24h window, not only G FUEL since UTC midnight.
+- "Get early access" is now a full lead-capture form. It posts to `/api/early-access`, which forwards to `EARLY_ACCESS_WEBHOOK_URL`.
+- Production still needs `EARLY_ACCESS_WEBHOOK_URL` set in Vercel before the form can deliver submissions.
+
+Merchant user access state:
+- Current merchant ownership is one `merchants.user_id` per merchant.
+- Admin can impersonate any merchant through `/admin/merchants`.
+- Admin can claim unowned merchants for the current admin user.
+- There is no invite-by-email UI yet. Manual assignment means updating `merchants.user_id` to the target Supabase Auth user id after they have logged in once.
+- Auth callback currently creates a blank merchant for first-time users without a merchant. A future invite flow should short-circuit that when a pending invite exists.
+
+Client-facing share page idea:
+- Best v1: create `/share/[token]` with a `merchant_share_links` table.
+- Store only hashed tokens/passwords, `enabled`, optional `expires_at`, and `merchant_id`.
+- Render a read-only report/dashboard with summary metrics only. No settings, raw rows, install snippets, admin controls, or merchant UUIDs.
+- Password-protected shares can set an httpOnly route-scoped cookie after successful password entry.
+- Quick demo alternative: one env-based password protecting a single report route, useful for sales calls but less clean long-term.
+
+---
+
 ## ⚡ DO THESE NOW (top priority)
 
-These are blocking or near-blocking. Order matters.
+These are the current next actions. Older notes about `0016_ab_split_pct.sql` and uncommitted defensive settings fixes are historical.
 
-### 1. Apply migration `0016_ab_split_pct.sql` in Supabase
-**Why:** Adds the `ab_split_pct` column the new A/B split slider writes to. Without this, the slider value silently drops (defensive code in the action skips it instead of failing the whole save), but operators can't actually configure non-50/50 splits.
-
-**How:** Open [Supabase SQL Editor](https://supabase.com/dashboard/project/kfzhbkvbxzlsiqcgaoiw/sql/new), paste:
-
-```sql
-alter table public.merchants
-  add column if not exists ab_split_pct int not null default 50;
-
-update public.merchants
-  set ab_split_pct = 50
-  where ab_split_pct is null;
-
-alter table public.merchants
-  drop constraint if exists merchants_ab_split_pct_range;
-alter table public.merchants
-  add constraint merchants_ab_split_pct_range
-  check (ab_split_pct between 1 and 99);
-```
-
-**Verify after:**
-```sql
-select column_name from information_schema.columns
-  where table_schema='public' and table_name='merchants' and column_name='ab_split_pct';
--- one row = applied
-```
-
-### 2. Commit + push the defensive settings save fix
-There's one uncommitted change on disk: `src/app/actions/merchant.ts` now catches Postgres `42703 undefined_column` errors specifically for `ab_split_pct` and retries the update without that field. **This is the safety net for #1** — until migration is applied, settings saves still succeed for every other field (kill switch, A/B toggle, fallback text, etc.). Without this fix, every settings save would 500 until migration was applied.
+### 1. Set the early-access webhook env var
+The homepage lead form is live in code, but delivery depends on Vercel env:
 
 ```bash
-git add src/app/actions/merchant.ts
-git commit -m "fix(settings): degrade gracefully if ab_split_pct column missing"
-git push
+EARLY_ACCESS_WEBHOOK_URL=https://...
 ```
 
-### 3. End-to-end verify andar's escape works
-After the deploy from #2 finishes:
+After setting it in Vercel, redeploy. Env var changes do not affect already-running deployments.
+
+### 2. End-to-end verify andar's escape works
+On the latest deploy:
 
 1. **From your test phone**: clear `andar.com` site data in Safari, force-quit Instagram.
 2. **DM yourself**: `https://www.andar.com/?eh_force=a` from inside Instagram.
@@ -73,13 +74,15 @@ After the deploy from #2 finishes:
 
 If any of those don't fire, see [Operator runbook](#-operator-runbook) below.
 
-### 4. Confirm A/B split slider works
-After #1 + #2:
+### 3. Confirm A/B split slider works
 
 1. `/dashboard/settings` (impersonating andar) → drag A/B slider to 70.
 2. Save. Banner says ✓ Saved.
 3. `curl -s 'https://getescapehatch.com/s/b8596aac-...js?v=$(date +%s)' | grep -oE 'Math\.random\(\)<[0-9.]+' | head -1` — should show `Math.random()<.7` or similar (anything not `<.5`).
 4. Drag back to 50, save, re-curl, should show `<.5` again.
+
+### 4. Decide on client share/report access
+If clients need to see metrics without dashboard login, build `/share/[token]` as a read-only report with optional password. This is safer than handing out admin/dashboard access and cleaner than a one-off screenshot.
 
 ---
 
