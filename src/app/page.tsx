@@ -1,5 +1,5 @@
 import { Lander, type CaseStudyData } from "@/components/Lander";
-import { getEscapesToday, getTestFunnel, zTestTwoProp } from "@/lib/db";
+import { getEscapesLast24Hours, getTestFunnel, zTestTwoProp } from "@/lib/db";
 
 // Revalidate the homepage every 5 min — live counter refreshes too.
 export const revalidate = 300;
@@ -18,7 +18,7 @@ export default async function Home() {
     const [funnel14, funnel90, today] = await Promise.all([
       getTestFunnel(G_FUEL_MERCHANT_ID, CASE_STUDY_WINDOW_DAYS),
       getTestFunnel(G_FUEL_MERCHANT_ID, 90),
-      getEscapesToday(G_FUEL_MERCHANT_ID),
+      getEscapesLast24Hours(),
     ]);
 
     // 90d numbers still feed the hero proof tiles (longer window = smoother).

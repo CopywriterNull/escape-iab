@@ -87,11 +87,11 @@ function Nav({ theme: _theme, escapesToday }: { theme: Theme; escapesToday: numb
           {escapesToday > 0 ? (
             <span
               className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] text-[11px] font-mono"
-              title="Live escapes since UTC midnight"
+              title="Live escape attempts across all merchants in the last 24 hours"
             >
               <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
               <span className="tnum text-[var(--color-fg)]">{escapesToday.toLocaleString()}</span>
-              <span className="text-[var(--color-fg-muted)]">escapes today</span>
+              <span className="text-[var(--color-fg-muted)]">escapes / 24h</span>
             </span>
           ) : null}
         </div>

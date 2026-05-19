@@ -6,6 +6,7 @@ import {
   impersonateMerchant,
   renameMerchantAsAdmin,
   setMerchantShopifyDomain,
+  detectMerchantShopifyDomain,
 } from "@/app/actions/admin";
 
 export const dynamic = "force-dynamic";
@@ -216,6 +217,16 @@ function MerchantRow({
             className="text-[12px] px-3 py-2 rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg-elev)] press transition-colors"
           >
             Save
+          </button>
+        </form>
+        <form action={detectMerchantShopifyDomain} className="-mt-2">
+          <input type="hidden" name="id" value={row.id} />
+          <input type="hidden" name="domain" value={row.domain ?? ""} />
+          <button
+            type="submit"
+            className="text-[11.5px] font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] underline underline-offset-2"
+          >
+            Detect from public domain
           </button>
         </form>
 

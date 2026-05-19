@@ -27,6 +27,22 @@ export async function getEscapesToday(merchantId: string): Promise<number> {
   return count ?? 0;
 }
 
+/** Rolling last-24h escape attempts. When merchantId is omitted, this returns
+ *  the platform-wide count for the marketing site's live proof badge. */
+export async function getEscapesLast24Hours(merchantId?: string): Promise<number> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return 0;
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  let q = supabase
+    .from("escape_events")
+    .select("*", { count: "exact", head: true })
+    .eq("event_type", "escape_attempt")
+    .gte("created_at", since);
+  if (merchantId) q = q.eq("merchant_id", merchantId);
+  const { count } = await q;
+  return count ?? 0;
+}
+
 export type Merchant = {
   id: string;
   user_id: string;

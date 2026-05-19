@@ -35,7 +35,17 @@ export default async function InstallPage() {
         <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
           Setup · two steps
         </div>
-        <h1 className="mt-1.5 h-display text-4xl">Install</h1>
+        <div className="mt-1.5 flex items-center justify-between gap-3 flex-wrap">
+          <h1 className="h-display text-4xl">Install</h1>
+          <a
+            href={`/install/${merchant.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[12px] font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] underline underline-offset-2"
+          >
+            Public install guide →
+          </a>
+        </div>
         <p className="mt-2 text-sm text-[var(--color-fg-dim)] max-w-prose leading-relaxed">
           Drop the snippet on your storefront, drop the pixel in Shopify Customer Events. Total time: under 5 minutes.
         </p>

@@ -57,7 +57,12 @@ export default async function InstallGuide({
             </span>
             <span>{brand.name}</span>
           </Link>
-          <span className="text-[11px] font-mono text-[var(--color-fg-muted)]">Install guide</span>
+          <div className="flex items-center gap-3 text-[11px] font-mono text-[var(--color-fg-muted)]">
+            <Link href="/dashboard/install" className="hover:text-[var(--color-fg)] underline underline-offset-2">
+              Dashboard install
+            </Link>
+            <span>Install guide</span>
+          </div>
         </div>
 
         {/* Greeting */}

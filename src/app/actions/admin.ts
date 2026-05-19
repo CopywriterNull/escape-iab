@@ -120,6 +120,73 @@ export async function setMerchantShopifyDomain(formData: FormData) {
   revalidateMerchantSurfaces(id);
 }
 
+/** Best-effort detection of the merchant's *.myshopify.com admin domain from
+ *  the public storefront HTML. Operators still review/save manually when the
+ *  storefront does not expose it. */
+export async function detectMerchantShopifyDomain(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const admin = getSupabaseAdmin();
+  if (!admin) return;
+
+  const id = String(formData.get("id") ?? "").trim();
+  const domain = String(formData.get("domain") ?? "").trim();
+  if (!UUID_RE.test(id) || !domain) return;
+
+  const url = normalizeStorefrontUrl(domain);
+  if (!url) return;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  let html = "";
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
+        accept: "text/html,application/xhtml+xml",
+      },
+      redirect: "follow",
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    html = (await res.text()).slice(0, 2_000_000);
+  } catch {
+    clearTimeout(timer);
+    return;
+  }
+  clearTimeout(timer);
+
+  const detected = detectMyshopifyDomain(html);
+  if (!detected) return;
+
+  await admin.from("merchants").update({ shopify_domain: detected }).eq("id", id);
+  revalidateMerchantSurfaces(id);
+}
+
+function normalizeStorefrontUrl(domain: string): string | null {
+  try {
+    const raw = domain.startsWith("http://") || domain.startsWith("https://")
+      ? domain
+      : `https://${domain}`;
+    const u = new URL(raw);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function detectMyshopifyDomain(html: string): string | null {
+  const matches = html.match(/[a-z0-9][a-z0-9-]*\.myshopify\.com/gi) ?? [];
+  for (const m of matches) {
+    const cleaned = m.toLowerCase();
+    if (!cleaned.startsWith("cdn.") && !cleaned.startsWith("shopify.")) {
+      return cleaned;
+    }
+  }
+  return null;
+}
+
 /** Set the impersonation cookie + jump into the dashboard as that merchant. */
 export async function impersonateMerchant(formData: FormData) {
   if (!(await requireAdmin())) return;
