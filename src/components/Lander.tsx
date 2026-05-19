@@ -212,7 +212,7 @@ function Hero({ proof, variant = "v1" }: { proof?: LanderProof; variant?: Lander
         <div className="hero-enter hero-enter-5">
           <Waitlist />
           <p className="mt-3 text-center text-xs text-[var(--color-fg-muted)]">
-            From $300/mo · Pays for itself in week 1 · 60-second install
+            From $300/mo for Shopify storefronts · Custom pilots for high-volume teams
           </p>
           {variant === "v2" ? (
             <p className="mt-3 text-center">
@@ -1698,7 +1698,7 @@ function Pricing() {
     },
     {
       name: "Scale",
-      price: "$900",
+      price: "$1,500",
       sub: "/mo — for brands doing real volume.",
       cta: { label: "Get started", href: "#waitlist" },
       features: [
@@ -1706,8 +1706,8 @@ function Pricing() {
         "Up to 5 storefronts",
         "Webhook to Klaviyo / Triple Whale / Northbeam",
         "First-party CNAME serving",
-        "Priority response (next-business-day)",
-        "Quarterly performance review",
+        "Priority launch support",
+        "Monthly performance review",
       ],
     },
     {
@@ -1717,11 +1717,11 @@ function Pricing() {
       cta: { label: "Talk to us", href: "mailto:hi@getescapehatch.com?subject=EscapeHatch%20Enterprise" },
       features: [
         "Unlimited escapes & storefronts",
-        "Dedicated infra + custom regions",
-        "CSP nonce variants & custom schemes",
+        "Scoped paid pilot + rollout plan",
+        "Custom storefront integration",
         "SLA, DPA, security review",
         "Shared Slack channel",
-        "Onboarding + migration support",
+        "Launch monitoring + kill switch",
       ],
     },
   ];
@@ -1732,11 +1732,11 @@ function Pricing() {
         <div className="text-center max-w-2xl mx-auto">
           <SectionLabel>Pricing</SectionLabel>
           <h2 className="mt-3 text-balance">
-            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Pays for itself</span>
-            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">in the first week.</span>
+            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Simple pricing</span>
+            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">for serious IG traffic.</span>
           </h2>
           <p className="mt-3 text-[var(--color-fg-dim)]">
-            Pricing scales with IG-IAB traffic. If you&apos;re running paid Meta, the first month of recovered checkouts covers the year.
+            Monthly plans for Shopify storefronts. High-volume and non-Shopify teams can run a scoped paid pilot with custom integration support.
           </p>
         </div>
         <div className="mt-14 grid md:grid-cols-3 gap-7 md:gap-4 items-stretch">
@@ -1745,7 +1745,7 @@ function Pricing() {
           ))}
         </div>
         <p className="mt-8 text-center text-[12px] text-[var(--color-fg-muted)]">
-          All plans include the dashboard, A/B test infra, and patch auto-updates as Meta ships changes. Month-to-month, no annual lock-in. Overage on escapes is metered, not capped — your traffic keeps flowing.
+          All plans include the snippet, dashboard, A/B test infra, and patch auto-updates. Month-to-month, no annual lock-in. Overage on escapes is metered, not capped — your traffic keeps flowing.
         </p>
       </div>
     </section>
@@ -1810,7 +1810,7 @@ function FAQ({ variant = "v1" }: { variant?: LanderVariant }) {
   const all = {
     tos: {
       q: "Does this violate Instagram's terms?",
-      a: "No. We use Instagram's own published deep-link scheme. Major link-in-bio platforms (Linktree, Linkfire, Beacons) use the same technique. No clause in Meta's developer terms or commerce policies prohibits it.",
+      a: "EscapeHatch uses browser-routing behavior inside social in-app browsers. It is not a Meta-approved advertiser API, so high-volume customers should treat it as an experimental optimization and launch with an A/B test, monitoring, and a kill switch.",
     },
     pixel: {
       q: "What about my Meta pixel and ad attribution?",
@@ -1834,11 +1834,11 @@ function FAQ({ variant = "v1" }: { variant?: LanderVariant }) {
     },
     plus: {
       q: "Does it work on Shopify Plus?",
-      a: "Yes. The snippet drops into theme.liquid same as any Shopify install. We've validated against checkout extensibility, Shop Pay, and the Plus B2B portal. Multi-store rollups are a Scale plan feature so a single dashboard covers every storefront.",
+      a: "Yes. EscapeHatch is a script, not a Shopify app. The snippet drops into your storefront <head>, and we've validated against checkout extensibility, Shop Pay, and the Plus B2B portal. Multi-store rollups are a Scale plan feature so a single dashboard covers every storefront.",
     },
     headless: {
       q: "Does it work outside Shopify — headless, custom, WooCommerce, BigCommerce?",
-      a: "Yes. EscapeHatch is platform-agnostic — paste the <script> tag in your <head> and it runs. Shopify, Shopify Plus, Hydrogen, Next.js Commerce, BigCommerce, WooCommerce, Medusa, custom-built — the detection + redirect logic is pure client-side JavaScript and doesn't depend on Liquid or any specific stack.",
+      a: "Yes. EscapeHatch is platform-agnostic — paste the <script> tag in your <head> and it runs. Shopify, Shopify Plus, Hydrogen, Next.js Commerce, BigCommerce, WooCommerce, Medusa, custom-built — the detection and browser handoff logic is client-side JavaScript and doesn't depend on Liquid or a Shopify app install.",
     },
   };
 

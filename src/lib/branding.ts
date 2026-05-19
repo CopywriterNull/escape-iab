@@ -11,7 +11,7 @@ export const brand = {
   seoTitle: "EscapeHatch · Recover IG ad revenue lost to checkout",
   // SERP <meta description>: 150-160 chars, includes CTA verb
   seoDescription:
-    "EscapeHatch detects Instagram's broken in-app browser and reopens your Shopify store in Safari — so paid IG clicks reach checkout. 60-second install.",
+    "EscapeHatch detects Instagram's broken in-app browser and reopens your storefront in Safari — so paid IG clicks reach checkout.",
   // Social card title (OG/Twitter): 55-60 chars, hook-led
   ogTitle: "Your Instagram ads work. Your checkout doesn't.",
   // Social card description: 150-160 chars, scroll-stopping
@@ -38,7 +38,7 @@ export const brand = {
       eyebrow: "How we fix it",
       headline: "One snippet. Detects the IAB. Reroutes to Safari.",
       body:
-        "Add a single <script> tag to your theme. We detect every paid IG visitor in the in-app browser and fire a deep link Instagram itself recognizes. The page reopens in Safari before checkout loads. They never see the broken IAB.",
+        "Add a single <script> tag to your storefront. We detect eligible paid IG visitors in the in-app browser and attempt a native-browser handoff before checkout loads. They never see the broken IAB.",
     },
     proof: {
       eyebrow: "What you recover",
