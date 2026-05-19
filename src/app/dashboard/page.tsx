@@ -908,9 +908,12 @@ function FunnelTable({
   rangeKey: string;
 }) {
   type Stage = { label: string; a: number; b: number; sub: string };
+  const hasProductViewedSignal = funnel.product_viewed.a + funnel.product_viewed.b > 0;
   const stages: Stage[] = [
     { label: "Impressions", a: funnel.impressions.a, b: funnel.impressions.b, sub: "test landings" },
-    { label: "Product viewed", a: funnel.product_viewed.a, b: funnel.product_viewed.b, sub: "/products/*" },
+    ...(hasProductViewedSignal
+      ? [{ label: "Product viewed", a: funnel.product_viewed.a, b: funnel.product_viewed.b, sub: "/products/*" }]
+      : []),
     { label: "Add to cart", a: funnel.add_to_cart.a, b: funnel.add_to_cart.b, sub: "added a SKU" },
     { label: "Checkout started", a: funnel.checkout_started.a, b: funnel.checkout_started.b, sub: "reached /checkouts" },
     { label: "Purchase", a: funnel.purchases.a, b: funnel.purchases.b, sub: "completed" },
