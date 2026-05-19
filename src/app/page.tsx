@@ -10,7 +10,7 @@ const CASE_STUDY_WINDOW_DAYS = 14;
 
 export default async function Home() {
   let liftPct: number | null = null;
-  let totalRevenueCents = 0;
+  let rpvLiftPct: number | null = null;
   let escapesToday = 0;
   let caseStudy: CaseStudyData | null = null;
 
@@ -25,7 +25,9 @@ export default async function Home() {
     const cvrA90 = funnel90.impressions.a > 0 ? funnel90.purchases.a / funnel90.impressions.a : 0;
     const cvrB90 = funnel90.impressions.b > 0 ? funnel90.purchases.b / funnel90.impressions.b : 0;
     if (cvrA90 > 0 && cvrB90 > 0) liftPct = (cvrA90 - cvrB90) / cvrB90;
-    totalRevenueCents = funnel90.revenue_cents.a + funnel90.revenue_cents.b;
+    const rpvA90 = funnel90.impressions.a > 0 ? funnel90.revenue_cents.a / funnel90.impressions.a : 0;
+    const rpvB90 = funnel90.impressions.b > 0 ? funnel90.revenue_cents.b / funnel90.impressions.b : 0;
+    if (rpvA90 > 0 && rpvB90 > 0) rpvLiftPct = (rpvA90 - rpvB90) / rpvB90;
     escapesToday = today;
 
     // 14d numbers feed the anonymized case-study section. % lifts only, no
@@ -64,7 +66,7 @@ export default async function Home() {
   return (
     <Lander
       theme="light"
-      proof={{ liftPct, totalRevenueCents, escapesToday, caseStudy }}
+      proof={{ liftPct, rpvLiftPct, escapesToday, caseStudy }}
     />
   );
 }

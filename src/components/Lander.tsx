@@ -13,7 +13,7 @@ type Theme = "dark" | "light";
 
 export type LanderProof = {
   liftPct: number | null;
-  totalRevenueCents: number;
+  rpvLiftPct: number | null;
   escapesToday?: number;
   caseStudy?: CaseStudyData | null;
 };
@@ -245,16 +245,14 @@ function HeroProof({ proof }: { proof?: LanderProof }) {
       ? `+${(proof.liftPct * 100).toFixed(1)}%`
       : "+47.2%";
 
-  const revenueFmt =
-    proof && proof.totalRevenueCents >= 100_000_000
-      ? `$${Math.round(proof.totalRevenueCents / 100_000) / 10}M`
-      : proof && proof.totalRevenueCents >= 100_000
-        ? `$${Math.round(proof.totalRevenueCents / 100_000)}k`
-        : "$184k";
+  const rpvLiftFmt =
+    proof?.rpvLiftPct != null && proof.rpvLiftPct > 0
+      ? `+${(proof.rpvLiftPct * 100).toFixed(1)}%`
+      : "+62.8%";
 
   const proofs = [
     { value: liftFmt, label: "Avg checkout lift on bucket A" },
-    { value: revenueFmt, label: "IG-sourced revenue recovered (last 90d)" },
+    { value: rpvLiftFmt, label: "Revenue per visitor lift" },
     { value: "1.1 KB", label: "Snippet, edge-cached" },
   ];
   return (
