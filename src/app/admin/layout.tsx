@@ -84,6 +84,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <nav className="flex items-center gap-1 text-[12px]">
             <Link href="/admin" className="px-2 py-1 text-[var(--color-fg-muted)]">Overview</Link>
             <Link href="/admin/merchants" className="px-2 py-1 text-[var(--color-fg-muted)]">Merchants</Link>
+            <Link href="/admin/performance" className="px-2 py-1 text-[var(--color-fg-muted)]">Perf</Link>
             <Link href="/admin/health" className="px-2 py-1 text-[var(--color-fg-muted)]">Health</Link>
             <Link href="/admin/guides" className="px-2 py-1 text-[var(--color-fg-muted)]">Guides</Link>
             <Link href="/admin/diagnostics" className="px-2 py-1 text-[var(--color-fg-muted)]">Diag</Link>
@@ -92,7 +93,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </header>
 
       <main className="flex-1 min-w-0">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 sm:py-8">{children}</div>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-8">{children}</div>
       </main>
     </div>
   );
