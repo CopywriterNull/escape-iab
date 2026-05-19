@@ -1,10 +1,12 @@
 // Generates the storefront-side JavaScript snippet.
 //
-// Test population: visitors who landed via a paid Meta ad (Facebook or
-// Instagram) inside the Instagram in-app browser. Detected by:
-//   - UA matches /Instagram/  (we're inside IG's WebView), AND
+// Test population: visitors on merchant-enabled in-app browser surfaces.
+// Default merchant config is Instagram only. Optional settings can enable
+// Threads, Facebook, Messenger, and Discord coverage separately. For the
+// Instagram baseline, detected by:
+//   - UA matches /Instagram/  (inside IG's WebView), AND
 //   - URL contains fbclid OR utm_source ∈ {facebook, instagram, fb, ig, meta}
-//     with utm_medium ∈ {paid, cpc, ad}
+//     with utm_medium ∈ {paid, cpc, ad} when paid_only is enabled
 //
 // Inside the test population, we 50/50 bucket (cookie eh_b):
 //   - Bucket A: redirect to Safari/Chrome via instagram://extbrowser
@@ -30,6 +32,11 @@ type SnippetOpts = {
    *  legacy even split. Clamped to [1, 99] — 0 and 100 defeat the
    *  purpose of an A/B. */
   abSplitPct?: number;
+  escapeInstagram?: boolean;
+  escapeThreads?: boolean;
+  escapeFacebook?: boolean;
+  escapeMessenger?: boolean;
+  escapeDiscord?: boolean;
 };
 
 export function buildSnippet(opts: SnippetOpts): string {
@@ -53,10 +60,15 @@ export function buildSnippet(opts: SnippetOpts): string {
   const rawSplit = typeof opts.abSplitPct === "number" ? opts.abSplitPct : 50;
   const clampedSplit = Math.min(99, Math.max(1, Math.round(rawSplit)));
   const splitThreshold = (clampedSplit / 100).toFixed(2); // string for embed
+  const escapeInstagram = opts.escapeInstagram === false ? "false" : "true";
+  const escapeThreads = opts.escapeThreads === true ? "true" : "false";
+  const escapeFacebook = opts.escapeFacebook === true ? "true" : "false";
+  const escapeMessenger = opts.escapeMessenger === true ? "true" : "false";
+  const escapeDiscord = opts.escapeDiscord === true ? "true" : "false";
 
   return `(function(){
 try{
-  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold};
+  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord};
   // Self-diagnostic: if our own <script> tag has async/defer, the redirect
   // path is structurally broken (IG webview paints before we run). Log a
   // visible warning so desktop QA catches it; stamp a flag on every beacon
@@ -92,6 +104,7 @@ try{
   // iOS: x-safari-https:// (broken on iOS 17.4+ but harmless when ignored).
   // sessionStorage guard prevents redirect loops if the OS rejects the scheme.
   if(kind==="discord"){
+    if(!ED)return;
     var dcDone=false;
     try{dcDone=sessionStorage.getItem("eh_dc")==="1";}catch(e){}
     if(dcDone)return;
@@ -131,11 +144,14 @@ try{
   // Instagram and Threads both use the Meta extbrowser private scheme.
   // When PO (paid-only) is true, gate the test population on paid signal.
   // When false, escape any Meta IAB visitor (paid + organic).
-  var isMetaIAB=(kind==="instagram"||kind==="threads");
+  var isInstagramIAB=kind==="instagram";
+  var isThreadsIAB=kind==="threads";
+  var isMetaIAB=(isInstagramIAB||isThreadsIAB);
+  var enabledMetaIAB=(isInstagramIAB&&EI)||(isThreadsIAB&&ET);
   // FORCED bypasses the paid_only gate so QA testers without paid UTMs
   // still land in the test population. Still requires being inside an IG
   // or Threads webview — the scheme handoff only works there.
-  var inTest=(isMetaIAB&&(FORCED||!PO||isPaidAd))||postEscape;
+  var inTest=(enabledMetaIAB&&(FORCED||!PO||isPaidAd))||postEscape;
 
   function readSy(){try{return(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){return null;}}
   var sy=readSy();
@@ -186,6 +202,8 @@ try{
   // press-and-hold splash so iOS' native long-press menu hands off to
   // Safari. Android uses intent:// to Chrome (works programmatically).
   if(kind==="facebook"||kind==="messenger"){
+    var fbEnabled=(kind==="facebook"&&EF)||(kind==="messenger"&&EM);
+    if(!fbEnabled){beacon("iab_detected");return;}
     if(postEscape){beacon("impression");return;}
     if(!FORCED){try{if(sessionStorage.getItem("eh_fb")==="1"){beacon("escape_skipped",{r:"f"});return;}}catch(e){}}
     if(PO&&!isPaidAd&&!FORCED){beacon("iab_detected");return;}

@@ -131,11 +131,11 @@ async function processFunnel(
   // Multi-key join: shopify_client_id first (most precise), eh_sid as fallback
   // (survives Shopify checkout cookie-jar break).
   const since = new Date(Date.now() - JOIN_WINDOW_DAYS * 86400_000).toISOString();
-  let imp: { bucket: "a" | "b" } | null = null;
+  let imp: { bucket: "a" | "b"; iab_kind: string | null } | null = null;
   if (sy) {
     const { data } = await admin
       .from("escape_events")
-      .select("bucket")
+      .select("bucket,iab_kind")
       .eq("merchant_id", merchantId)
       .eq("shopify_client_id", sy)
       .eq("event_type", "impression")
@@ -144,12 +144,12 @@ async function processFunnel(
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    imp = data as { bucket: "a" | "b" } | null;
+    imp = data as { bucket: "a" | "b"; iab_kind: string | null } | null;
   }
   if (!imp && ehSid) {
     const { data } = await admin
       .from("escape_events")
-      .select("bucket")
+      .select("bucket,iab_kind")
       .eq("merchant_id", merchantId)
       .eq("eh_sid", ehSid)
       .eq("event_type", "impression")
@@ -158,7 +158,7 @@ async function processFunnel(
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    imp = data as { bucket: "a" | "b" } | null;
+    imp = data as { bucket: "a" | "b"; iab_kind: string | null } | null;
   }
 
   if (!imp) {
@@ -194,6 +194,7 @@ async function processFunnel(
     event_type: eventType,
     bucket,
     in_test: true,
+    iab_kind: imp.iab_kind,
     shopify_client_id: sy,
     eh_sid: ehSid,
     order_id: eventType === "purchase" ? orderId : null,

@@ -44,6 +44,11 @@ export async function updateMerchantSettings(formData: FormData) {
   const fb = formData.get("fallback_button") === "on";
   const escape = formData.get("escape_enabled") === "on";
   const paidOnly = formData.get("paid_only") === "on";
+  const escapeInstagram = formData.get("escape_instagram") === "on";
+  const escapeThreads = formData.get("escape_threads") === "on";
+  const escapeFacebook = formData.get("escape_facebook") === "on";
+  const escapeMessenger = formData.get("escape_messenger") === "on";
+  const escapeDiscord = formData.get("escape_discord") === "on";
   const name = String(formData.get("name") ?? "").trim().slice(0, 80) || null;
   const domain = String(formData.get("domain") ?? "").trim().slice(0, 120) || null;
   const fallback = String(formData.get("fallback_text") ?? "").trim().slice(0, 60) || null;
@@ -69,6 +74,11 @@ export async function updateMerchantSettings(formData: FormData) {
     fallback_button: fb,
     escape_enabled: escape,
     paid_only: paidOnly,
+    escape_instagram: escapeInstagram,
+    escape_threads: escapeThreads,
+    escape_facebook: escapeFacebook,
+    escape_messenger: escapeMessenger,
+    escape_discord: escapeDiscord,
     fallback_text: fallback,
     name,
     domain,

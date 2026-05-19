@@ -108,7 +108,7 @@ async function processPurchase(
   const since = new Date(Date.now() - JOIN_WINDOW_DAYS * 86400_000).toISOString();
   const { data: imp } = await admin
     .from("escape_events")
-    .select("bucket")
+    .select("bucket,iab_kind")
     .eq("merchant_id", merchantId)
     .eq("shopify_client_id", sy)
     .eq("event_type", "impression")
@@ -137,6 +137,7 @@ async function processPurchase(
     merchant_id: merchantId,
     event_type: "purchase",
     bucket,
+    iab_kind: (imp as { iab_kind?: string | null }).iab_kind ?? null,
     shopify_client_id: sy,
     order_id: orderId,
     value_cents: valueCents,

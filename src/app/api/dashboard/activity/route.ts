@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentMerchant } from "@/lib/db";
+import { getCurrentMerchant, getEnabledDashboardIabKinds } from "@/lib/db";
 import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,7 @@ export async function GET(req: Request) {
     .select("event_type,bucket,in_test,value_cents,utm_source,iab_kind,created_at")
     .eq("merchant_id", merchant.id)
     .in("event_type", ["purchase", "checkout_started", "add_to_cart", "escape_attempt"])
+    .in("iab_kind", getEnabledDashboardIabKinds(merchant))
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(limit);

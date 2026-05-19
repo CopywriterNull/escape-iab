@@ -34,6 +34,11 @@ export async function GET(
   // Default A/B split = 50/50 (legacy). Per-merchant override via the
   // ab_split_pct column (migration 0016). Clamped server-side too.
   let abSplitPct = 50;
+  let escapeInstagram = true;
+  let escapeThreads = false;
+  let escapeFacebook = false;
+  let escapeMessenger = false;
+  let escapeDiscord = false;
   let valid = isValidShape;
   if (isValidShape) {
     const admin = getSupabaseAdmin();
@@ -60,6 +65,13 @@ export async function GET(
         if (typeof rawSplit === "number" && Number.isFinite(rawSplit)) {
           abSplitPct = Math.min(99, Math.max(1, Math.round(rawSplit)));
         }
+        // Platform targeting. Missing columns read as defaults so the route
+        // keeps serving while migrations roll forward.
+        escapeInstagram = m.escape_instagram !== false;
+        escapeThreads = m.escape_threads === true;
+        escapeFacebook = m.escape_facebook === true;
+        escapeMessenger = m.escape_messenger === true;
+        escapeDiscord = m.escape_discord === true;
       } else {
         valid = false;
       }
@@ -87,6 +99,11 @@ export async function GET(
     fallbackText,
     paidOnly,
     abSplitPct,
+    escapeInstagram,
+    escapeThreads,
+    escapeFacebook,
+    escapeMessenger,
+    escapeDiscord,
   });
   const body = await obfuscateSnippet(raw);
 

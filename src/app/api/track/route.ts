@@ -13,11 +13,13 @@ const ALLOWED_EVENTS = new Set([
 ]);
 const ALLOWED_KINDS = new Set([
   "instagram",
+  "threads",
   "facebook",
   "messenger",
   "tiktok",
   "snapchat",
   "pinterest",
+  "discord",
   "line",
   "wechat",
   "webview",

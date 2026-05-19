@@ -4,6 +4,7 @@ import {
   getCurrentMerchant,
   getPeriodDelta,
   getRollups,
+  getEnabledDashboardIabKinds,
   getSourceBreakdown,
   getTestFunnel,
   getUnattributedPurchaseStats,
@@ -13,6 +14,7 @@ import {
   type Funnel,
   type PeriodDelta,
   type SourceRow,
+  type IabKind,
 } from "@/lib/db";
 import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
 import {
@@ -92,6 +94,7 @@ const fetchPeriodDelta = cache(getPeriodDelta);
 const fetchActivity = cache(async function fetchActivity(
   merchantId: string,
   days: number,
+  iabKinds: IabKind[],
   limit = 12,
 ): Promise<ActivityRow[]> {
   const supabase = getSupabaseAdmin() ?? (await getSupabaseServer());
@@ -102,6 +105,7 @@ const fetchActivity = cache(async function fetchActivity(
     .select("event_type,bucket,in_test,value_cents,utm_source,iab_kind,created_at")
     .eq("merchant_id", merchantId)
     .in("event_type", ["purchase", "checkout_started", "add_to_cart", "escape_attempt"])
+    .in("iab_kind", iabKinds)
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -189,7 +193,7 @@ export default async function DashboardOverview({
       </Layout>
 
       <Suspense key={`activity-${range.key}`} fallback={<ActivitySkeleton />}>
-        <ActivitySection merchantId={m} days={d} />
+        <ActivitySection merchantId={m} days={d} iabKinds={getEnabledDashboardIabKinds(merchant)} />
       </Suspense>
     </Page>
   );
@@ -440,8 +444,16 @@ async function SampleSizeSection({ merchantId, days }: { merchantId: string; day
   return <SampleSizeCard funnel={funnel} />;
 }
 
-async function ActivitySection({ merchantId, days }: { merchantId: string; days: number }) {
-  const rows = await fetchActivity(merchantId, days, 12);
+async function ActivitySection({
+  merchantId,
+  days,
+  iabKinds,
+}: {
+  merchantId: string;
+  days: number;
+  iabKinds: IabKind[];
+}) {
+  const rows = await fetchActivity(merchantId, days, iabKinds, 12);
   return <ActivityCard rows={rows} days={days} />;
 }
 

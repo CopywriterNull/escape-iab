@@ -103,11 +103,60 @@ export default async function SettingsPage({
         </div>
 
         <div className="border-t border-[var(--color-border-soft)] pt-7 space-y-5">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
+              Platform coverage
+            </div>
+            <h2 className="mt-1 h-display text-[22px] tracking-tight">Where EscapeHatch runs</h2>
+            <p className="mt-1.5 text-xs text-[var(--color-fg-muted)] leading-relaxed max-w-2xl">
+              Instagram is the clean baseline. Turn on additional surfaces only when the merchant wants those visitors included in escape behavior and reporting.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <ToggleCard
+              name="escape_instagram"
+              defaultOn={merchant.escape_instagram !== false}
+              label="Instagram"
+              badge="Primary"
+              hint="Default. Included in A/B testing, recent activity, and dashboard reporting."
+            />
+            <ToggleCard
+              name="escape_threads"
+              defaultOn={merchant.escape_threads === true}
+              label="Threads"
+              badge="Meta"
+              hint="Uses the Meta/Threads browser handoff path. Keep off unless the brand wants Threads traffic in the test."
+            />
+            <ToggleCard
+              name="escape_facebook"
+              defaultOn={merchant.escape_facebook === true}
+              label="Facebook"
+              badge="Meta"
+              hint="Optional Facebook in-app handling. Different behavior than Instagram on iOS, so keep separate."
+            />
+            <ToggleCard
+              name="escape_messenger"
+              defaultOn={merchant.escape_messenger === true}
+              label="Messenger"
+              badge="Meta"
+              hint="Optional Messenger coverage. Enable only when the brand cares about Messenger click traffic."
+            />
+            <ToggleCard
+              name="escape_discord"
+              defaultOn={merchant.escape_discord === true}
+              label="Discord"
+              badge="Other"
+              hint="Experimental browser handoff path. Keep off for Shopify A/B reads unless intentionally testing it."
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-[var(--color-border-soft)] pt-7 space-y-5">
           <Toggle
             name="paid_only"
             defaultOn={merchant.paid_only === true}
-            label="Only escape paid Meta traffic"
-            hint="Default off — escape every IG/Threads in-app browser visitor (organic story / DM / link-in-bio + paid). On: restrict to paid clicks only (fbclid present or paid-UTM tags)."
+            label="Only escape paid traffic"
+            hint="Default off — escape enabled platform traffic from paid + organic sources. On: restrict to fbclid or paid-UTM clicks."
           />
           <Toggle
             name="ab_enabled"
@@ -211,5 +260,39 @@ function Toggle({
         </span>
       </label>
     </div>
+  );
+}
+
+function ToggleCard({
+  name,
+  defaultOn,
+  label,
+  badge,
+  hint,
+}: {
+  name: string;
+  defaultOn: boolean;
+  label: string;
+  badge: string;
+  hint: string;
+}) {
+  return (
+    <label className="group flex min-h-[118px] cursor-pointer flex-col justify-between rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/55 p-4 transition-colors hover:border-[var(--color-border)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium tracking-tight">{label}</span>
+            <span className="pill pill-muted">{badge}</span>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-[var(--color-fg-muted)]">{hint}</p>
+        </div>
+        <span className="relative inline-flex shrink-0 items-center">
+          <input type="checkbox" name={name} defaultChecked={defaultOn} className="peer sr-only" />
+          <span className="relative inline-block h-6 w-11 rounded-full bg-[var(--color-border)] transition-colors duration-200 peer-checked:bg-[var(--color-accent)]">
+            <span className="absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow-md transition-transform duration-200 peer-checked:translate-x-5" />
+          </span>
+        </span>
+      </div>
+    </label>
   );
 }

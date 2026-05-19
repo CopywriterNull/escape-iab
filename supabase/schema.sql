@@ -13,6 +13,11 @@ create table if not exists public.merchants (
   plan text not null default 'free',
   ab_enabled boolean not null default true,
   fallback_button boolean not null default true,
+  escape_instagram boolean not null default true,
+  escape_threads boolean not null default false,
+  escape_facebook boolean not null default false,
+  escape_messenger boolean not null default false,
+  escape_discord boolean not null default false,
   created_at timestamptz not null default now()
 );
 create index if not exists merchants_user_id_idx on public.merchants(user_id);
@@ -30,7 +35,7 @@ create table if not exists public.escape_events (
   bucket text not null check (bucket in ('a','b')),
   is_ig boolean not null default false,
   iab_kind text check (iab_kind in (
-    'instagram','facebook','messenger','tiktok','snapchat','pinterest','line','wechat','webview'
+    'instagram','threads','facebook','messenger','tiktok','snapchat','pinterest','discord','line','wechat','webview'
   )),
   shopify_client_id text,
   value_cents int,

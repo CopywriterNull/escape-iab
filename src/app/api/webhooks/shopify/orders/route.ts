@@ -200,12 +200,12 @@ export async function POST(req: NextRequest) {
   //   2. eh_sid — works when landing_site URL preserved our marker.
   //   3. fbclid — fallback for paid Meta clicks where neither above survived.
   const since = new Date(Date.now() - JOIN_WINDOW_DAYS * 86400_000).toISOString();
-  let imp: { bucket: "a" | "b" } | null = null;
+  let imp: { bucket: "a" | "b"; iab_kind: string | null } | null = null;
   let joinMethod: string | null = null;
   if (cartToken) {
     const { data } = await admin
       .from("escape_events")
-      .select("bucket")
+      .select("bucket,iab_kind")
       .eq("merchant_id", merchantId)
       .eq("cart_token", cartToken)
       .eq("in_test", true)
@@ -213,13 +213,13 @@ export async function POST(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    imp = data as { bucket: "a" | "b" } | null;
+    imp = data as { bucket: "a" | "b"; iab_kind: string | null } | null;
     if (imp) joinMethod = "cart_token";
   }
   if (!imp && ehSid) {
     const { data } = await admin
       .from("escape_events")
-      .select("bucket")
+      .select("bucket,iab_kind")
       .eq("merchant_id", merchantId)
       .eq("eh_sid", ehSid)
       .eq("event_type", "impression")
@@ -228,13 +228,13 @@ export async function POST(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    imp = data as { bucket: "a" | "b" } | null;
+    imp = data as { bucket: "a" | "b"; iab_kind: string | null } | null;
     if (imp) joinMethod = "eh_sid";
   }
   if (!imp && fbclid) {
     const { data } = await admin
       .from("escape_events")
-      .select("bucket")
+      .select("bucket,iab_kind")
       .eq("merchant_id", merchantId)
       .eq("fbclid", fbclid)
       .eq("event_type", "impression")
@@ -243,7 +243,7 @@ export async function POST(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    imp = data as { bucket: "a" | "b" } | null;
+    imp = data as { bucket: "a" | "b"; iab_kind: string | null } | null;
     if (imp) joinMethod = "fbclid";
   }
 
@@ -257,6 +257,7 @@ export async function POST(req: NextRequest) {
     event_type: "purchase",
     bucket,
     in_test: inTest,
+    iab_kind: imp?.iab_kind ?? null,
     eh_sid: ehSid,
     fbclid,
     cart_token: cartToken,

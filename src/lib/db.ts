@@ -56,6 +56,11 @@ export type Merchant = {
   paid_only?: boolean;
   /** Percent of in-test traffic placed in bucket A (escape). 50 = even. */
   ab_split_pct?: number;
+  escape_instagram?: boolean;
+  escape_threads?: boolean;
+  escape_facebook?: boolean;
+  escape_messenger?: boolean;
+  escape_discord?: boolean;
   created_at: string;
 };
 
@@ -78,14 +83,33 @@ export type DailyRollup = {
 
 export type IabKind =
   | "instagram"
+  | "threads"
   | "facebook"
   | "messenger"
   | "tiktok"
   | "snapchat"
   | "pinterest"
+  | "discord"
   | "line"
   | "wechat"
   | "webview";
+
+export function getEnabledDashboardIabKinds(merchant: Pick<
+  Merchant,
+  | "escape_instagram"
+  | "escape_threads"
+  | "escape_facebook"
+  | "escape_messenger"
+  | "escape_discord"
+>): IabKind[] {
+  const kinds: IabKind[] = [];
+  if (merchant.escape_instagram !== false) kinds.push("instagram");
+  if (merchant.escape_threads === true) kinds.push("threads");
+  if (merchant.escape_facebook === true) kinds.push("facebook");
+  if (merchant.escape_messenger === true) kinds.push("messenger");
+  if (merchant.escape_discord === true) kinds.push("discord");
+  return kinds.length > 0 ? kinds : ["instagram"];
+}
 
 export async function getCurrentMerchant(): Promise<Merchant | null> {
   const supabase = await getSupabaseServer();
@@ -414,11 +438,13 @@ export async function getIabBreakdown(
   const supabase = await getTelemetryClient();
   const empty: Record<IabKind, number> = {
     instagram: 0,
+    threads: 0,
     facebook: 0,
     messenger: 0,
     tiktok: 0,
     snapchat: 0,
     pinterest: 0,
+    discord: 0,
     line: 0,
     wechat: 0,
     webview: 0,
