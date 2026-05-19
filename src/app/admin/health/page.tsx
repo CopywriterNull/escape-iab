@@ -43,7 +43,18 @@ const EVENT_TYPES = [
 
 export default async function AdminHealth() {
   const admin = getSupabaseAdmin();
-  const { data: merchantData } = await admin!
+  if (!admin) {
+    return (
+      <div className="rounded-xl border border-[var(--color-danger)]/35 bg-[var(--color-danger-soft)]/30 p-6">
+        <div className="eyebrow">Admin · Health</div>
+        <h1 className="mt-2 h-display text-[24px] tracking-tight">Service role unavailable</h1>
+        <p className="mt-2 text-[13px] text-[var(--color-fg-dim)]">
+          Set <code className="font-mono">SUPABASE_SERVICE_ROLE_KEY</code> to run cross-merchant health checks.
+        </p>
+      </div>
+    );
+  }
+  const { data: merchantData } = await admin
     .from("merchants")
     .select("id,name,domain,shopify_domain,escape_enabled,ab_enabled,paid_only,escape_instagram,escape_threads,escape_facebook,escape_messenger,escape_discord,created_at")
     .order("created_at", { ascending: false });
@@ -53,7 +64,7 @@ export default async function AdminHealth() {
   const eventsByMerchant = new Map<string, EventRow[]>();
 
   if (merchants.length > 0) {
-    const { data: eventData } = await admin!
+    const { data: eventData } = await admin
       .from("escape_events")
       .select("merchant_id,event_type,iab_kind,in_test,order_id,cart_token,created_at")
       .in("merchant_id", merchants.map((m) => m.id))
