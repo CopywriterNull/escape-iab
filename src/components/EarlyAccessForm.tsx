@@ -12,7 +12,7 @@ const visitorRanges = [
 
 const platforms = ["Shopify", "Shopify Plus", "Headless Shopify", "Custom / other"];
 
-export function EarlyAccessForm() {
+export function EarlyAccessForm({ initialEmail = "" }: { initialEmail?: string } = {}) {
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
 
@@ -64,6 +64,7 @@ export function EarlyAccessForm() {
             required
             autoComplete="email"
             placeholder="you@brand.com"
+            defaultValue={initialEmail}
             className={inputClass}
           />
         </Field>
