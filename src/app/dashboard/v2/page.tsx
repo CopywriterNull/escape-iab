@@ -83,6 +83,29 @@ function metricColor(value: number | null): string {
   return "text-[var(--color-fg)]";
 }
 
+type DailyIncrement = { day: string; value: number };
+
+function computeDailyIncrementals(rollups: DailyRollup[], days: number): DailyIncrement[] {
+  const byDay = new Map<string, { a?: DailyRollup; b?: DailyRollup }>();
+  for (const row of rollups) {
+    const slot = byDay.get(row.day) ?? {};
+    slot[row.bucket] = row;
+    byDay.set(row.day, slot);
+  }
+  const series: DailyIncrement[] = [];
+  for (const [day, { a, b }] of byDay) {
+    if (!a || !b || a.impressions <= 0 || b.impressions <= 0) {
+      series.push({ day, value: 0 });
+      continue;
+    }
+    const rpvA = a.revenue_cents / 100 / a.impressions;
+    const rpvB = b.revenue_cents / 100 / b.impressions;
+    series.push({ day, value: (rpvA - rpvB) * a.impressions });
+  }
+  series.sort((x, y) => (x.day < y.day ? -1 : 1));
+  return series.slice(-days);
+}
+
 function computeCumulativeIncremental(rollups: DailyRollup[]): number {
   // Group per-day rows into bucket A vs B totals, then sum (RPV_A - RPV_B) * impressions_A.
   // This mirrors the live A/B math but accumulated across the rollup window.
@@ -192,9 +215,12 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
   ]);
   const s = summarize(funnel);
   const cumulativeIncremental = computeCumulativeIncremental(rollups);
+  const dailySeries = computeDailyIncrementals(rollups, 14);
   const bestSource = pickBestSource(sources);
   const platformWinner = pickPlatformWinner(iabBreakdown, iabKinds);
   const revenueWow = periodDelta.comparable ? periodDelta.deltas.revenue_cents : null;
+  const holdoutCost =
+    s.rpvA != null && s.rpvB != null ? (s.rpvA - s.rpvB) * s.baseB : null;
   const abPct =
     typeof merchant.ab_split_pct === "number" && Number.isFinite(merchant.ab_split_pct)
       ? Math.min(99, Math.max(1, Math.round(merchant.ab_split_pct)))
@@ -294,19 +320,24 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
               <div className="mt-2 max-w-xl text-[13px] text-[var(--color-fg-dim)]">
                 Based on A/B revenue per visitor: bucket A escape vs bucket B holdout over the last {range.label}.
               </div>
-              {cumulativeIncremental !== 0 ? (
-                <div className="mt-3 inline-flex items-center gap-2 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/45 px-2.5 py-1.5">
-                  <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--color-fg-muted)]">
-                    Realized to date
-                  </span>
-                  <span className={`text-[14px] font-semibold tnum ${metricColor(cumulativeIncremental)}`}>
-                    {fmtUSD(cumulativeIncremental, true)}
-                  </span>
-                  <span className="text-[10.5px] font-mono text-[var(--color-fg-muted)]">
-                    last {cumulativeDays}d
-                  </span>
-                </div>
-              ) : null}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {cumulativeIncremental !== 0 ? (
+                  <div className="inline-flex items-center gap-2 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/45 px-2.5 py-1.5">
+                    <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--color-fg-muted)]">
+                      Realized to date
+                    </span>
+                    <span className={`text-[14px] font-semibold tnum ${metricColor(cumulativeIncremental)}`}>
+                      {fmtUSD(cumulativeIncremental, true)}
+                    </span>
+                    <span className="text-[10.5px] font-mono text-[var(--color-fg-muted)]">
+                      last {cumulativeDays}d
+                    </span>
+                  </div>
+                ) : null}
+                {dailySeries.some((d) => d.value !== 0) ? (
+                  <IncrementalSparkline series={dailySeries} />
+                ) : null}
+              </div>
 
               <div className="mt-5 grid grid-cols-3 gap-2">
                 <MiniReadout label="Lift" value={fmtPct(primaryLift)} tone={metricColor(primaryLift)} />
@@ -318,7 +349,14 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
             <div className="border-t border-[var(--color-border-soft)] p-4 lg:border-l lg:border-t-0">
               <div className="grid grid-cols-2 gap-2">
                 <BucketCard label="A escape" visitors={s.baseA} revenue={s.revA} rpv={s.rpvA} cvr={s.cvrA} active />
-                <BucketCard label="B holdout" visitors={s.baseB} revenue={s.revB} rpv={s.rpvB} cvr={s.cvrB} />
+                <BucketCard
+                  label="B holdout"
+                  visitors={s.baseB}
+                  revenue={s.revB}
+                  rpv={s.rpvB}
+                  cvr={s.cvrB}
+                  holdoutCost={holdoutCost}
+                />
               </div>
               <div className="mt-3 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/50 p-3">
                 <div className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--color-fg-muted)]">
@@ -452,6 +490,7 @@ function BucketCard({
   rpv,
   cvr,
   active = false,
+  holdoutCost = null,
 }: {
   label: string;
   visitors: number;
@@ -459,6 +498,7 @@ function BucketCard({
   rpv: number | null;
   cvr: number | null;
   active?: boolean;
+  holdoutCost?: number | null;
 }) {
   return (
     <div
@@ -477,6 +517,11 @@ function BucketCard({
         <div>{fmtUSD(rpv ?? 0)} RPV</div>
         <div>{((cvr ?? 0) * 100).toFixed(2)}% CVR</div>
       </div>
+      {holdoutCost != null && holdoutCost > 0 ? (
+        <div className="mt-2 rounded-sm border border-[var(--color-warn)]/25 bg-[var(--color-warn)]/8 px-1.5 py-1 text-[10px] font-mono text-[var(--color-warn)] tnum" title="Revenue B would have earned at A's RPV — the cost of keeping the holdout.">
+          −{fmtUSD(holdoutCost, true)} holdout cost
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -533,6 +578,78 @@ function ProofTile({
       </div>
       <div className={`mt-2 text-[24px] font-semibold tracking-tight tnum ${tone}`}>{value}</div>
       <div className="mt-1 text-[11px] text-[var(--color-fg-muted)] tnum">{helper}</div>
+    </div>
+  );
+}
+
+function IncrementalSparkline({ series }: { series: DailyIncrement[] }) {
+  const w = 132;
+  const h = 32;
+  const padX = 2;
+  const padY = 4;
+  const values = series.map((d) => d.value);
+  const max = Math.max(...values, 0);
+  const min = Math.min(...values, 0);
+  const span = max - min || 1;
+  const points = values.map((v, i) => {
+    const x = padX + (i * (w - padX * 2)) / Math.max(1, values.length - 1);
+    const y = padY + (1 - (v - min) / span) * (h - padY * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const lastValue = values[values.length - 1] ?? 0;
+  const positiveDays = values.filter((v) => v > 0).length;
+  const zeroY = padY + (1 - (0 - min) / span) * (h - padY * 2);
+  const stroke =
+    lastValue > 0
+      ? "var(--color-success)"
+      : lastValue < 0
+        ? "var(--color-danger)"
+        : "var(--color-fg-muted)";
+
+  return (
+    <div className="inline-flex items-center gap-2 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/45 px-2.5 py-1.5">
+      <div className="flex flex-col">
+        <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--color-fg-muted)]">
+          Daily incremental
+        </span>
+        <span className="text-[10.5px] font-mono text-[var(--color-fg-muted)] tnum">
+          {positiveDays}/{values.length} days positive
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        width={w}
+        height={h}
+        role="img"
+        aria-label={`Daily incremental revenue over the last ${values.length} days, ${positiveDays} positive`}
+        className="shrink-0"
+      >
+        <line
+          x1={padX}
+          x2={w - padX}
+          y1={zeroY}
+          y2={zeroY}
+          stroke="var(--color-border-soft)"
+          strokeDasharray="2 2"
+          strokeWidth={1}
+        />
+        <polyline
+          points={points.join(" ")}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {points.length > 0 ? (
+          <circle
+            cx={Number(points[points.length - 1].split(",")[0])}
+            cy={Number(points[points.length - 1].split(",")[1])}
+            r={2}
+            fill={stroke}
+          />
+        ) : null}
+      </svg>
     </div>
   );
 }
