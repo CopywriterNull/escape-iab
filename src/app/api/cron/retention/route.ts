@@ -12,7 +12,7 @@ const MAX_BATCHES_PER_RUN = 8;
 const POLICIES = [
   {
     name: "cart_check",
-    retentionDays: 7,
+    retentionDays: 1,
     eventTypes: ["cart_check"],
   },
   {
@@ -26,6 +26,8 @@ const POLICIES = [
     eventTypes: ["purchase"],
   },
 ] as const;
+
+const CART_ATTRIBUTION_RETENTION_DAYS = 45;
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -64,6 +66,26 @@ export async function GET(req: NextRequest) {
 
   const batchSize = batchSizeFrom(req);
   const results: Record<string, { deleted: number; cutoff: string }> = {};
+
+  const cartAttributionCutoff = cutoffIso(CART_ATTRIBUTION_RETENTION_DAYS);
+  const { count: cartAttributionsDeleted, error: cartAttributionsError } = await admin
+    .from("cart_attributions")
+    .delete({ count: "exact" })
+    .lt("last_seen_at", cartAttributionCutoff);
+  if (cartAttributionsError) {
+    return json(
+      {
+        ok: false,
+        error: "cart_attribution_delete_failed",
+        details: cartAttributionsError.message,
+      },
+      500,
+    );
+  }
+  results.cart_attributions = {
+    deleted: cartAttributionsDeleted ?? 0,
+    cutoff: cartAttributionCutoff,
+  };
 
   for (const policy of POLICIES) {
     const cutoff = cutoffIso(policy.retentionDays);

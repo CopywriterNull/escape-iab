@@ -203,19 +203,32 @@ export async function POST(req: NextRequest) {
   let imp: { bucket: "a" | "b"; iab_kind: string | null } | null = null;
   let joinMethod: string | null = null;
   if (cartToken) {
-    const { data } = await admin
-      .from("escape_events")
+    const { data: cartAttr } = await admin
+      .from("cart_attributions")
       .select("bucket,iab_kind")
       .eq("merchant_id", merchantId)
       .eq("cart_token", cartToken)
       .eq("in_test", true)
-      .neq("event_type", "purchase")
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
-      .limit(1)
+      .gte("last_seen_at", since)
       .maybeSingle();
-    imp = data as { bucket: "a" | "b"; iab_kind: string | null } | null;
-    if (imp) joinMethod = "cart_token";
+    imp = cartAttr as { bucket: "a" | "b"; iab_kind: string | null } | null;
+    if (imp) joinMethod = "cart_attribution";
+
+    if (!imp) {
+      const { data } = await admin
+        .from("escape_events")
+        .select("bucket,iab_kind")
+        .eq("merchant_id", merchantId)
+        .eq("cart_token", cartToken)
+        .eq("in_test", true)
+        .neq("event_type", "purchase")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      imp = data as { bucket: "a" | "b"; iab_kind: string | null } | null;
+      if (imp) joinMethod = "cart_token_legacy";
+    }
   }
   if (!imp && ehSid) {
     const { data } = await admin

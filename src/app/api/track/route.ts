@@ -115,6 +115,29 @@ export async function POST(req: NextRequest) {
 
   const admin = getSupabaseAdmin();
   if (admin) {
+    if (eventType === "cart_check") {
+      if (cartToken) {
+        await admin.from("cart_attributions").upsert(
+          {
+            merchant_id: merchantId,
+            cart_token: cartToken,
+            bucket,
+            in_test: inTest,
+            iab_kind: iabKind,
+            eh_sid: ehSid,
+            shopify_client_id: shopifyClientId,
+            last_seen_at: new Date().toISOString(),
+          },
+          { onConflict: "merchant_id,cart_token" },
+        );
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json", ...corsHeaders(origin) },
+      });
+    }
+
     await admin.from("escape_events").insert({
       merchant_id: merchantId,
       event_type: eventType,
