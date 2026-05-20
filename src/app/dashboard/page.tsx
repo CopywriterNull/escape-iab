@@ -31,6 +31,7 @@ import {
 import { RangeSelector } from "./_components/range-selector";
 import { LiveActivity } from "./_components/live-activity";
 import { SampleSizeCalculator } from "./_components/sample-size-calc";
+import { PorscheMeter } from "./_components/porsche-meter";
 import { PixelIcon } from "@/components/PixelIcon";
 
 /* -------- Number formatters -------- */
@@ -415,7 +416,6 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
   const rpsB = baseB > 0 ? revB / baseB : 0;
   const liftRel = rpsB > 0 ? (rpsA - rpsB) / rpsB : null;
   const z = zTestTwoProp(funnel.purchases.a, baseA, funnel.purchases.b, baseB);
-  const escapeRate = baseA > 0 ? (100 * funnel.escape_attempts.a) / baseA : 0;
   const totalImpressions = baseA + baseB;
   const totalRevenue = revA + revB;
   const revPerVisitor = totalImpressions > 0 ? totalRevenue / totalImpressions : 0;
@@ -428,6 +428,7 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
   const rpvA = baseA > 0 ? revA / baseA : null;
   const rpvB = baseB > 0 ? revB / baseB : null;
   const rpvLift = rpvA != null && rpvB != null && rpvB > 0 ? (rpvA - rpvB) / rpvB : null;
+  const projectedRevenue = rpvA != null && totalImpressions > 0 ? totalImpressions * rpvA : null;
 
   // Purchase CVR per bucket — for the lift tile's comparison sub-line.
   const cvrA = baseA > 0 ? funnel.purchases.a / baseA : null;
@@ -437,8 +438,8 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
     <KPIGrid
       impressions={totalImpressions}
       escapeAttempts={funnel.escape_attempts.a}
-      escapeRate={escapeRate}
       revenue={totalRevenue}
+      projectedRevenue={projectedRevenue}
       purchases={funnel.purchases.a + funnel.purchases.b}
       revPerVisitor={revPerVisitor}
       rpvPrior={prevRpv > 0 ? prevRpv : null}
@@ -729,8 +730,8 @@ function Banner({
 function KPIGrid({
   impressions,
   escapeAttempts,
-  escapeRate,
   revenue,
+  projectedRevenue,
   purchases,
   revPerVisitor,
   rpvPrior,
@@ -746,8 +747,8 @@ function KPIGrid({
 }: {
   impressions: number;
   escapeAttempts: number;
-  escapeRate: number;
   revenue: number;
+  projectedRevenue: number | null;
   purchases: number;
   revPerVisitor: number;
   rpvPrior: number | null;
@@ -771,16 +772,6 @@ function KPIGrid({
       : liftRel > 0
         ? "text-[var(--color-success)]"
         : "text-[var(--color-danger)]";
-
-  // Escape-rate delta from prior period.
-  const prevEscapeRate =
-    period.previous.impressions > 0
-      ? (100 * period.previous.escape_attempts) / period.previous.impressions
-      : null;
-  const escapeRateDelta =
-    prevEscapeRate != null && prevEscapeRate > 0
-      ? (escapeRate - prevEscapeRate) / prevEscapeRate
-      : null;
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -811,14 +802,7 @@ function KPIGrid({
         delta={period.deltas.impressions}
         deltaLabel={period.priorLabel}
       />
-      <KPI
-        label="Escape rate"
-        icon="bolt"
-        value={`${escapeRate.toFixed(0)}%`}
-        sub="of bucket A landings"
-        delta={escapeRateDelta}
-        deltaLabel={period.priorLabel}
-      />
+      <PorscheMeter trackedRevenue={revenue} projectedRevenue={projectedRevenue} />
       <KPI
         label="Revenue (test)"
         icon="cart"
