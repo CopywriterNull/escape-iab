@@ -809,7 +809,6 @@ function KPIGrid({
         deltaLabel={period.priorLabel}
       />
       <PorscheMeter
-        trackedRevenue={revenue}
         incrementalRevenue={incrementalRevenue}
         rolloutIncrementalRevenue={rolloutIncrementalRevenue}
       />
