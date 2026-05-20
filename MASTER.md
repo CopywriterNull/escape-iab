@@ -1,8 +1,23 @@
 # EscapeHatch — master review doc
 
-**Last updated:** 2026-05-17 · **Branch:** `master` · **Prod:** [getescapehatch.com](https://getescapehatch.com)
+**Last updated:** 2026-05-20 · **Branch:** `main` · **Prod:** [getescapehatch.com](https://getescapehatch.com)
 
 > Single review-and-action document. The "do this first" sits at the top; deeper architecture / history lives in [`NOTES.md`](./NOTES.md) and session-level details in [`HANDOFF.md`](./HANDOFF.md).
+
+## 2026-05-20 update — dashboard v2 + rollout measurement
+
+Pushed to `main` in commit `2dd17d1`. Auto-deployed via Vercel.
+
+- New route `/dashboard/v2` is a denser, screenshot-ready variant of the overview. Reuses existing loaders (`getTestFunnel`, `getSourceBreakdown`, `getUnattributedPurchaseStats`); classic `/dashboard` is unchanged.
+- Added `Try v2 preview` chip on `/dashboard` next to `Install snippet` so the variant is discoverable. Range is carried over.
+- New `SUPABASE.md` at repo root captures the data-side state and the **100% rollout measurement model** (small holdout → test-locked baseline → pre/post). Read it before adding any new dashboard metric or changing how value is reported to clients.
+- v2 has a `PhaseStrip` panel that derives **Testing / Ready to graduate / Rolled out** from `ab_enabled` + significance + lift sign and explains the right measurement model for each phase.
+
+What's still missing (durable next step): a `merchant_test_baselines` table to snapshot the winning B-RPV/CVR/AOV at graduation. Without it, the "Rolled out" branch of `PhaseStrip` reuses live deltas as a stand-in instead of showing a true estimated-lift number. See `HANDOFF.md` → "2026-05-20 session notes" for the full plan.
+
+Other in-flight changes visible in `git status` (admin sidebar/diagnostics/layout/page, `api/track/route.ts`, preview landing pages, `admin/momentum/`, `docs/audits/`, a `20260520164000_drop_legacy_eh_increment_rollup_4arg.sql` migration, `supabase/.temp/`) were **deliberately not bundled** into this commit — they belong to other work streams.
+
+---
 
 ## 2026-05-18 Codex update
 
@@ -107,6 +122,9 @@ If clients need to see metrics without dashboard login, build `/share/[token]` a
 | G FUEL (steady state) | ✅ Working | Reference install, no known issues |
 | Marketing site dark mode | ✅ Live | `getescapehatch.com` |
 | v2 lander | 🟡 Preview at `/preview/landing/next` | Approve to flip prod to `variant="v2"` |
+| Dashboard v2 (`/dashboard/v2`) | ✅ Live | Denser variant + `PhaseStrip` (Testing/Ready/Rolled out). Classic `/dashboard` unchanged. |
+| `merchant_test_baselines` (post-rollout proof) | ⛔ Not built | Required for honest "Rolled out" estimated-lift on v2. See `SUPABASE.md` + `HANDOFF.md`. |
+| `SUPABASE.md` (rollout measurement doc) | ✅ Live | Canonical reference for how to report value once a merchant moves off 50/50. |
 
 ---
 
@@ -339,7 +357,8 @@ r:"s"                      eh_a sticky exit
 | File | What it has |
 |---|---|
 | [`NOTES.md`](./NOTES.md) | Canonical project state — stack, schema, attribution architecture, all migrations, known issues, marketing copy, alt taglines, name decisions |
-| [`HANDOFF.md`](./HANDOFF.md) | Session-level handoff (2026-05-17) — what's deployed, what's on disk only, continuation prompt for next agent session |
+| [`HANDOFF.md`](./HANDOFF.md) | Session-level handoff (latest: 2026-05-20) — what's deployed, what's on disk only, continuation prompt for next agent session |
+| [`SUPABASE.md`](./SUPABASE.md) | Supabase/data state + the **100% rollout measurement model** (small holdout, test-locked baseline, pre/post). Read before changing how dashboard value is reported. |
 | [`docs/INSTALL_GFUEL.md`](./docs/INSTALL_GFUEL.md) | Concrete merchant install guide (snippet + Customer Events pixel) |
 | [`docs/AB_TESTING_PLAN.md`](./docs/AB_TESTING_PLAN.md) | A/B testing methodology — sample size, z-test, attribution architecture rationale |
 | `/admin/guides` (in app) | Live operator playbooks — sync-script pitfall, cache busting, kill switch, paid-only, multi-tenant webhook, pixel setup, `?eh_force=a\|b` QA, full QA checklist |

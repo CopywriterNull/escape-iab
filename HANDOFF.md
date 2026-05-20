@@ -4,11 +4,74 @@ Where we left off after a multi-day push to make andar.com escape correctly, har
 
 For the canonical state of the project (stack, schema, attribution architecture, known issues) **read `NOTES.md` first.** This doc is the live "what just happened + what's next" overlay.
 
+> **2026-05-20 update (dashboard v2 + rollout measurement):** new `/dashboard/v2` route is live on `main` (commit `2dd17d1`). It is a denser, screenshot-ready variant of the overview built on top of the same loaders (`getTestFunnel`, `getSourceBreakdown`, `getUnattributedPurchaseStats`). The main dashboard is unchanged; a "Try v2 preview" chip on `/dashboard` links to it. New `SUPABASE.md` at repo root documents the Supabase/data-side work and — most importantly — the **100% rollout measurement model** (small holdout, test-locked baseline, pre/post). v2 surfaces this as a `PhaseStrip` panel that derives Testing / Ready to graduate / Rolled out from `ab_enabled` + significance + lift sign. The matching DB primitive (`merchant_test_baselines` to snapshot the winning B-RPV at graduation) is **not yet implemented** — that is the next durable step for true post-rollout estimated-lift.
+
 > **2026-05-18 update:** parts of this handoff are stale. `0016_ab_split_pct.sql` is already applied in live Supabase, v10-era code is no longer sitting uncommitted, and the immediate dashboard issue was traced to RLS-hidden admin impersonation reads plus slow `escape_events` aggregates. See the top of `MASTER.md` and migration `0017_dashboard_perf_and_rls.sql`.
 
 > **2026-05-19 update:** latest production work is pushed to `main`. Dashboard impersonation/settings data loading is fixed, homepage proof language now uses percentage lift/RPV lift instead of recovered-dollar framing, homepage escape counter uses all merchants over the last rolling 24h, and the early-access CTA is now a lead form posting to `/api/early-access`. The form forwards to `EARLY_ACCESS_WEBHOOK_URL`, which still needs to be set in Vercel once the webhook URL is available.
 
 > **2026-05-19 report/ops update:** `/dashboard/report` is now the first client-report surface. It is still login/impersonation gated, but it packages the exact data we want to later expose through `/share/[token]`: validity status, RPV lift, CVR lift, projected revenue delta, funnel proof, source mix, and caveats. Shared validity math lives in `src/lib/test-validity.ts`. Admin overview/merchant/diagnostics event counts now use service-role-only summary RPCs from `supabase/migrations/0019_admin_summary_rpcs.sql` instead of pulling raw 24h event rows.
+
+---
+
+## 2026-05-20 session notes — dashboard v2 + rollout measurement
+
+### What shipped (pushed to `main`, commit `2dd17d1`)
+
+| File | Change |
+| --- | --- |
+| `src/app/dashboard/v2/page.tsx` | **NEW** — denser overview variant. Hero panel (incremental revenue + lift + confidence + rollout upside) + Porsche meter on top row, 4-up metric strip in the middle, A/B readout + source mix on the bottom. Reuses `getTestFunnel`, `getSourceBreakdown`, `getUnattributedPurchaseStats`, `zTestTwoProp`. Range pills link back to `/dashboard/v2?range=...`; a `Classic` link returns to `/dashboard`. |
+| `src/app/dashboard/page.tsx` | Added `Try v2 preview` chip next to `Install snippet` in the page action area. Range is carried over via `?range=${range.key}`. |
+| `SUPABASE.md` | **NEW** at repo root. Captures the data-side state (rollups, indexes, retention, attribution gaps) **and** the 100% rollout measurement model — see below. |
+
+### Why v2 exists
+
+User feedback: classic `/dashboard` has too much vertical white space and the Porsche revenue card felt isolated. v2 is the screenshot-ready compact variant for client decks. It is deliberately a parallel route, not a replacement — anything that wants to keep working should keep using `/dashboard`.
+
+### `PhaseStrip` (v2-only)
+
+Derived locally in `src/app/dashboard/v2/page.tsx`:
+
+- **Testing** — `ab_enabled === true` and **not** statistically significant. Helper copy reinforces "bucket B is silent by design."
+- **Ready to graduate** — `ab_enabled === true`, significant, positive RPV lift. Helper copy recommends a 90/10 or 95/5 holdout when flipping to rollout so live lift math stays honest.
+- **Rolled out** — `ab_enabled === false`. Helper copy reframes the readout as "estimated incremental revenue vs locked baseline."
+
+Today the strip is purely derived from current data. The "Rolled out" state still draws on live A/B deltas because we do not yet snapshot the winning test window.
+
+### 100% rollout measurement — recommended approach
+
+Documented in full in `SUPABASE.md` under `## 100% Rollout Measurement`. Short version, in order of preference:
+
+1. **Small holdout (best).** Run 90/10 or 95/5 instead of true 100%. A = escape, B = holdout. Keep computing `(RPV A − RPV B) * A visitors` for realized incremental, and `(RPV A − RPV B) * all eligible visitors` for rollout upside. This is the cleanest way to keep proving lift over time.
+2. **Test-locked baseline (good).** If the client insists on 100%, freeze the winning test window's B/control RPV/CVR/AOV in a new table and compute `estimated incremental revenue = (current escaped RPV − locked control RPV) * current eligible visitors`. Label as "estimated", not live A/B proof.
+3. **Pre/post (backup).** Compare post-rollout performance to prior same-day / same-source history. Vulnerable to seasonality and creative mix — should not be presented as causal proof.
+
+### What is NOT yet built
+
+- No `merchant_test_baselines` table. Without it, the "Rolled out" PhaseStrip state cannot show a true estimated-lift number — it reuses live deltas as a stand-in. **This is the next durable step** if we want post-rollout proof to be honest.
+- No dashboard control to "Lock baseline" / graduate a test. Today operators just flip `ab_enabled = false` in `/dashboard/settings`.
+- No "Phase" indicator on the classic `/dashboard` (intentional — keeping it stable).
+
+### Uncommitted work sitting next to this on `master`/`main`
+
+Untouched by this session, but visible in `git status`:
+
+- `src/app/admin/_components/sidebar-nav.tsx`, `src/app/admin/diagnostics/page.tsx`, `src/app/admin/layout.tsx`, `src/app/admin/page.tsx`
+- `src/app/api/track/route.ts`
+- `src/app/preview/landing/page.tsx` and new `src/app/preview/landing/{cto,signal}/`
+- `src/app/admin/momentum/`
+- `docs/audits/`
+- `supabase/migrations/20260520164000_drop_legacy_eh_increment_rollup_4arg.sql`
+- `supabase/.temp/`
+
+These are someone else's in-flight changes and were **deliberately not bundled** into commit `2dd17d1`. Do not assume they relate to the dashboard work.
+
+### Suggested next moves
+
+1. **Add `merchant_test_baselines`** (id, merchant_id, locked_at, b_rpv, b_cvr, b_aov, control_visitors, source_scope, confidence, notes). Write a server action invoked from a new "Graduate test" button on `/dashboard/settings`. Update v2's PhaseStrip "Rolled out" branch to read from it.
+2. **Add a `Testing | Ready | Rolled out` chip to `/dashboard/report`** so the client-facing readout matches what operators see on v2.
+3. **Storage retention work** from `SUPABASE.md`: drop the `fbclid` index, replace raw user-agent retention with parsed fields, partition raw `escape_events` by month if volume keeps climbing.
+4. **Decide v2's fate.** If the team likes it, either promote it to `/dashboard` and move classic to `/dashboard/classic`, or keep v2 as the client-facing screenshot route and leave `/dashboard` as the operator workspace.
 
 ---
 
@@ -149,18 +212,21 @@ For ~30 min I insisted "snippet not in HTML" based on `curl ?em-bypass=server` r
 
 ## 📋 Continuation prompt (paste into next session)
 
-> I'm working on EscapeHatch (https://github.com/CopywriterNull/escape-iab), a SaaS that escapes Instagram/Threads in-app browser for Shopify merchants. Repo at `~/Desktop/escape-iab`. Prod at `https://getescapehatch.com`. First customer G FUEL is steady-state; second customer andar.com (merchant `b8596aac-0c87-4616-80c1-4bdfddf54ad8`) is in final QA after a multi-day install debug.
+> I'm working on EscapeHatch (https://github.com/CopywriterNull/escape-iab), a SaaS that escapes Instagram/Threads in-app browser for Shopify merchants. Repo at `~/Desktop/escape-iab`. Prod at `https://getescapehatch.com`.
 >
-> **Read `HANDOFF.md` first**, then `NOTES.md` for canonical state. Don't re-derive what's already documented.
+> **Read in this order before doing anything:** `HANDOFF.md` (live what-just-happened) → `MASTER.md` (top-of-doc status snapshot) → `SUPABASE.md` (data state + how to report value post-rollout) → `NOTES.md` only if you still need canonical architecture. Don't re-derive what's already documented.
+>
+> Recent state (2026-05-20):
+> - `/dashboard/v2` is live as a denser, screenshot-ready overview variant. Classic `/dashboard` is unchanged. A "Try v2 preview" chip links between them.
+> - v2 includes a `PhaseStrip` panel (Testing / Ready to graduate / Rolled out) driven by `ab_enabled` + significance + lift sign.
+> - `SUPABASE.md` is the canonical reference for the 100% rollout measurement model (small holdout → test-locked baseline → pre/post). The `merchant_test_baselines` table that would make the "Rolled out" branch honest **does not exist yet**.
+> - There are other in-flight changes sitting uncommitted in `git status` (admin sidebar/diagnostics/layout, `api/track/route.ts`, preview landing pages, `admin/momentum/`, `docs/audits/`, a drop-legacy-RPC migration). They are someone else's stream — do not bundle them into v2-related commits.
 >
 > Top priorities (do in order):
 >
-> 1. **Deploy the pending changes** — `git status` shows uncommitted v10 snippet + ab_split_pct migration + slider UI + install fixes. (a) Apply `supabase/migrations/0016_ab_split_pct.sql` in Supabase SQL Editor first. (b) `git push` to deploy. (c) Verify v10 is live with `curl -s 'https://getescapehatch.com/s/b8596aac-...js?v=$(date +%s)' | grep -oE '"v10"|forced:|SPLIT'`.
+> 1. **Add `merchant_test_baselines`** (id, merchant_id, locked_at, b_rpv, b_cvr, b_aov, control_visitors, source_scope, confidence, notes). Server action invoked from a new "Graduate test" button on `/dashboard/settings`. Update v2's PhaseStrip "Rolled out" branch to read estimated lift from it.
+> 2. **Mirror the phase chip on `/dashboard/report`** so the client-facing readout matches what operators see on v2.
+> 3. **Storage retention work from `SUPABASE.md`**: drop the `fbclid` index, replace raw user-agent retention with parsed fields, consider monthly partitioning for raw `escape_events`.
+> 4. **Decide v2's fate.** Either promote it to `/dashboard` and move classic to `/dashboard/classic`, or keep v2 as the client-facing screenshot route and leave classic for operators.
 >
-> 2. **End-to-end QA on andar** — open `https://www.andar.com/?eh_force=a` from inside Instagram on a test phone. Expect Safari handoff. Then $0.01 test order, watch Vercel `/api/track` + `/api/webhooks/shopify/orders` logs, confirm dashboard shows the purchase attributed to bucket A. Tests v10's `eh_force` flag and the full attribution chain at once.
->
-> 3. **Add `forced` column to `escape_events`** + insert-side wiring at `src/app/api/track/route.ts:116` so QA traffic can be filtered out of dashboard metrics.
->
-> 4. **Single-source install tag** — extract the `<script src="...">` template into `src/lib/snippet-tag.ts`, refactor all 5 surfaces (`/install/[id]`, `/admin/merchants`, `/admin/guides`, `/dashboard/install`, `docs/INSTALL_GFUEL.md`) to import. Prevents recurrence of the async-drift bug.
->
-> Don't migrate frameworks, don't break working A/B data flow, push to prod and verify routes return 200 after meaningful changes. Run `npx tsc --noEmit` after multi-file edits.
+> Don't migrate frameworks, don't break the existing A/B data flow, verify routes return 200 after meaningful changes, and run `npx tsc --noEmit` after multi-file edits. Touched dashboard files must pass lint; the full repo lint still fails on unrelated older issues so don't chase those.
