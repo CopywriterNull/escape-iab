@@ -149,15 +149,24 @@ export default async function DashboardOverview({
       range={range}
       subtitle={<span>Last {range.label}</span>}
       action={
-        <Link
-          href="/dashboard/install"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-[12.5px] font-medium press lift focus-ring"
-        >
-          Install snippet
-          <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/dashboard/v2?range=${range.key}`}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)] text-[12px] font-mono text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] focus-ring"
+          >
+            <span className="inline-block size-1.5 rounded-full bg-[var(--color-accent)]" />
+            Try v2 preview
+          </Link>
+          <Link
+            href="/dashboard/install"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-[12.5px] font-medium press lift focus-ring"
+          >
+            Install snippet
+            <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </Link>
+        </div>
       }
     >
       <ScopeBanner merchant={merchant} />
