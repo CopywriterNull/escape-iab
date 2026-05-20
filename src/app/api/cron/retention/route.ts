@@ -12,12 +12,12 @@ const MAX_BATCHES_PER_RUN = 8;
 const POLICIES = [
   {
     name: "cart_check",
-    retentionDays: 14,
+    retentionDays: 7,
     eventTypes: ["cart_check"],
   },
   {
     name: "raw_non_purchase",
-    retentionDays: 45,
+    retentionDays: 21,
     excludeEventTypes: ["purchase"],
   },
   {
