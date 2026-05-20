@@ -17,7 +17,7 @@ const MODELS: PorscheModel[] = [
   { id: "gt4rs", name: "718 GT4 RS", price: 165_000 },
 ];
 
-type Mode = "tracked" | "projected" | "slider";
+type Mode = "incremental" | "rollout" | "tracked";
 
 const compactMoney = new Intl.NumberFormat("en-US", {
   notation: "compact",
@@ -26,25 +26,39 @@ const compactMoney = new Intl.NumberFormat("en-US", {
 
 export function PorscheMeter({
   trackedRevenue,
-  projectedRevenue,
+  incrementalRevenue,
+  rolloutIncrementalRevenue,
 }: {
   trackedRevenue: number;
-  projectedRevenue: number | null;
+  incrementalRevenue: number | null;
+  rolloutIncrementalRevenue: number | null;
 }) {
   const [modelId, setModelId] = useState(MODELS[0].id);
-  const [mode, setMode] = useState<Mode>("projected");
-  const [multiplier, setMultiplier] = useState(2);
+  const [mode, setMode] = useState<Mode>("incremental");
 
   const model = MODELS.find((item) => item.id === modelId) ?? MODELS[0];
   const amount = useMemo(() => {
     if (mode === "tracked") return trackedRevenue;
-    if (mode === "slider") return trackedRevenue * multiplier;
-    return projectedRevenue ?? trackedRevenue;
-  }, [mode, multiplier, projectedRevenue, trackedRevenue]);
+    if (mode === "rollout") return rolloutIncrementalRevenue ?? 0;
+    return incrementalRevenue ?? 0;
+  }, [incrementalRevenue, mode, rolloutIncrementalRevenue, trackedRevenue]);
 
   const fraction = model.price > 0 ? amount / model.price : 0;
-  const pct = Math.max(0, Math.min(100, fraction * 100));
-  const readableFraction = fraction < 0.01 ? fraction.toFixed(3) : fraction.toFixed(2);
+  const pct = Math.max(0, Math.min(100, Math.abs(fraction) * 100));
+  const readableFraction =
+    Math.abs(fraction) < 0.01 ? fraction.toFixed(3) : fraction.toFixed(2);
+  const amountTone =
+    amount > 0
+      ? "text-[var(--color-success)]"
+      : amount < 0
+        ? "text-[var(--color-danger)]"
+        : "text-[var(--color-fg)]";
+  const modeNote =
+    mode === "tracked"
+      ? "gross test revenue"
+      : mode === "rollout"
+        ? "if all IG traffic matched A lift"
+        : "A lift vs B holdout";
 
   return (
     <div className="relative overflow-hidden bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg px-4 py-3">
@@ -54,7 +68,7 @@ export function PorscheMeter({
             Porsche meter
           </div>
           <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <div className="h-section text-[22px] md:text-[24px] tnum text-[var(--color-success)]">
+            <div className={`h-section text-[22px] md:text-[24px] tnum ${amountTone}`}>
               {readableFraction}x
             </div>
             <div className="text-[11px] text-[var(--color-fg-muted)] tnum">
@@ -92,7 +106,9 @@ export function PorscheMeter({
           </div>
           <div className="mt-1 h-2 overflow-hidden rounded-full bg-[var(--color-border-soft)]">
             <div
-              className="h-full rounded-full bg-[var(--color-success)] transition-[width] duration-200"
+              className={`h-full rounded-full transition-[width] duration-200 ${
+                amount < 0 ? "bg-[var(--color-danger)]" : "bg-[var(--color-success)]"
+              }`}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -106,31 +122,16 @@ export function PorscheMeter({
           className="min-w-0 flex-1 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)] px-2 py-1 text-[10.5px] font-mono text-[var(--color-fg-dim)] focus-ring"
           aria-label="Revenue mode"
         >
-          <option value="projected">Projected revenue</option>
+          <option value="incremental">Incremental lift</option>
+          <option value="rollout">Full-rollout upside</option>
           <option value="tracked">Tracked revenue</option>
-          <option value="slider">Potential slider</option>
         </select>
         <span className="shrink-0 text-[10.5px] font-mono text-[var(--color-fg-muted)] tnum">
-          {mode === "slider" ? `${multiplier.toFixed(1)}x` : `${pct.toFixed(0)}%`}
+          {pct.toFixed(0)}%
         </span>
       </div>
 
-      {mode === "slider" ? (
-        <input
-          type="range"
-          min="0.5"
-          max="12"
-          step="0.5"
-          value={multiplier}
-          onChange={(event) => setMultiplier(Number(event.target.value))}
-          className="mt-2 w-full accent-[var(--color-success)]"
-          aria-label="Potential revenue multiplier"
-        />
-      ) : (
-        <div className="mt-2 text-[11px] text-[var(--color-fg-muted)] tnum">
-          {mode === "tracked" ? "current test revenue" : "if current read scaled"}
-        </div>
-      )}
+      <div className="mt-2 text-[11px] text-[var(--color-fg-muted)] tnum">{modeNote}</div>
     </div>
   );
 }

@@ -428,7 +428,10 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
   const rpvA = baseA > 0 ? revA / baseA : null;
   const rpvB = baseB > 0 ? revB / baseB : null;
   const rpvLift = rpvA != null && rpvB != null && rpvB > 0 ? (rpvA - rpvB) / rpvB : null;
-  const projectedRevenue = rpvA != null && totalImpressions > 0 ? totalImpressions * rpvA : null;
+  const incrementalRevenue =
+    rpvA != null && rpvB != null ? (rpvA - rpvB) * baseA : null;
+  const rolloutIncrementalRevenue =
+    rpvA != null && rpvB != null ? (rpvA - rpvB) * totalImpressions : null;
 
   // Purchase CVR per bucket — for the lift tile's comparison sub-line.
   const cvrA = baseA > 0 ? funnel.purchases.a / baseA : null;
@@ -439,7 +442,8 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
       impressions={totalImpressions}
       escapeAttempts={funnel.escape_attempts.a}
       revenue={totalRevenue}
-      projectedRevenue={projectedRevenue}
+      incrementalRevenue={incrementalRevenue}
+      rolloutIncrementalRevenue={rolloutIncrementalRevenue}
       purchases={funnel.purchases.a + funnel.purchases.b}
       revPerVisitor={revPerVisitor}
       rpvPrior={prevRpv > 0 ? prevRpv : null}
@@ -731,7 +735,8 @@ function KPIGrid({
   impressions,
   escapeAttempts,
   revenue,
-  projectedRevenue,
+  incrementalRevenue,
+  rolloutIncrementalRevenue,
   purchases,
   revPerVisitor,
   rpvPrior,
@@ -748,7 +753,8 @@ function KPIGrid({
   impressions: number;
   escapeAttempts: number;
   revenue: number;
-  projectedRevenue: number | null;
+  incrementalRevenue: number | null;
+  rolloutIncrementalRevenue: number | null;
   purchases: number;
   revPerVisitor: number;
   rpvPrior: number | null;
@@ -802,7 +808,11 @@ function KPIGrid({
         delta={period.deltas.impressions}
         deltaLabel={period.priorLabel}
       />
-      <PorscheMeter trackedRevenue={revenue} projectedRevenue={projectedRevenue} />
+      <PorscheMeter
+        trackedRevenue={revenue}
+        incrementalRevenue={incrementalRevenue}
+        rolloutIncrementalRevenue={rolloutIncrementalRevenue}
+      />
       <KPI
         label="Revenue (test)"
         icon="cart"
