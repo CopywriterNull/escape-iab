@@ -4,8 +4,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { brand } from "@/lib/branding";
 import { PixelIcon } from "@/components/PixelIcon";
 import { AdminSidebarNav } from "./_components/sidebar-nav";
-
-const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
+import { isAdminEmail } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  if (user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+  if (!isAdminEmail(user.email)) {
     return <Locked title="Admin only">Signed in as {user.email}.</Locked>;
   }
 

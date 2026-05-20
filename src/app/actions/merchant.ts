@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getCurrentMerchant } from "@/lib/db";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
-
-const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
+import { isAdminEmail } from "@/lib/admin";
 
 export async function updateMerchantSettings(formData: FormData) {
   // Resolve which merchant the *current view* is showing (honors the
@@ -34,7 +33,7 @@ export async function updateMerchantSettings(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const isAdmin = user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  const isAdmin = isAdminEmail(user.email);
   const owns = merchant.user_id === user.id;
   if (!owns && !isAdmin) {
     redirect("/dashboard/settings?saved=0&err=forbidden");

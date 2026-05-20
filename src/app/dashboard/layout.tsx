@@ -8,8 +8,7 @@ import { stopImpersonating } from "@/app/actions/admin";
 import { SidebarNav } from "./_components/sidebar-nav";
 import { MerchantSwitcher, type SwitcherRow } from "./_components/merchant-switcher";
 import { PixelIcon } from "@/components/PixelIcon";
-
-const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
+import { isAdminEmail } from "@/lib/admin";
 
 type LiveRow = {
   event_type: string;
@@ -69,7 +68,7 @@ export default async function DashboardLayout({
     data: { user },
   } = await supabase!.auth.getUser();
   if (!user) redirect("/login");
-  const isAdmin = user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  const isAdmin = isAdminEmail(user.email);
   const adminClient = isAdmin ? getSupabaseAdmin() : null;
 
   // Parallelize the four independent fetches that previously ran serial

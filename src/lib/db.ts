@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin";
 
-const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
 const IMP_COOKIE = "eh_imp_merchant_id";
 
 async function getTelemetryClient() {
@@ -121,9 +121,9 @@ export async function getCurrentMerchant(): Promise<Merchant | null> {
 
   // Admin impersonation: if the eh_imp_merchant_id cookie is set AND
   // the current user is the admin, load that merchant via service-role.
-  // Honoured only for the admin email — anyone else with the cookie set
+  // Honoured only for admin emails — anyone else with the cookie set
   // is ignored (cookie alone confers no privilege).
-  if (user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+  if (isAdminEmail(user.email)) {
     const cookieStore = await cookies();
     const impId = cookieStore.get(IMP_COOKIE)?.value;
     if (impId) {
@@ -163,7 +163,7 @@ export async function getImpersonationStatus(): Promise<{
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { active: false, merchant: null };
-  if (user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+  if (!isAdminEmail(user.email)) {
     return { active: false, merchant: null };
   }
   const cookieStore = await cookies();

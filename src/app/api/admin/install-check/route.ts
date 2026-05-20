@@ -11,9 +11,8 @@
 // UA-varying CDN serves the same body it would to a paid IG visitor).
 
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin";
 import { type NextRequest } from "next/server";
-
-const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
 
 // Realistic IG iOS UA — what a paid Meta ad click actually sees on the
 // merchant's storefront. Pinned to one string so we don't drift.
@@ -79,7 +78,7 @@ export async function POST(req: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || user.email?.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+  if (!user || !isAdminEmail(user.email)) {
     return jsonError("forbidden", 403);
   }
 

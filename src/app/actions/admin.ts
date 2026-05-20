@@ -4,8 +4,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin";
 
-const ADMIN_EMAIL = "lennyhuynh526@gmail.com";
 const IMP_COOKIE = "eh_imp_merchant_id";
 
 // UUID guard: every admin merchant write must filter by a real PK shape.
@@ -20,7 +20,7 @@ async function requireAdmin(): Promise<boolean> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  return isAdminEmail(user?.email);
 }
 
 function revalidateMerchantSurfaces(merchantId?: string) {
