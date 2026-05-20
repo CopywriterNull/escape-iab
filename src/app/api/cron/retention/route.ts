@@ -67,6 +67,25 @@ export async function GET(req: NextRequest) {
   const batchSize = batchSizeFrom(req);
   const results: Record<string, { deleted: number; cutoff: string }> = {};
 
+  const rollupSince = new Date(Date.now() - 48 * 3600_000).toISOString();
+  const { data: rollupRows, error: rollupError } = await admin.rpc(
+    "eh_refresh_hourly_funnel_rollups",
+    {
+      p_since: rollupSince,
+      p_until: new Date().toISOString(),
+    },
+  );
+  if (rollupError) {
+    return json(
+      {
+        ok: false,
+        error: "hourly_rollup_refresh_failed",
+        details: rollupError.message,
+      },
+      500,
+    );
+  }
+
   const cartAttributionCutoff = cutoffIso(CART_ATTRIBUTION_RETENTION_DAYS);
   const { count: cartAttributionsDeleted, error: cartAttributionsError } = await admin
     .from("cart_attributions")
@@ -144,5 +163,11 @@ export async function GET(req: NextRequest) {
     results[policy.name] = { deleted, cutoff };
   }
 
-  return json({ ok: true, batchSize, maxBatches: MAX_BATCHES_PER_RUN, results });
+  return json({
+    ok: true,
+    batchSize,
+    maxBatches: MAX_BATCHES_PER_RUN,
+    hourlyRollups: { refreshed: Number(rollupRows ?? 0), since: rollupSince },
+    results,
+  });
 }
