@@ -2,10 +2,14 @@ import Link from "next/link";
 import {
   getCurrentMerchant,
   getEnabledDashboardIabKinds,
+  getIabBreakdown,
+  getPeriodDelta,
+  getRollups,
   getSourceBreakdown,
   getTestFunnel,
   getUnattributedPurchaseStats,
   zTestTwoProp,
+  type DailyRollup,
   type Funnel,
   type IabKind,
   type SourceRow,
@@ -79,6 +83,49 @@ function metricColor(value: number | null): string {
   return "text-[var(--color-fg)]";
 }
 
+function computeCumulativeIncremental(rollups: DailyRollup[]): number {
+  // Group per-day rows into bucket A vs B totals, then sum (RPV_A - RPV_B) * impressions_A.
+  // This mirrors the live A/B math but accumulated across the rollup window.
+  const byDay = new Map<string, { a?: DailyRollup; b?: DailyRollup }>();
+  for (const row of rollups) {
+    const slot = byDay.get(row.day) ?? {};
+    slot[row.bucket] = row;
+    byDay.set(row.day, slot);
+  }
+  let total = 0;
+  for (const { a, b } of byDay.values()) {
+    if (!a || !b) continue;
+    if (a.impressions <= 0 || b.impressions <= 0) continue;
+    const rpvA = a.revenue_cents / 100 / a.impressions;
+    const rpvB = b.revenue_cents / 100 / b.impressions;
+    total += (rpvA - rpvB) * a.impressions;
+  }
+  return total;
+}
+
+function pickBestSource(sources: SourceRow[]): SourceRow | null {
+  let best: SourceRow | null = null;
+  for (const row of sources) {
+    if (!row.utm_source || row.utm_source === "unknown") continue;
+    if (row.revenue_cents <= 0) continue;
+    if (!best || row.revenue_cents > best.revenue_cents) best = row;
+  }
+  return best;
+}
+
+function pickPlatformWinner(
+  breakdown: Record<IabKind, number>,
+  enabled: IabKind[],
+): { kind: IabKind; impressions: number } | null {
+  let best: { kind: IabKind; impressions: number } | null = null;
+  for (const kind of enabled) {
+    const count = breakdown[kind] ?? 0;
+    if (count <= 0) continue;
+    if (!best || count > best.impressions) best = { kind, impressions: count };
+  }
+  return best;
+}
+
 function summarize(funnel: Funnel) {
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
@@ -134,12 +181,20 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
   }
 
   const iabKinds = getEnabledDashboardIabKinds(merchant);
-  const [funnel, sources, unattributed] = await Promise.all([
+  const cumulativeDays = Math.max(range.days, 90);
+  const [funnel, sources, unattributed, rollups, periodDelta, iabBreakdown] = await Promise.all([
     getTestFunnel(merchant.id, range.days),
-    getSourceBreakdown(merchant.id, range.days, 5),
+    getSourceBreakdown(merchant.id, range.days, 10),
     getUnattributedPurchaseStats(merchant.id, range.days),
+    getRollups(merchant.id, cumulativeDays),
+    getPeriodDelta(merchant.id, range.days),
+    getIabBreakdown(merchant.id, range.days),
   ]);
   const s = summarize(funnel);
+  const cumulativeIncremental = computeCumulativeIncremental(rollups);
+  const bestSource = pickBestSource(sources);
+  const platformWinner = pickPlatformWinner(iabBreakdown, iabKinds);
+  const revenueWow = periodDelta.comparable ? periodDelta.deltas.revenue_cents : null;
   const abPct =
     typeof merchant.ab_split_pct === "number" && Number.isFinite(merchant.ab_split_pct)
       ? Math.min(99, Math.max(1, Math.round(merchant.ab_split_pct)))
@@ -202,17 +257,56 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
                 <Badge>{iabKinds.map(platformLabel).join(" + ")}</Badge>
                 <Badge>{splitLabel} split</Badge>
                 <Badge>{merchant.paid_only ? "Paid only" : "Paid + organic"}</Badge>
+                {platformWinner ? (
+                  <Badge tone="success">
+                    {platformLabel(platformWinner.kind)} leading · {fmtCompact(platformWinner.impressions)}
+                  </Badge>
+                ) : null}
+                {bestSource ? (
+                  <Badge tone="success">
+                    Top source: {bestSource.utm_source} · {fmtUSD(bestSource.revenue_cents / 100, true)}
+                  </Badge>
+                ) : null}
               </div>
 
               <div className="mt-5 text-[11px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
                 Incremental revenue
               </div>
-              <div className={`mt-1 text-[44px] leading-none md:text-[62px] font-semibold tracking-tight tnum ${metricColor(incremental)}`}>
-                {fmtUSD(incremental, true)}
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <div className={`text-[44px] leading-none md:text-[62px] font-semibold tracking-tight tnum ${metricColor(incremental)}`}>
+                  {fmtUSD(incremental, true)}
+                </div>
+                {revenueWow != null ? (
+                  <span
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-mono tnum ${
+                      revenueWow > 0
+                        ? "border-[var(--color-success)]/30 bg-[var(--color-success)]/10 text-[var(--color-success)]"
+                        : revenueWow < 0
+                          ? "border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 text-[var(--color-danger)]"
+                          : "border-[var(--color-border-soft)] bg-[var(--color-bg)]/60 text-[var(--color-fg-muted)]"
+                    }`}
+                    title={periodDelta.priorLabel}
+                  >
+                    {fmtPct(revenueWow)} {periodDelta.priorLabel}
+                  </span>
+                ) : null}
               </div>
               <div className="mt-2 max-w-xl text-[13px] text-[var(--color-fg-dim)]">
                 Based on A/B revenue per visitor: bucket A escape vs bucket B holdout over the last {range.label}.
               </div>
+              {cumulativeIncremental !== 0 ? (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/45 px-2.5 py-1.5">
+                  <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--color-fg-muted)]">
+                    Realized to date
+                  </span>
+                  <span className={`text-[14px] font-semibold tnum ${metricColor(cumulativeIncremental)}`}>
+                    {fmtUSD(cumulativeIncremental, true)}
+                  </span>
+                  <span className="text-[10.5px] font-mono text-[var(--color-fg-muted)]">
+                    last {cumulativeDays}d
+                  </span>
+                </div>
+              ) : null}
 
               <div className="mt-5 grid grid-cols-3 gap-2">
                 <MiniReadout label="Lift" value={fmtPct(primaryLift)} tone={metricColor(primaryLift)} />
