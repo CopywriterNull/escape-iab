@@ -31,7 +31,6 @@ import {
 import { RangeSelector } from "./_components/range-selector";
 import { LiveActivity } from "./_components/live-activity";
 import { SampleSizeCalculator } from "./_components/sample-size-calc";
-import { PorscheMeter } from "./_components/porsche-meter";
 import { PixelIcon } from "@/components/PixelIcon";
 
 /* -------- Number formatters -------- */
@@ -824,9 +823,24 @@ function KPIGrid({
         delta={period.deltas.impressions}
         deltaLabel={period.priorLabel}
       />
-      <PorscheMeter
-        incrementalRevenue={incrementalRevenue}
-        rolloutIncrementalRevenue={rolloutIncrementalRevenue}
+      <KPI
+        label="Incremental"
+        icon="dollar"
+        value={incrementalRevenue != null ? fmtUSD(incrementalRevenue, { compact: true }) : "—"}
+        valueClass={
+          incrementalRevenue == null
+            ? ""
+            : incrementalRevenue > 0
+              ? "text-[var(--color-success)]"
+              : incrementalRevenue < 0
+                ? "text-[var(--color-danger)]"
+                : ""
+        }
+        sub={
+          rolloutIncrementalRevenue != null
+            ? `${fmtUSD(rolloutIncrementalRevenue, { compact: true })} at full rollout`
+            : "A vs B revenue per visitor"
+        }
       />
       <KPI
         label="Revenue (test)"
