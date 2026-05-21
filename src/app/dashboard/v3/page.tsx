@@ -15,22 +15,13 @@ import {
   type IabKind,
   type SourceRow,
 } from "@/lib/db";
+import { TimeRangeSelector } from "../_components/time-range-selector";
+import { parseDashboardRange } from "@/lib/dashboard-ranges";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type Range = { key: string; label: string; days: number };
 type SearchParams = Promise<{ range?: string }>;
-
-const RANGES: Range[] = [
-  { key: "1h", label: "1h", days: 1 / 24 },
-  { key: "6h", label: "6h", days: 6 / 24 },
-  { key: "1d", label: "24h", days: 1 },
-  { key: "7d", label: "7d", days: 7 },
-  { key: "14d", label: "14d", days: 14 },
-  { key: "30d", label: "30d", days: 30 },
-  { key: "90d", label: "90d", days: 90 },
-];
 
 const PORSCHE_PRICE = 420_000;
 
@@ -38,10 +29,6 @@ const compactNF = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
-
-function parseRange(value: string | undefined): Range {
-  return RANGES.find((range) => range.key === value) ?? RANGES[4];
-}
 
 function fmtCompact(value: number): string {
   if (!Number.isFinite(value)) return "-";
@@ -181,7 +168,7 @@ function pickPlatformWinner(
 
 export default async function DashboardV3({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
-  const range = parseRange(sp.range);
+  const range = parseDashboardRange(sp.range);
   const merchant = await getCurrentMerchant();
 
   if (!merchant) {
@@ -243,7 +230,7 @@ export default async function DashboardV3({ searchParams }: { searchParams: Sear
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <RangePills active={range.key} />
+          <TimeRangeSelector key={range.key} active={range.key} basePath="/dashboard/v3" />
           <LinkButton href={`/dashboard/v2?range=${range.key}`}>v2</LinkButton>
           <LinkButton href={`/dashboard?range=${range.key}`}>Classic</LinkButton>
         </div>
@@ -421,30 +408,6 @@ export default async function DashboardV3({ searchParams }: { searchParams: Sear
         </div>
       </ShellPanel>
     </main>
-  );
-}
-
-function RangePills({ active }: { active: string }) {
-  return (
-    <div className="inline-flex items-center gap-0.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] p-[3px] text-[12px]">
-      {RANGES.map((range) => {
-        const selected = active === range.key;
-        return (
-          <Link
-            key={range.key}
-            href={`/dashboard/v3?range=${range.key}`}
-            scroll={false}
-            className={`rounded-full px-2.5 py-[5px] font-mono tnum focus-ring ${
-              selected
-                ? "bg-[var(--color-bg)] text-[var(--color-fg)] shadow-[0_0_0_1px_var(--color-border-soft)_inset]"
-                : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
-            }`}
-          >
-            {range.label}
-          </Link>
-        );
-      })}
-    </div>
   );
 }
 

@@ -14,31 +14,18 @@ import {
 } from "@/lib/db";
 import { PixelIcon } from "@/components/PixelIcon";
 import { PorscheMeter } from "../_components/porsche-meter";
+import { TimeRangeSelector } from "../_components/time-range-selector";
+import { parseDashboardRange } from "@/lib/dashboard-ranges";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type Range = { key: string; label: string; days: number };
 type SearchParams = Promise<{ range?: string }>;
-
-const RANGES: Range[] = [
-  { key: "1h", label: "1h", days: 1 / 24 },
-  { key: "6h", label: "6h", days: 6 / 24 },
-  { key: "1d", label: "24h", days: 1 },
-  { key: "7d", label: "7d", days: 7 },
-  { key: "14d", label: "14d", days: 14 },
-  { key: "30d", label: "30d", days: 30 },
-  { key: "90d", label: "90d", days: 90 },
-];
 
 const compactNF = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
-
-function parseRange(value: string | undefined): Range {
-  return RANGES.find((range) => range.key === value) ?? RANGES[4];
-}
 
 function fmtCompact(value: number): string {
   if (!Number.isFinite(value)) return "-";
@@ -163,7 +150,7 @@ function summarize(funnel: Funnel) {
 
 export default async function DashboardV2({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
-  const range = parseRange(sp.range);
+  const range = parseDashboardRange(sp.range);
   const merchant = await getCurrentMerchant();
 
   if (!merchant) {
@@ -211,7 +198,7 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
           {merchant.name ?? merchant.domain ?? "Merchant"}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <RangePills active={range.key} />
+          <TimeRangeSelector key={range.key} active={range.key} basePath="/dashboard/v2" />
           <Link
             href={`/dashboard/v3?range=${range.key}`}
             className="inline-flex h-8 items-center rounded-md border border-[var(--color-success)]/25 bg-[var(--color-success)]/8 px-3 text-[11.5px] font-mono text-[var(--color-success)] hover:bg-[var(--color-success)]/12 focus-ring"
@@ -339,30 +326,6 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
         </div>
       </details>
     </main>
-  );
-}
-
-function RangePills({ active }: { active: string }) {
-  return (
-    <div className="inline-flex items-center gap-0.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] p-[3px] text-[12px]">
-      {RANGES.map((range) => {
-        const selected = active === range.key;
-        return (
-          <Link
-            key={range.key}
-            href={`/dashboard/v2?range=${range.key}`}
-            scroll={false}
-            className={`rounded-full px-2.5 py-[5px] font-mono tnum focus-ring ${
-              selected
-                ? "bg-[var(--color-bg)] text-[var(--color-fg)] shadow-[0_0_0_1px_var(--color-border-soft)_inset]"
-                : "text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
-            }`}
-          >
-            {range.label}
-          </Link>
-        );
-      })}
-    </div>
   );
 }
 

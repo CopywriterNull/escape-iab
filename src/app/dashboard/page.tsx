@@ -28,10 +28,11 @@ import {
   SampleSizeSkeleton,
   SourcesSkeleton,
 } from "./_components/skeletons";
-import { RangeSelector } from "./_components/range-selector";
+import { TimeRangeSelector } from "./_components/time-range-selector";
 import { LiveActivity } from "./_components/live-activity";
 import { SampleSizeCalculator } from "./_components/sample-size-calc";
 import { PixelIcon } from "@/components/PixelIcon";
+import { parseDashboardRange, type DashboardRange } from "@/lib/dashboard-ranges";
 
 /* -------- Number formatters -------- */
 
@@ -57,22 +58,7 @@ export const revalidate = 0;
 
 /* -------- Range types + constants -------- */
 
-type Range = { key: string; label: string; days: number; subDay?: boolean };
-
-const RANGES: Range[] = [
-  { key: "1h", label: "1h", days: 1 / 24, subDay: true },
-  { key: "6h", label: "6h", days: 6 / 24, subDay: true },
-  { key: "1d", label: "24h", days: 1 },
-  { key: "7d", label: "7d", days: 7 },
-  { key: "14d", label: "14d", days: 14 },
-  { key: "30d", label: "30d", days: 30 },
-  { key: "90d", label: "90d", days: 90 },
-];
-
-function parseRange(v: string | undefined): Range {
-  const found = RANGES.find((r) => r.key === v);
-  return found ?? RANGES[4]; // default 14d
-}
+type Range = DashboardRange;
 
 type ActivityRow = {
   event_type: string;
@@ -128,7 +114,7 @@ export default async function DashboardOverview({
   searchParams: SearchParams;
 }) {
   const sp = await searchParams;
-  const range = parseRange(sp.range);
+  const range = parseDashboardRange(sp.range);
   const funnelMode = parseFunnelMode(sp.funnel);
 
   const merchant = await getCurrentMerchant();
@@ -146,6 +132,7 @@ export default async function DashboardOverview({
   return (
     <Page
       range={range}
+      funnelMode={funnelMode}
       subtitle={<span>Last {range.label}</span>}
       action={
         <div className="flex items-center gap-2">
@@ -540,6 +527,7 @@ function Page({
   subtitle,
   action,
   range,
+  funnelMode = "corrected",
   children,
 }: {
   // Title was redundant with the top-nav breadcrumb + tab strip — dropped.
@@ -547,6 +535,7 @@ function Page({
   subtitle?: React.ReactNode;
   action?: React.ReactNode;
   range?: Range;
+  funnelMode?: FunnelMode;
   children: React.ReactNode;
 }) {
   return (
@@ -558,7 +547,14 @@ function Page({
             {subtitle}
           </div>
           <div className="flex items-center gap-2 flex-wrap -mx-1 md:mx-0 overflow-x-auto md:overflow-visible scrollbar-none">
-            {range ? <RangeSelector active={range.key} /> : null}
+            {range ? (
+              <TimeRangeSelector
+                key={range.key}
+                active={range.key}
+                basePath="/dashboard"
+                extraParams={funnelMode === "raw" ? { funnel: "raw" } : undefined}
+              />
+            ) : null}
             {action}
           </div>
         </div>

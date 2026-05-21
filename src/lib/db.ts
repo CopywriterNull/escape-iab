@@ -435,7 +435,7 @@ export async function getIabBreakdown(
   merchantId: string,
   days = 14,
 ): Promise<Record<IabKind, number>> {
-  const supabase = await getTelemetryClient();
+  const supabase = getSupabaseAdmin();
   const empty: Record<IabKind, number> = {
     instagram: 0,
     threads: 0,
@@ -451,15 +451,17 @@ export async function getIabBreakdown(
   };
   if (!supabase) return empty;
   const since = new Date(Date.now() - days * 86400_000).toISOString();
-  const { data } = await supabase
-    .from("escape_events")
-    .select("iab_kind")
-    .eq("merchant_id", merchantId)
-    .eq("event_type", "impression")
-    .gte("created_at", since);
+  const { data, error } = await supabase.rpc("eh_iab_breakdown", {
+    p_merchant_id: merchantId,
+    p_since: since,
+  });
+  if (error || !Array.isArray(data)) return empty;
   const out = { ...empty };
-  for (const row of (data ?? []) as { iab_kind: IabKind | null }[]) {
-    if (row.iab_kind && row.iab_kind in out) out[row.iab_kind]++;
+  for (const row of data as { iab_kind: IabKind | null; impressions: number | string }[]) {
+    if (row.iab_kind && row.iab_kind in out) {
+      out[row.iab_kind] =
+        typeof row.impressions === "string" ? parseInt(row.impressions, 10) : row.impressions;
+    }
   }
   return out;
 }
