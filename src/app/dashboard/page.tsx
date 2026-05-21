@@ -158,6 +158,13 @@ export default async function DashboardOverview({
             Try v2 preview
           </Link>
           <Link
+            href={`/dashboard/v3?range=${range.key}`}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-[var(--color-success)]/25 bg-[var(--color-success)]/8 text-[12px] font-mono text-[var(--color-success)] hover:bg-[var(--color-success)]/12 focus-ring"
+          >
+            <span className="inline-block size-1.5 rounded-full bg-[var(--color-success)]" />
+            Try v3 board
+          </Link>
+          <Link
             href="/dashboard/install"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-[12.5px] font-medium press lift focus-ring"
           >

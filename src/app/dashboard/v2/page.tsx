@@ -254,6 +254,12 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
         <div className="flex flex-wrap items-center gap-2">
           <RangePills active={range.key} />
           <Link
+            href={`/dashboard/v3?range=${range.key}`}
+            className="inline-flex h-8 items-center rounded-md border border-[var(--color-success)]/25 bg-[var(--color-success)]/8 px-3 text-[11.5px] font-mono text-[var(--color-success)] hover:bg-[var(--color-success)]/12 focus-ring"
+          >
+            v3 board
+          </Link>
+          <Link
             href={`/dashboard?range=${range.key}`}
             className="inline-flex h-8 items-center rounded-md border border-[var(--color-border-soft)] px-3 text-[11.5px] font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] focus-ring"
           >

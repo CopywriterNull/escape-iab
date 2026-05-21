@@ -17,6 +17,13 @@ What's still missing (durable next step): a `merchant_test_baselines` table to s
 
 Other in-flight changes visible in `git status` (admin sidebar/diagnostics/layout/page, `api/track/route.ts`, preview landing pages, `admin/momentum/`, `docs/audits/`, a `20260520164000_drop_legacy_eh_increment_rollup_4arg.sql` migration, `supabase/.temp/`) were **deliberately not bundled** into this commit — they belong to other work streams.
 
+## 2026-05-20 update — dashboard v3 client board
+
+- New route `/dashboard/v3` is a more polished screenshot board. It is meant for client-facing updates and exec screenshots, while v2 remains a dense operator/client hybrid.
+- v3 keeps the same safe data sources as v2: `getTestFunnel`, `getSourceBreakdown`, `getUnattributedPurchaseStats`, `getRollups`, `getPeriodDelta`, and `getIabBreakdown`.
+- The above-the-fold story is now: incremental revenue, lift/confidence/rollout upside, decision state, A/B buckets, GT2 RS benchmark, and caveats.
+- Classic `/dashboard` now links to both v2 and v3. v2 links forward to v3. v3 links back to v2 and Classic.
+
 ---
 
 ## 2026-05-18 Codex update
