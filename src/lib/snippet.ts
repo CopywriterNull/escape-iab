@@ -210,6 +210,7 @@ try{
     if(!KE&&!FORCED){beacon("escape_skipped",{r:"k"});return;}
 
     if(FORCED){bk=ehForce;}
+    else if(!AB){bk="a";try{document.cookie="eh_b=a;path=/;max-age=2592000;samesite=Lax";}catch(e){}}
     else{
       try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
       if(!bk){bk=(Math.random()<SPLIT)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
@@ -309,6 +310,7 @@ try{
   // FORCED pins bucket from the URL flag without writing the eh_b cookie,
   // so QA traffic doesn't permanently bucket the tester's device.
   if(FORCED){bk=ehForce;}
+  else if(!AB){bk="a";try{document.cookie="eh_b=a;path=/;max-age=2592000;samesite=Lax";}catch(e){}}
   else{
     try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
     // Post-escape Safari side: force bucket A (we know this visitor was escaped
