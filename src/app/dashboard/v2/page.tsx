@@ -2,8 +2,6 @@ import Link from "next/link";
 import {
   getCurrentMerchant,
   getEnabledDashboardIabKinds,
-  getIabBreakdown,
-  getPeriodDelta,
   getRollups,
   getSourceBreakdown,
   getTestFunnel,
@@ -55,7 +53,7 @@ function fmtUSD(value: number, compact = false): string {
 }
 
 function fmtPct(value: number | null, digits = 1): string {
-  if (value == null || !Number.isFinite(value)) return "-";
+  if (value == null || !Number.isFinite(value)) return "—";
   return `${value > 0 ? "+" : ""}${(value * 100).toFixed(digits)}%`;
 }
 
@@ -107,8 +105,6 @@ function computeDailyIncrementals(rollups: DailyRollup[], days: number): DailyIn
 }
 
 function computeCumulativeIncremental(rollups: DailyRollup[]): number {
-  // Group per-day rows into bucket A vs B totals, then sum (RPV_A - RPV_B) * impressions_A.
-  // This mirrors the live A/B math but accumulated across the rollup window.
   const byDay = new Map<string, { a?: DailyRollup; b?: DailyRollup }>();
   for (const row of rollups) {
     const slot = byDay.get(row.day) ?? {};
@@ -124,29 +120,6 @@ function computeCumulativeIncremental(rollups: DailyRollup[]): number {
     total += (rpvA - rpvB) * a.impressions;
   }
   return total;
-}
-
-function pickBestSource(sources: SourceRow[]): SourceRow | null {
-  let best: SourceRow | null = null;
-  for (const row of sources) {
-    if (!row.utm_source || row.utm_source === "unknown") continue;
-    if (row.revenue_cents <= 0) continue;
-    if (!best || row.revenue_cents > best.revenue_cents) best = row;
-  }
-  return best;
-}
-
-function pickPlatformWinner(
-  breakdown: Record<IabKind, number>,
-  enabled: IabKind[],
-): { kind: IabKind; impressions: number } | null {
-  let best: { kind: IabKind; impressions: number } | null = null;
-  for (const kind of enabled) {
-    const count = breakdown[kind] ?? 0;
-    if (count <= 0) continue;
-    if (!best || count > best.impressions) best = { kind, impressions: count };
-  }
-  return best;
 }
 
 function summarize(funnel: Funnel) {
@@ -197,43 +170,33 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
     return (
       <main className="space-y-3">
         <Panel className="p-5">
-          <div className="text-sm text-[var(--color-fg-muted)]">Provisioning merchant record...</div>
+          <div className="text-sm text-[var(--color-fg-muted)]">Provisioning merchant record…</div>
         </Panel>
       </main>
     );
   }
 
   const iabKinds = getEnabledDashboardIabKinds(merchant);
-  const cumulativeDays = Math.max(range.days, 90);
-  const [funnel, sources, unattributed, rollups, periodDelta, iabBreakdown] = await Promise.all([
+  const cumulativeDays = 365;
+  const [funnel, sources, unattributed, rollups] = await Promise.all([
     getTestFunnel(merchant.id, range.days),
-    getSourceBreakdown(merchant.id, range.days, 10),
+    getSourceBreakdown(merchant.id, range.days, 5),
     getUnattributedPurchaseStats(merchant.id, range.days),
     getRollups(merchant.id, cumulativeDays),
-    getPeriodDelta(merchant.id, range.days),
-    getIabBreakdown(merchant.id, range.days),
   ]);
   const s = summarize(funnel);
   const cumulativeIncremental = computeCumulativeIncremental(rollups);
   const dailySeries = computeDailyIncrementals(rollups, 14);
-  const bestSource = pickBestSource(sources);
-  const platformWinner = pickPlatformWinner(iabBreakdown, iabKinds);
-  const revenueWow = periodDelta.comparable ? periodDelta.deltas.revenue_cents : null;
-  const holdoutCost =
-    s.rpvA != null && s.rpvB != null ? (s.rpvA - s.rpvB) * s.baseB : null;
+  const positiveDays = dailySeries.filter((d) => d.value > 0).length;
   const abPct =
     typeof merchant.ab_split_pct === "number" && Number.isFinite(merchant.ab_split_pct)
       ? Math.min(99, Math.max(1, Math.round(merchant.ab_split_pct)))
       : 50;
   const splitLabel = merchant.ab_enabled ? `${abPct}/${100 - abPct}` : "100/0";
-  const primaryLift = s.rpvLift;
-  const incremental = s.incrementalRevenue ?? 0;
-  const confidenceLabel =
-    s.confidence == null ? "Collecting" : `${Math.round(s.confidence * 100)}% conf`;
+  const lift = s.rpvLift;
+  const confidencePct = s.confidence == null ? null : Math.round(s.confidence * 100);
+  const liftTone = metricColor(lift);
 
-  // Rollout phase — derived locally because there's no baseline table yet.
-  // Testing: A/B still running; Ready to graduate: A/B running and statistically clean;
-  // Rolled out: A/B off, escaping 100% of eligible traffic.
   const phase: "testing" | "ready" | "rolled_out" = !merchant.ab_enabled
     ? "rolled_out"
     : s.significant && (s.rpvLift ?? 0) > 0
@@ -242,14 +205,10 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
 
   return (
     <main className="space-y-3">
+      {/* Tight header: just merchant + range pills + nav */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
-            Client snapshot
-          </div>
-          <h1 className="mt-1 text-[20px] font-semibold tracking-tight text-[var(--color-fg)]">
-            {merchant.name ?? merchant.domain ?? "Merchant"} performance
-          </h1>
+        <div className="min-w-0 text-[12px] font-mono text-[var(--color-fg-muted)] truncate">
+          {merchant.name ?? merchant.domain ?? "Merchant"}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <RangePills active={range.key} />
@@ -268,158 +227,117 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
         </div>
       </div>
 
-      <PhaseStrip
-       phase={phase}
-       splitLabel={splitLabel}
-       confidenceLabel={confidenceLabel}
-       significant={s.significant}
-       primaryLift={primaryLift}
-       incremental={s.incrementalRevenue}
-       rolloutUpside={s.rolloutIncrementalRevenue}
-      />
+      {/* Hero — % lift on the left, $ realized on the right, sparkline footer */}
+      <Panel className="px-6 py-8 md:px-10 md:py-12">
+        <div className="text-[11px] font-mono text-[var(--color-fg-muted)] tnum">
+          <span className={merchant.escape_enabled === false ? "text-[var(--color-warn)]" : "text-[var(--color-success)]"}>
+            {merchant.escape_enabled === false ? "Paused" : "Live"}
+          </span>
+          {"  ·  "}
+          {splitLabel}
+          {"  ·  "}
+          {iabKinds.map(platformLabel).join(" + ")}
+          {"  ·  last "}
+          {range.label}
+        </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
-        <Panel className="overflow-hidden">
-          <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(260px,0.85fr)]">
-            <div className="p-5 md:p-6">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Badge tone={merchant.escape_enabled === false ? "warn" : "success"}>
-                  {merchant.escape_enabled === false ? "Paused" : "Live"}
-                </Badge>
-                <Badge>{iabKinds.map(platformLabel).join(" + ")}</Badge>
-                <Badge>{splitLabel} split</Badge>
-                <Badge>{merchant.paid_only ? "Paid only" : "Paid + organic"}</Badge>
-                {platformWinner ? (
-                  <Badge tone="success">
-                    {platformLabel(platformWinner.kind)} leading · {fmtCompact(platformWinner.impressions)}
-                  </Badge>
-                ) : null}
-                {bestSource ? (
-                  <Badge tone="success">
-                    Top source: {bestSource.utm_source} · {fmtUSD(bestSource.revenue_cents / 100, true)}
-                  </Badge>
-                ) : null}
-              </div>
-
-              <div className="mt-5 text-[11px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
-                Incremental revenue
-              </div>
-              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <div className={`text-[44px] leading-none md:text-[62px] font-semibold tracking-tight tnum ${metricColor(incremental)}`}>
-                  {fmtUSD(incremental, true)}
-                </div>
-                {revenueWow != null ? (
-                  <span
-                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-mono tnum ${
-                      revenueWow > 0
-                        ? "border-[var(--color-success)]/30 bg-[var(--color-success)]/10 text-[var(--color-success)]"
-                        : revenueWow < 0
-                          ? "border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 text-[var(--color-danger)]"
-                          : "border-[var(--color-border-soft)] bg-[var(--color-bg)]/60 text-[var(--color-fg-muted)]"
-                    }`}
-                    title={periodDelta.priorLabel}
-                  >
-                    {fmtPct(revenueWow)} {periodDelta.priorLabel}
-                  </span>
-                ) : null}
-              </div>
-              <div className="mt-2 max-w-xl text-[13px] text-[var(--color-fg-dim)]">
-                Based on A/B revenue per visitor: bucket A escape vs bucket B holdout over the last {range.label}.
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {cumulativeIncremental !== 0 ? (
-                  <div className="inline-flex items-center gap-2 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/45 px-2.5 py-1.5">
-                    <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--color-fg-muted)]">
-                      Realized to date
-                    </span>
-                    <span className={`text-[14px] font-semibold tnum ${metricColor(cumulativeIncremental)}`}>
-                      {fmtUSD(cumulativeIncremental, true)}
-                    </span>
-                    <span className="text-[10.5px] font-mono text-[var(--color-fg-muted)]">
-                      last {cumulativeDays}d
-                    </span>
-                  </div>
-                ) : null}
-                {dailySeries.some((d) => d.value !== 0) ? (
-                  <IncrementalSparkline series={dailySeries} />
-                ) : null}
-              </div>
-
-              <div className="mt-5 grid grid-cols-3 gap-2">
-                <MiniReadout label="Lift" value={fmtPct(primaryLift)} tone={metricColor(primaryLift)} />
-                <MiniReadout label="Confidence" value={confidenceLabel} tone={s.significant ? "text-[var(--color-success)]" : "text-[var(--color-fg)]"} />
-                <MiniReadout label="Rollout upside" value={fmtUSD(s.rolloutIncrementalRevenue ?? 0, true)} tone={metricColor(s.rolloutIncrementalRevenue)} />
-              </div>
+        <div className="mt-6 grid gap-8 md:grid-cols-2 md:gap-4">
+          <div>
+            <div
+              className={`text-[64px] leading-none tracking-tight font-semibold tnum md:text-[96px] ${liftTone}`}
+            >
+              {fmtPct(lift)}
             </div>
+            <div className="mt-3 text-[12px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+              RPV lift
+            </div>
+            <div className="mt-1 text-[12.5px] font-mono text-[var(--color-fg-muted)] tnum">
+              {confidencePct == null
+                ? "Collecting"
+                : `${confidencePct}% confidence${s.significant ? "" : " (not yet significant)"}`}
+            </div>
+          </div>
 
-            <div className="border-t border-[var(--color-border-soft)] p-4 lg:border-l lg:border-t-0">
-              <div className="grid grid-cols-2 gap-2">
+          <div className="md:text-right">
+            <div
+              className={`text-[44px] leading-none tracking-tight font-semibold tnum md:text-[64px] ${metricColor(cumulativeIncremental)}`}
+            >
+              {fmtUSD(cumulativeIncremental, true)}
+            </div>
+            <div className="mt-3 text-[12px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+              Realized
+            </div>
+            <div className="mt-1 text-[12.5px] font-mono text-[var(--color-fg-muted)] tnum">since launch</div>
+          </div>
+        </div>
+
+        {dailySeries.some((d) => d.value !== 0) ? (
+          <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-[var(--color-border-soft)] pt-4">
+            <DailyLiftSparkline series={dailySeries} />
+            <div className="text-[11px] font-mono text-[var(--color-fg-muted)] tnum">
+              daily lift · {positiveDays}/{dailySeries.length} days positive
+            </div>
+          </div>
+        ) : null}
+      </Panel>
+
+      {/* Supporting detail — collapsed by default, native disclosure, no JS */}
+      <details className="group rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-card)] open:bg-transparent open:border-transparent open:p-0 [&>summary::-webkit-details-marker]:hidden">
+        <summary className="cursor-pointer list-none px-4 py-2.5 text-[11.5px] font-mono text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] focus-ring rounded-md">
+          <span className="inline-flex items-center gap-2">
+            <span className="inline-block transition-transform group-open:rotate-90">▸</span>
+            Show supporting detail
+          </span>
+        </summary>
+
+        <div className="mt-3 space-y-3">
+          <PhaseStrip phase={phase} splitLabel={splitLabel} significant={s.significant} />
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <Panel className="p-4">
+              <SectionTitle title="A/B buckets" subtitle={`Last ${range.label}`} />
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 <BucketCard label="A escape" visitors={s.baseA} revenue={s.revA} rpv={s.rpvA} cvr={s.cvrA} active />
-                <BucketCard
-                  label="B holdout"
-                  visitors={s.baseB}
-                  revenue={s.revB}
-                  rpv={s.rpvB}
-                  cvr={s.cvrB}
-                  holdoutCost={holdoutCost}
-                />
+                <BucketCard label="B holdout" visitors={s.baseB} revenue={s.revB} rpv={s.rpvB} cvr={s.cvrB} />
               </div>
               <div className="mt-3 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/50 p-3">
                 <div className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--color-fg-muted)]">
                   Attribution gap
                 </div>
-                <div className="mt-1 text-[17px] font-semibold tracking-tight tnum">
-                  {unattributed.count.toLocaleString()} purchases
+                <div className="mt-1 text-[16px] font-semibold tnum">
+                  {unattributed.count.toLocaleString()} purchases · {fmtUSD(unattributed.revenue_cents / 100, true)}
                 </div>
-                <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] tnum">
-                  {fmtUSD(unattributed.revenue_cents / 100, true)} not joined to the test population
-                </div>
+                <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)]">not joined to the test population</div>
               </div>
+            </Panel>
+
+            <PorscheMeter
+              incrementalRevenue={s.incrementalRevenue}
+              rolloutIncrementalRevenue={s.rolloutIncrementalRevenue}
+            />
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-4">
+            <MetricCard label="Visitors" value={fmtCompact(s.totalVisitors)} sub={`A ${fmtCompact(s.baseA)} / B ${fmtCompact(s.baseB)}`} icon="eye" />
+            <MetricCard label="Revenue" value={fmtUSD(s.revenue, true)} sub={`${s.purchases.toLocaleString()} purchases`} icon="cart" />
+            <MetricCard label="RPV" value={fmtUSD(s.totalVisitors > 0 ? s.revenue / s.totalVisitors : 0)} sub={`A ${fmtUSD(s.rpvA ?? 0)} / B ${fmtUSD(s.rpvB ?? 0)}`} icon="dollar" />
+            <MetricCard label="Escapes" value={fmtCompact(funnel.escape_attempts.a)} sub="bucket A opens" icon="bolt" />
+          </div>
+
+          <Panel className="p-4">
+            <SectionTitle title="Source mix" subtitle={`Last ${range.label}`} />
+            <div className="mt-3 space-y-2">
+              {sources.length > 0 ? (
+                sources.map((source) => <SourceLine key={source.utm_source} source={source} />)
+              ) : (
+                <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/40 p-3 text-[12px] text-[var(--color-fg-muted)]">
+                  No source rows yet.
+                </div>
+              )}
             </div>
-          </div>
-        </Panel>
-
-        <PorscheMeter
-          incrementalRevenue={s.incrementalRevenue}
-          rolloutIncrementalRevenue={s.rolloutIncrementalRevenue}
-        />
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-4">
-        <MetricCard label="Visitors" value={fmtCompact(s.totalVisitors)} sub={`A ${fmtCompact(s.baseA)} / B ${fmtCompact(s.baseB)}`} icon="eye" />
-        <MetricCard label="Revenue" value={fmtUSD(s.revenue, true)} sub={`${s.purchases.toLocaleString()} purchases`} icon="cart" />
-        <MetricCard label="RPV" value={fmtUSD(s.totalVisitors > 0 ? s.revenue / s.totalVisitors : 0)} sub={`A ${fmtUSD(s.rpvA ?? 0)} / B ${fmtUSD(s.rpvB ?? 0)}`} icon="dollar" />
-        <MetricCard label="Escapes" value={fmtCompact(funnel.escape_attempts.a)} sub="bucket A opens" icon="bolt" />
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Panel className="p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <SectionTitle title="A/B readout" subtitle="Screenshot-safe proof points" />
-            <Badge tone={s.significant ? "success" : "warn"}>
-              {s.significant ? "Ready" : "Keep collecting"}
-            </Badge>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <ProofTile label="RPV lift" value={fmtPct(s.rpvLift)} helper={`A ${fmtUSD(s.rpvA ?? 0)} vs B ${fmtUSD(s.rpvB ?? 0)}`} tone={metricColor(s.rpvLift)} />
-            <ProofTile label="CVR" value={`${((s.cvrA ?? 0) * 100).toFixed(2)}% / ${((s.cvrB ?? 0) * 100).toFixed(2)}%`} helper="A escape / B holdout" />
-            <ProofTile label="Revenue delta" value={fmtUSD((s.revA / Math.max(1, s.baseA) - s.revB / Math.max(1, s.baseB)) * s.baseA, true)} helper="realized on escaped traffic" tone={metricColor(s.incrementalRevenue)} />
-          </div>
-        </Panel>
-
-        <Panel className="p-4">
-          <SectionTitle title="Source mix" subtitle={`Last ${range.label}`} />
-          <div className="mt-3 space-y-2">
-            {sources.length > 0 ? (
-              sources.map((source) => <SourceLine key={source.utm_source} source={source} />)
-            ) : (
-              <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/40 p-3 text-[12px] text-[var(--color-fg-muted)]">
-                No source rows yet.
-              </div>
-            )}
-          </div>
-        </Panel>
-      </div>
+          </Panel>
+        </div>
+      </details>
     </main>
   );
 }
@@ -456,36 +374,116 @@ function Panel({ children, className = "" }: { children: React.ReactNode; classN
   );
 }
 
-function Badge({ children, tone = "muted" }: { children: React.ReactNode; tone?: "muted" | "success" | "warn" }) {
-  const cls =
-    tone === "success"
-      ? "border-[var(--color-success)]/25 bg-[var(--color-success)]/10 text-[var(--color-success)]"
-      : tone === "warn"
-        ? "border-[var(--color-warn)]/30 bg-[var(--color-warn)]/10 text-[var(--color-warn)]"
-        : "border-[var(--color-border-soft)] bg-[var(--color-bg)]/60 text-[var(--color-fg-muted)]";
+function DailyLiftSparkline({ series }: { series: DailyIncrement[] }) {
+  const w = 200;
+  const h = 36;
+  const padX = 2;
+  const padY = 4;
+  const values = series.map((d) => d.value);
+  const max = Math.max(...values, 0);
+  const min = Math.min(...values, 0);
+  const span = max - min || 1;
+  const points = values.map((v, i) => {
+    const x = padX + (i * (w - padX * 2)) / Math.max(1, values.length - 1);
+    const y = padY + (1 - (v - min) / span) * (h - padY * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const lastValue = values[values.length - 1] ?? 0;
+  const zeroY = padY + (1 - (0 - min) / span) * (h - padY * 2);
+  const stroke =
+    lastValue > 0
+      ? "var(--color-success)"
+      : lastValue < 0
+        ? "var(--color-danger)"
+        : "var(--color-fg-muted)";
+
   return (
-    <span className={`inline-flex h-6 items-center rounded-full border px-2 text-[10.5px] font-mono ${cls}`}>
-      {children}
-    </span>
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      width={w}
+      height={h}
+      role="img"
+      aria-label="Daily incremental revenue trend"
+      className="shrink-0"
+    >
+      <line
+        x1={padX}
+        x2={w - padX}
+        y1={zeroY}
+        y2={zeroY}
+        stroke="var(--color-border-soft)"
+        strokeDasharray="2 2"
+        strokeWidth={1}
+      />
+      <polyline
+        points={points.join(" ")}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {points.length > 0 ? (
+        <circle
+          cx={Number(points[points.length - 1].split(",")[0])}
+          cy={Number(points[points.length - 1].split(",")[1])}
+          r={2}
+          fill={stroke}
+        />
+      ) : null}
+    </svg>
   );
 }
 
-function MiniReadout({
-  label,
-  value,
-  tone = "text-[var(--color-fg)]",
+function PhaseStrip({
+  phase,
+  splitLabel,
+  significant,
 }: {
-  label: string;
-  value: string;
-  tone?: string;
+  phase: "testing" | "ready" | "rolled_out";
+  splitLabel: string;
+  significant: boolean;
 }) {
+  const steps: { key: "testing" | "ready" | "rolled_out"; label: string; helper: string }[] = [
+    { key: "testing", label: "Testing", helper: `Live A/B · ${splitLabel}` },
+    { key: "ready", label: "Ready to graduate", helper: significant ? "Significant · positive lift" : "Awaiting significance" },
+    { key: "rolled_out", label: "Rolled out", helper: "100% escape · use locked baseline" },
+  ];
+  const activeIndex = steps.findIndex((step) => step.key === phase);
+
   return (
-    <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/45 p-2">
-      <div className="text-[9.5px] uppercase tracking-[0.14em] font-semibold text-[var(--color-fg-muted)]">
-        {label}
+    <Panel className="p-3">
+      <div className="text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+        Rollout phase
       </div>
-      <div className={`mt-1 text-[15px] font-semibold tnum ${tone}`}>{value}</div>
-    </div>
+      <ol className="mt-2 grid gap-2 sm:grid-cols-3">
+        {steps.map((step, idx) => {
+          const isActive = idx === activeIndex;
+          const isPast = idx < activeIndex;
+          const tone = isActive
+            ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/8 text-[var(--color-fg)]"
+            : isPast
+              ? "border-[var(--color-success)]/25 bg-[var(--color-success)]/8 text-[var(--color-fg-dim)]"
+              : "border-[var(--color-border-soft)] bg-[var(--color-bg)]/40 text-[var(--color-fg-muted)]";
+          const dot = isActive
+            ? "bg-[var(--color-accent)]"
+            : isPast
+              ? "bg-[var(--color-success)]"
+              : "bg-[var(--color-fg-muted)]/40";
+          return (
+            <li key={step.key} className={`rounded-md border px-3 py-2 ${tone}`}>
+              <div className="flex items-center gap-2">
+                <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
+                <span className="text-[10.5px] uppercase tracking-[0.16em] font-semibold">
+                  {idx + 1} · {step.label}
+                </span>
+              </div>
+              <div className="mt-1 text-[11.5px] font-mono tnum">{step.helper}</div>
+            </li>
+          );
+        })}
+      </ol>
+    </Panel>
   );
 }
 
@@ -496,7 +494,6 @@ function BucketCard({
   rpv,
   cvr,
   active = false,
-  holdoutCost = null,
 }: {
   label: string;
   visitors: number;
@@ -504,7 +501,6 @@ function BucketCard({
   rpv: number | null;
   cvr: number | null;
   active?: boolean;
-  holdoutCost?: number | null;
 }) {
   return (
     <div
@@ -523,11 +519,6 @@ function BucketCard({
         <div>{fmtUSD(rpv ?? 0)} RPV</div>
         <div>{((cvr ?? 0) * 100).toFixed(2)}% CVR</div>
       </div>
-      {holdoutCost != null && holdoutCost > 0 ? (
-        <div className="mt-2 rounded-sm border border-[var(--color-warn)]/25 bg-[var(--color-warn)]/8 px-1.5 py-1 text-[10px] font-mono text-[var(--color-warn)] tnum" title="Revenue B would have earned at A's RPV — the cost of keeping the holdout.">
-          −{fmtUSD(holdoutCost, true)} holdout cost
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -563,189 +554,6 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) 
       <h2 className="text-[14px] font-semibold tracking-tight">{title}</h2>
       <p className="mt-0.5 text-[11px] text-[var(--color-fg-muted)]">{subtitle}</p>
     </div>
-  );
-}
-
-function ProofTile({
-  label,
-  value,
-  helper,
-  tone = "text-[var(--color-fg)]",
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  tone?: string;
-}) {
-  return (
-    <div className="rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/45 p-3">
-      <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-[var(--color-fg-muted)]">
-        {label}
-      </div>
-      <div className={`mt-2 text-[24px] font-semibold tracking-tight tnum ${tone}`}>{value}</div>
-      <div className="mt-1 text-[11px] text-[var(--color-fg-muted)] tnum">{helper}</div>
-    </div>
-  );
-}
-
-function IncrementalSparkline({ series }: { series: DailyIncrement[] }) {
-  const w = 132;
-  const h = 32;
-  const padX = 2;
-  const padY = 4;
-  const values = series.map((d) => d.value);
-  const max = Math.max(...values, 0);
-  const min = Math.min(...values, 0);
-  const span = max - min || 1;
-  const points = values.map((v, i) => {
-    const x = padX + (i * (w - padX * 2)) / Math.max(1, values.length - 1);
-    const y = padY + (1 - (v - min) / span) * (h - padY * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const lastValue = values[values.length - 1] ?? 0;
-  const positiveDays = values.filter((v) => v > 0).length;
-  const zeroY = padY + (1 - (0 - min) / span) * (h - padY * 2);
-  const stroke =
-    lastValue > 0
-      ? "var(--color-success)"
-      : lastValue < 0
-        ? "var(--color-danger)"
-        : "var(--color-fg-muted)";
-
-  return (
-    <div className="inline-flex items-center gap-2 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-bg)]/45 px-2.5 py-1.5">
-      <div className="flex flex-col">
-        <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[var(--color-fg-muted)]">
-          Daily incremental
-        </span>
-        <span className="text-[10.5px] font-mono text-[var(--color-fg-muted)] tnum">
-          {positiveDays}/{values.length} days positive
-        </span>
-      </div>
-      <svg
-        viewBox={`0 0 ${w} ${h}`}
-        width={w}
-        height={h}
-        role="img"
-        aria-label={`Daily incremental revenue over the last ${values.length} days, ${positiveDays} positive`}
-        className="shrink-0"
-      >
-        <line
-          x1={padX}
-          x2={w - padX}
-          y1={zeroY}
-          y2={zeroY}
-          stroke="var(--color-border-soft)"
-          strokeDasharray="2 2"
-          strokeWidth={1}
-        />
-        <polyline
-          points={points.join(" ")}
-          fill="none"
-          stroke={stroke}
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {points.length > 0 ? (
-          <circle
-            cx={Number(points[points.length - 1].split(",")[0])}
-            cy={Number(points[points.length - 1].split(",")[1])}
-            r={2}
-            fill={stroke}
-          />
-        ) : null}
-      </svg>
-    </div>
-  );
-}
-
-function PhaseStrip({
-  phase,
-  splitLabel,
-  confidenceLabel,
-  significant,
-  primaryLift,
-  incremental,
-  rolloutUpside,
-}: {
-  phase: "testing" | "ready" | "rolled_out";
-  splitLabel: string;
-  confidenceLabel: string;
-  significant: boolean;
-  primaryLift: number | null;
-  incremental: number | null;
-  rolloutUpside: number | null;
-}) {
-  const steps: { key: "testing" | "ready" | "rolled_out"; label: string; helper: string }[] = [
-    { key: "testing", label: "Testing", helper: `Live A/B · ${splitLabel}` },
-    { key: "ready", label: "Ready to graduate", helper: significant ? `${confidenceLabel} · positive lift` : "Awaiting significance" },
-    { key: "rolled_out", label: "Rolled out", helper: "100% escape · use locked baseline" },
-  ];
-  const activeIndex = steps.findIndex((step) => step.key === phase);
-  const headline =
-    phase === "rolled_out"
-      ? "Reporting against locked baseline"
-      : phase === "ready"
-        ? "Test is statistically clean — safe to graduate"
-        : "Collecting evidence";
-  const body =
-    phase === "rolled_out"
-      ? "Live A/B is off. Compare current RPV against the locked control RPV from the winning test window. Show as 'estimated incremental revenue', not live A/B proof."
-      : phase === "ready"
-        ? "Hold a tiny 90/10 or 95/5 holdout when you flip to rollout — that keeps live incremental math honest and proves lift over time."
-        : "Keep the 50/50 split running until confidence ≥ 95%. Bucket B is silent by design; do not confuse it with broken.";
-
-  return (
-    <Panel className="p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
-            Rollout phase
-          </div>
-          <div className="mt-1 text-[15px] font-semibold tracking-tight">{headline}</div>
-          <p className="mt-1 max-w-2xl text-[12px] text-[var(--color-fg-dim)]">{body}</p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2 text-[11px] font-mono tnum text-[var(--color-fg-muted)]">
-          <span>Lift {fmtPct(primaryLift)}</span>
-          <span aria-hidden>·</span>
-          <span>Realized {fmtUSD(incremental ?? 0, true)}</span>
-          {phase !== "rolled_out" ? (
-            <>
-              <span aria-hidden>·</span>
-              <span>Upside {fmtUSD(rolloutUpside ?? 0, true)}</span>
-            </>
-          ) : null}
-        </div>
-      </div>
-      <ol className="mt-3 grid gap-2 sm:grid-cols-3">
-        {steps.map((step, idx) => {
-          const isActive = idx === activeIndex;
-          const isPast = idx < activeIndex;
-          const tone = isActive
-            ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/8 text-[var(--color-fg)]"
-            : isPast
-              ? "border-[var(--color-success)]/25 bg-[var(--color-success)]/8 text-[var(--color-fg-dim)]"
-              : "border-[var(--color-border-soft)] bg-[var(--color-bg)]/40 text-[var(--color-fg-muted)]";
-          const dot = isActive
-            ? "bg-[var(--color-accent)]"
-            : isPast
-              ? "bg-[var(--color-success)]"
-              : "bg-[var(--color-fg-muted)]/40";
-          return (
-            <li key={step.key} className={`rounded-md border px-3 py-2 ${tone}`}>
-              <div className="flex items-center gap-2">
-                <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
-                <span className="text-[10.5px] uppercase tracking-[0.16em] font-semibold">
-                  {idx + 1} · {step.label}
-                </span>
-              </div>
-              <div className="mt-1 text-[11.5px] font-mono tnum">{step.helper}</div>
-            </li>
-          );
-        })}
-      </ol>
-    </Panel>
   );
 }
 
