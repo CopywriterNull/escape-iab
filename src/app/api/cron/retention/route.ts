@@ -28,6 +28,7 @@ const POLICIES = [
 ] as const;
 
 const CART_ATTRIBUTION_RETENTION_DAYS = 45;
+const HOURLY_ROLLUP_REFRESH_HOURS = 8;
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -67,7 +68,9 @@ export async function GET(req: NextRequest) {
   const batchSize = batchSizeFrom(req);
   const results: Record<string, { deleted: number; cutoff: string }> = {};
 
-  const rollupSince = new Date(Date.now() - 48 * 3600_000).toISOString();
+  // Keep this small: the 48h refresh began timing out once COVE/SquidHaus volume
+  // picked up, which made sub-day dashboard ranges show zero despite live traffic.
+  const rollupSince = new Date(Date.now() - HOURLY_ROLLUP_REFRESH_HOURS * 3600_000).toISOString();
   const { data: rollupRows, error: rollupError } = await admin.rpc(
     "eh_refresh_hourly_funnel_rollups",
     {

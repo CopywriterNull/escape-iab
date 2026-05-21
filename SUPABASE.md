@@ -18,6 +18,7 @@ This file tracks the database and Supabase-side decisions for Escape Hatch: what
 - Fixed the product/cart/checkout display issue where product views and add-to-cart could appear identical because later funnel stages were being clamped incorrectly.
 - Added hourly funnel rollups so dashboard ranges like 6h, 24h, 14d, and 30d can load from summarized data instead of scanning raw `escape_events`.
 - Added a cron refresh path that refreshes the last 48 hours of hourly funnel rollups during retention maintenance.
+- Updated that cron refresh window from 48 hours to 8 hours after the 48h refresh began timing out under COVE/SquidHaus volume and caused sub-day dashboard ranges to show zero.
 - Backfilled recent hourly rollups after the RPC timeout issue.
 - Added and tightened indexes for high-volume queries:
   - merchant/time/event/bucket funnel reads
