@@ -218,8 +218,10 @@ export async function getTestFunnel(
   const supabase = getSupabaseAdmin();
   if (!supabase) return empty;
   const since = new Date(Date.now() - days * 86400_000).toISOString();
-  // Aggregate server-side via RPC to avoid the PostgREST 1000-row cap.
-  const { data, error } = await supabase.rpc("eh_test_funnel", {
+  // Sub-day windows need exact rolling timestamps. The rollup-backed RPC is
+  // intentionally hour-grain for speed on 14d/30d windows.
+  const rpcName = days < 1 ? "eh_test_funnel_exact" : "eh_test_funnel";
+  const { data, error } = await supabase.rpc(rpcName, {
     p_merchant_id: merchantId,
     p_since: since,
   });
