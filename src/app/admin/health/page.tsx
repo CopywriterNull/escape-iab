@@ -76,7 +76,7 @@ export default async function AdminHealth() {
   }
 
   const merchants = (merchantData ?? []) as MerchantRow[];
-  const since30 = new Date(Date.now() - 30 * 86400_000).toISOString();
+  const since30 = new Date(new Date().getTime() - 30 * 86400_000).toISOString();
   const summaries = await Promise.all(
     merchants.map(async (merchant) => {
       const health = await loadMerchantHealth(admin, merchant.id, since30);

@@ -25,14 +25,14 @@ function ehSend(et, params) {
         credentials: "omit",
         keepalive: true
       }).catch(function () {});
-    } catch (e) {}
+    } catch {}
     try {
       if (typeof Image !== "undefined") {
         var img = new Image();
         img.src = EH_BASE + "?" + qs + "&_t=img";
       }
-    } catch (e) {}
-  } catch (e) {}
+    } catch {}
+  } catch {}
 }
 
 function ehSy(event) {
@@ -55,7 +55,7 @@ function ehSid(event) {
         return attrs.eh_sid;
       }
     }
-  } catch (e) {}
+  } catch {}
   return "";
 }
 
@@ -77,7 +77,7 @@ analytics.subscribe("product_viewed", function (event) {
       cy: price.currencyCode || "",
       pid: pid
     });
-  } catch (e) {}
+  } catch {}
 });
 
 analytics.subscribe("product_added_to_cart", function (event) {
@@ -95,7 +95,7 @@ analytics.subscribe("product_added_to_cart", function (event) {
       v: amount || "",
       cy: price.currencyCode || ""
     });
-  } catch (e) {}
+  } catch {}
 });
 
 analytics.subscribe("checkout_started", function (event) {
@@ -112,7 +112,7 @@ analytics.subscribe("checkout_started", function (event) {
       v: amount || "",
       cy: price.currencyCode || ""
     });
-  } catch (e) {}
+  } catch {}
 });
 
 analytics.subscribe("checkout_completed", function (event) {
@@ -135,5 +135,5 @@ analytics.subscribe("checkout_completed", function (event) {
       cy: price.currencyCode || "",
       oid: oid
     });
-  } catch (e) {}
+  } catch {}
 });

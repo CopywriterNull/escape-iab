@@ -41,10 +41,11 @@ export default function V3Terminal() {
       </header>
 
       <div className="px-6 py-6 max-w-6xl mx-auto">
-        {/* Hero ASCII-ish */}
+        {"/* Hero ASCII-ish */"}
         <div className="mb-6">
           <div className="text-[10.5px] tracking-[0.18em]" style={{ color: FG_MUTED }}>
-            // LIFT_OBSERVED · {d.rangeLabel.toUpperCase()}
+            {"// LIFT_OBSERVED · "}
+            {d.rangeLabel.toUpperCase()}
           </div>
           <div className="mt-2 flex items-baseline gap-4">
             <div className="text-[56px] leading-none tnum tracking-tight font-semibold" style={{ color: PHOSPHOR }}>

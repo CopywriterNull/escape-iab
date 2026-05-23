@@ -23,15 +23,12 @@ export function InstallCheck({
   domain: string | null;
   merchantId: string;
 }) {
-  const [result, setResult] = useState<InstallResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [check, setCheck] = useState<{ targetUrl: string; result: InstallResult } | null>(null);
   const targetUrl = useMemo(() => normalizeUrl(domain), [domain]);
 
   useEffect(() => {
     if (!targetUrl) return;
     let cancelled = false;
-    setLoading(true);
-    setResult(null);
     fetch("/api/admin/install-check", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -39,13 +36,15 @@ export function InstallCheck({
     })
       .then((r) => r.json())
       .then((json: InstallResult) => {
-        if (!cancelled) setResult(json);
+        if (!cancelled) setCheck({ targetUrl, result: json });
       })
       .catch((e: unknown) => {
-        if (!cancelled) setResult({ ok: false, error: e instanceof Error ? e.message : "check_failed" });
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setCheck({
+            targetUrl,
+            result: { ok: false, error: e instanceof Error ? e.message : "check_failed" },
+          });
+        }
       });
     return () => {
       cancelled = true;
@@ -55,9 +54,10 @@ export function InstallCheck({
   if (!targetUrl) {
     return <Status tone="warn" label="No domain" detail="Add storefront domain" />;
   }
-  if (loading || !result) {
+  if (!check || check.targetUrl !== targetUrl) {
     return <Status tone="muted" label="Checking" detail="Fetching storefront head" />;
   }
+  const { result } = check;
   if (!result.ok) {
     return <Status tone="warn" label="Fetch failed" detail={result.stage ? `${result.stage}: ${result.error}` : result.error} />;
   }

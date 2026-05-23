@@ -140,7 +140,7 @@ function MerchantRow({
   const snippet = `<script src="https://getescapehatch.com/s/${row.id}.js?v=12"></script>`;
   const tracking = eventsLast24h > 0;
   const lastSeenLabel = lastSeen
-    ? `${Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000)}m ago`
+    ? `${Math.floor((new Date().getTime() - new Date(lastSeen).getTime()) / 60000)}m ago`
     : "—";
 
   return (

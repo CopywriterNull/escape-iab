@@ -8,8 +8,11 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    const current = document.documentElement.getAttribute("data-theme") as Theme | null;
-    setTheme(current === "dark" ? "dark" : "light");
+    const id = window.requestAnimationFrame(() => {
+      const current = document.documentElement.getAttribute("data-theme") as Theme | null;
+      setTheme(current === "dark" ? "dark" : "light");
+    });
+    return () => window.cancelAnimationFrame(id);
   }, []);
 
   const toggle = () => {

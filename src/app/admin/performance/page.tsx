@@ -76,7 +76,7 @@ export default async function AdminPerformancePage({
     return <EmptyState title="Service role unavailable" detail="Set SUPABASE_SERVICE_ROLE_KEY to load performance." />;
   }
 
-  const since = new Date(Date.now() - range.days * 86400_000).toISOString();
+  const since = new Date(new Date().getTime() - range.days * 86400_000).toISOString();
   const { data, error } = await admin.rpc("eh_admin_brand_performance", {
     p_since: since,
   });

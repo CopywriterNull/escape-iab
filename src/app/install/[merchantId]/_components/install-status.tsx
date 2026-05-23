@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Status = {
   installed: boolean;
@@ -19,8 +19,8 @@ const POLL_MS = 4000;
 
 export function InstallStatus({ merchantId }: { merchantId: string }) {
   const [s, setS] = useState<Status | null>(null);
+  const [hasFetched, setHasFetched] = useState(false);
   const [tick, setTick] = useState(0);
-  const initialFetched = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,7 +32,7 @@ export function InstallStatus({ merchantId }: { merchantId: string }) {
         const json = (await r.json()) as { ok?: boolean } & Status;
         if (!cancelled && json.ok) {
           setS(json);
-          initialFetched.current = true;
+          setHasFetched(true);
         }
       } catch {
         /* ignore network blip */
@@ -50,7 +50,7 @@ export function InstallStatus({ merchantId }: { merchantId: string }) {
   }, [merchantId]);
 
   // Pre-first-fetch — show a quiet skeleton.
-  if (!s && !initialFetched.current) {
+  if (!s && !hasFetched) {
     return (
       <Card tone="idle">
         <Dot tone="idle" />

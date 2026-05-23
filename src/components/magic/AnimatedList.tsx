@@ -28,22 +28,21 @@ const POOL: Omit<Item, "id" | "ago">[] = [
 
 const MAX = 5;
 
-export function AnimatedList({ className = "" }: { className?: string }) {
-  const [items, setItems] = useState<Item[]>([]);
+function seedItems(): Item[] {
+  const seed: Item[] = [];
+  for (let i = 0; i < MAX; i++) {
+    const sample = POOL[(POOL.length - i - 1 + POOL.length) % POOL.length];
+    seed.push({
+      id: `seed-${i}`,
+      ...sample,
+      ago: `${(i + 1) * 7}s`,
+    });
+  }
+  return seed;
+}
 
-  // Seed with 5 items so the panel isn't empty on first paint.
-  useEffect(() => {
-    const seed: Item[] = [];
-    for (let i = 0; i < MAX; i++) {
-      const sample = POOL[(POOL.length - i - 1 + POOL.length) % POOL.length];
-      seed.push({
-        id: `seed-${i}`,
-        ...sample,
-        ago: `${(i + 1) * 7}s`,
-      });
-    }
-    setItems(seed);
-  }, []);
+export function AnimatedList({ className = "" }: { className?: string }) {
+  const [items, setItems] = useState<Item[]>(seedItems);
 
   // Inject a new event every ~2.4s.
   useEffect(() => {

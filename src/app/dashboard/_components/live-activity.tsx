@@ -32,7 +32,6 @@ export function LiveActivity({
   // .magic-list-item entry animation fires.
   useEffect(() => {
     let cancelled = false;
-    let timer: number | null = null;
 
     async function tick() {
       try {
@@ -62,7 +61,6 @@ export function LiveActivity({
       cancelled = true;
       window.clearInterval(labelTimer);
       window.clearInterval(pollTimer);
-      if (timer) window.clearTimeout(timer);
     };
   }, [days, limit]);
 

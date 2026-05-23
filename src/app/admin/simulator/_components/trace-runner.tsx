@@ -261,6 +261,7 @@ function runTrace(
   // shouldn't fire for impressions, but cart_check uses fetch directly.
 
   const mockSetTimeout = (fn: () => void, _ms?: number) => {
+    void _ms;
     try { fn(); } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg !== "__eh_redirect_thrown__") {

@@ -34,7 +34,6 @@ export type CaseStudyData = {
 export type LanderVariant = "v1" | "v2";
 
 export function Lander({
-  theme = "light",
   proof,
   variant = "v1",
 }: {
@@ -47,7 +46,7 @@ export function Lander({
     <div className="text-[var(--color-fg)] bg-[var(--color-bg)] grain relative overflow-x-clip">
       <div aria-hidden className="gradient-dotgrid" />
       <PointerTracker />
-      <Nav theme={theme} escapesToday={proof?.escapesToday ?? 0} />
+      <Nav escapesToday={proof?.escapesToday ?? 0} />
       <Hero proof={proof} variant={variant} />
       <HowItWorks />
       <PlatformsSection />
@@ -75,7 +74,7 @@ export function Lander({
 
 /* -------- Nav -------- */
 
-function Nav({ theme: _theme, escapesToday }: { theme: Theme; escapesToday: number }) {
+function Nav({ escapesToday }: { escapesToday: number }) {
   return (
     <header className="sticky top-0 z-40 backdrop-blur-md bg-[var(--color-bg)]/80 border-b border-[var(--color-border)]/60">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between gap-3 sm:gap-6">
@@ -708,13 +707,6 @@ function SecureTag() {
       ready
     </span>
   );
-}
-
-/* -------- Logo strip -------- */
-
-function LogoStrip() {
-  // Replaced by <PlatformsSection /> in the page composition.
-  return null;
 }
 
 /* -------- Floating platform logos around the hero (desktop-only) -------- */
