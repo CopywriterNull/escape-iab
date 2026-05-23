@@ -220,7 +220,9 @@ export async function getTestFunnel(
   const since = new Date(Date.now() - days * 86400_000).toISOString();
   // Sub-day windows need exact rolling timestamps. The rollup-backed RPC is
   // intentionally hour-grain for speed on 14d/30d windows.
-  const rpcName = days < 1 ? "eh_test_funnel_exact" : "eh_test_funnel";
+  const useExact =
+    days < 1 || (days <= 1 && !(await hasHourlyRollupCoverage(merchantId, since, days)));
+  const rpcName = useExact ? "eh_test_funnel_exact" : "eh_test_funnel";
   const { data, error } = await supabase.rpc(rpcName, {
     p_merchant_id: merchantId,
     p_since: since,
@@ -262,6 +264,27 @@ export async function getTestFunnel(
     }
   }
   return out;
+}
+
+async function hasHourlyRollupCoverage(
+  merchantId: string,
+  sinceIso: string,
+  days: number,
+): Promise<boolean> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return false;
+
+  const expectedHours = Math.max(1, Math.floor(days * 24));
+  const { data, error } = await supabase
+    .from("hourly_funnel_rollups")
+    .select("hour")
+    .eq("merchant_id", merchantId)
+    .gte("hour", sinceIso)
+    .limit(expectedHours * 2);
+
+  if (error) return false;
+  const hours = new Set(((data ?? []) as { hour: string | null }[]).map((row) => row.hour).filter(Boolean));
+  return hours.size >= Math.max(1, expectedHours - 2);
 }
 
 export async function getRollups(
