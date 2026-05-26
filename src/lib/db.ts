@@ -218,10 +218,11 @@ export async function getTestFunnel(
   const supabase = getSupabaseAdmin();
   if (!supabase) return empty;
   const since = new Date(Date.now() - days * 86400_000).toISOString();
-  // Sub-day windows need exact rolling timestamps. The rollup-backed RPC is
-  // intentionally hour-grain for speed on 14d/30d windows.
+  // Sub-day windows need exact rolling timestamps. For day-grain ranges, fall
+  // back to exact whenever rollups look stale — defense against cron stalls
+  // that previously caused SquidHaus 24h/7d to silently under-report.
   const useExact =
-    days < 1 || (days <= 1 && !(await hasHourlyRollupCoverage(merchantId, since, days)));
+    days < 1 || !(await hasHourlyRollupCoverage(merchantId, since, days));
   const rpcName = useExact ? "eh_test_funnel_exact" : "eh_test_funnel";
   const { data, error } = await supabase.rpc(rpcName, {
     p_merchant_id: merchantId,
@@ -274,17 +275,43 @@ async function hasHourlyRollupCoverage(
   const supabase = getSupabaseAdmin();
   if (!supabase) return false;
 
+  // Pull at most enough rows to evaluate both checks. For multi-day ranges
+  // we don't need every hour — we only need to know the newest refresh
+  // time and verify the recent end of the window is covered.
   const expectedHours = Math.max(1, Math.floor(days * 24));
+  const sampleLimit = Math.min(expectedHours * 2, 96);
   const { data, error } = await supabase
     .from("hourly_funnel_rollups")
-    .select("hour")
+    .select("hour, refreshed_at")
     .eq("merchant_id", merchantId)
     .gte("hour", sinceIso)
-    .limit(expectedHours * 2);
+    .order("hour", { ascending: false })
+    .limit(sampleLimit);
 
   if (error) return false;
-  const hours = new Set(((data ?? []) as { hour: string | null }[]).map((row) => row.hour).filter(Boolean));
-  return hours.size >= Math.max(1, expectedHours - 2);
+  const rows = (data ?? []) as { hour: string | null; refreshed_at: string | null }[];
+  if (rows.length === 0) return false;
+
+  // Freshness check applies to every range. If the newest rollup row is more
+  // than 3h old the cron has stalled; fall back to exact regardless of how
+  // many historical hours are present.
+  const newestRefresh = rows.reduce<number>((latest, row) => {
+    if (!row.refreshed_at) return latest;
+    const refreshedAt = new Date(row.refreshed_at).getTime();
+    return Number.isFinite(refreshedAt) ? Math.max(latest, refreshedAt) : latest;
+  }, 0);
+  if (newestRefresh < Date.now() - 3 * 3600_000) return false;
+
+  // For sub-day-ish windows (1d) require nearly-complete hour coverage —
+  // high-traffic merchants like SquidHaus emit events every hour, so missing
+  // hours mean missing data. For 7d+ ranges, low-traffic hours legitimately
+  // have no rollup rows, so coverage gaps shouldn't trigger fallback.
+  if (days <= 1) {
+    const hours = new Set(rows.map((row) => row.hour).filter(Boolean));
+    return hours.size >= Math.max(1, expectedHours - 2);
+  }
+
+  return true;
 }
 
 export async function getRollups(

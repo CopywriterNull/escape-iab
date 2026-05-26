@@ -77,6 +77,21 @@ export default async function AdminPerformancePage({
   }
 
   const since = new Date(new Date().getTime() - range.days * 86400_000).toISOString();
+
+  // Defense in depth: this RPC reads from hourly_funnel_rollups only. If the
+  // refresh cron has stalled, every row below silently under-reports. Surface
+  // it visibly so we don't repeat the 3-day SquidHaus blackout.
+  const { data: freshnessRows } = await admin
+    .from("hourly_funnel_rollups")
+    .select("refreshed_at")
+    .order("refreshed_at", { ascending: false })
+    .limit(1);
+  const lastRefreshIso = freshnessRows?.[0]?.refreshed_at ?? null;
+  const lastRefreshMs = lastRefreshIso ? new Date(lastRefreshIso).getTime() : 0;
+  const nowMs = new Date().getTime();
+  const rollupAgeHours = lastRefreshMs > 0 ? (nowMs - lastRefreshMs) / 3600_000 : Infinity;
+  const rollupStale = rollupAgeHours > 2;
+
   const { data, error } = await admin.rpc("eh_admin_brand_performance", {
     p_since: since,
   });
@@ -101,6 +116,19 @@ export default async function AdminPerformancePage({
         </div>
         <RangeLinks active={range.key} />
       </div>
+
+      {rollupStale ? (
+        <div className="rounded-lg border border-[var(--color-warn)]/40 bg-[var(--color-warn)]/10 px-4 py-3 text-[12px] text-[var(--color-warn)]">
+          <div className="font-semibold tracking-tight">
+            Rollups stale — numbers below may be missing the last{" "}
+            {Number.isFinite(rollupAgeHours) ? `${rollupAgeHours.toFixed(1)}h` : "many hours"} of traffic.
+          </div>
+          <div className="mt-1 text-[11px] font-mono text-[var(--color-fg-muted)]">
+            Last refresh: {lastRefreshIso ?? "never"}. The hourly cron at /api/cron/retention has likely
+            stalled. Trigger a manual refresh or check Vercel cron logs.
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
