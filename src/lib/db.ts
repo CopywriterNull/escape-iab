@@ -218,11 +218,14 @@ export async function getTestFunnel(
   const supabase = getSupabaseAdmin();
   if (!supabase) return empty;
   const since = new Date(Date.now() - days * 86400_000).toISOString();
-  // Sub-day windows need exact rolling timestamps. For day-grain ranges, fall
-  // back to exact whenever rollups look stale — defense against cron stalls
-  // that previously caused SquidHaus 24h/7d to silently under-report.
+  // Sub-day windows go straight to exact. The 24h window falls back to exact
+  // when rollups look stale or incomplete. For 7d+ we always trust rollups —
+  // the exact RPC is too slow over multi-day windows on volume merchants
+  // (SquidHaus, COVE) and would return empty under timeout, which is worse
+  // than showing slightly-stale numbers. Staleness on multi-day is surfaced
+  // via the rollup-freshness banner instead.
   const useExact =
-    days < 1 || !(await hasHourlyRollupCoverage(merchantId, since, days));
+    days < 1 || (days <= 1 && !(await hasHourlyRollupCoverage(merchantId, since, days)));
   const rpcName = useExact ? "eh_test_funnel_exact" : "eh_test_funnel";
   const { data, error } = await supabase.rpc(rpcName, {
     p_merchant_id: merchantId,
