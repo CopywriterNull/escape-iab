@@ -2,6 +2,11 @@ import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { type NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
+// Fluid Compute ceiling. The rollup refresh RPC over 4h still aggregates
+// hundreds of thousands of escape_events rows; without this it hits the
+// default 60s timeout and the whole hour silently fails (see SquidHaus
+// 3-day blackout 2026-05-23 → 2026-05-26).
+export const maxDuration = 300;
 
 type EscapeEventIdRow = { id: string };
 
@@ -28,7 +33,10 @@ const POLICIES = [
 ] as const;
 
 const CART_ATTRIBUTION_RETENTION_DAYS = 45;
-const HOURLY_ROLLUP_REFRESH_HOURS = 8;
+// Refresh window. Cron runs hourly, so 4h gives 4x redundancy and stays well
+// under the function timeout even at SquidHaus/COVE volume. Shrunk from 8h
+// after the 2026-05-26 blackout where 8h consistently 500'd.
+const HOURLY_ROLLUP_REFRESH_HOURS = 4;
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -66,52 +74,75 @@ export async function GET(req: NextRequest) {
   if (!admin) return json({ ok: false, error: "no_db" }, 503);
 
   const batchSize = batchSizeFrom(req);
-  const results: Record<string, { deleted: number; cutoff: string }> = {};
+  const steps: Record<string, { ok: boolean; [key: string]: unknown }> = {};
 
-  // Keep this small: the 48h refresh began timing out once COVE/SquidHaus volume
-  // picked up, which made sub-day dashboard ranges show zero despite live traffic.
+  // Step 1: rollup refresh. Isolated — if it fails, retention still runs.
+  // Previous architecture returned 500 here on any RPC error, which meant the
+  // whole cron blocked on the slowest sub-task.
   const rollupSince = new Date(Date.now() - HOURLY_ROLLUP_REFRESH_HOURS * 3600_000).toISOString();
-  const { data: rollupRows, error: rollupError } = await admin.rpc(
-    "eh_refresh_hourly_funnel_rollups",
-    {
-      p_since: rollupSince,
-      p_until: new Date().toISOString(),
-    },
-  );
-  if (rollupError) {
-    return json(
+  try {
+    const { data: rollupRows, error: rollupError } = await admin.rpc(
+      "eh_refresh_hourly_funnel_rollups",
       {
-        ok: false,
-        error: "hourly_rollup_refresh_failed",
-        details: rollupError.message,
+        p_since: rollupSince,
+        p_until: new Date().toISOString(),
       },
-      500,
     );
+    if (rollupError) {
+      steps.hourly_rollups = {
+        ok: false,
+        error: rollupError.message,
+        code: rollupError.code,
+        since: rollupSince,
+      };
+    } else {
+      steps.hourly_rollups = {
+        ok: true,
+        refreshed: Number(rollupRows ?? 0),
+        since: rollupSince,
+      };
+    }
+  } catch (err) {
+    steps.hourly_rollups = {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      since: rollupSince,
+    };
   }
 
+  // Step 2: cart attribution retention. Isolated.
   const cartAttributionCutoff = cutoffIso(CART_ATTRIBUTION_RETENTION_DAYS);
-  const { count: cartAttributionsDeleted, error: cartAttributionsError } = await admin
-    .from("cart_attributions")
-    .delete({ count: "exact" })
-    .lt("last_seen_at", cartAttributionCutoff);
-  if (cartAttributionsError) {
-    return json(
-      {
+  try {
+    const { count: cartAttributionsDeleted, error: cartAttributionsError } = await admin
+      .from("cart_attributions")
+      .delete({ count: "exact" })
+      .lt("last_seen_at", cartAttributionCutoff);
+    if (cartAttributionsError) {
+      steps.cart_attributions = {
         ok: false,
-        error: "cart_attribution_delete_failed",
-        details: cartAttributionsError.message,
-      },
-      500,
-    );
+        error: cartAttributionsError.message,
+        cutoff: cartAttributionCutoff,
+      };
+    } else {
+      steps.cart_attributions = {
+        ok: true,
+        deleted: cartAttributionsDeleted ?? 0,
+        cutoff: cartAttributionCutoff,
+      };
+    }
+  } catch (err) {
+    steps.cart_attributions = {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      cutoff: cartAttributionCutoff,
+    };
   }
-  results.cart_attributions = {
-    deleted: cartAttributionsDeleted ?? 0,
-    cutoff: cartAttributionCutoff,
-  };
 
+  // Step 3: event retention policies. Each policy isolated.
   for (const policy of POLICIES) {
     const cutoff = cutoffIso(policy.retentionDays);
     let deleted = 0;
+    let stepError: string | null = null;
 
     for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch += 1) {
       let selectQuery = admin
@@ -130,16 +161,8 @@ export async function GET(req: NextRequest) {
 
       const { data, error: selectError } = await selectQuery;
       if (selectError) {
-        return json(
-          {
-            ok: false,
-            error: "select_failed",
-            policy: policy.name,
-            details: selectError.message,
-            results,
-          },
-          500,
-        );
+        stepError = `select_failed: ${selectError.message}`;
+        break;
       }
 
       const ids = ((data ?? []) as EscapeEventIdRow[]).map((row) => row.id);
@@ -147,30 +170,35 @@ export async function GET(req: NextRequest) {
 
       const { error: deleteError } = await admin.from("escape_events").delete().in("id", ids);
       if (deleteError) {
-        return json(
-          {
-            ok: false,
-            error: "delete_failed",
-            policy: policy.name,
-            details: deleteError.message,
-            results,
-          },
-          500,
-        );
+        stepError = `delete_failed: ${deleteError.message}`;
+        break;
       }
 
       deleted += ids.length;
       if (ids.length < batchSize) break;
     }
 
-    results[policy.name] = { deleted, cutoff };
+    steps[policy.name] = stepError
+      ? { ok: false, deleted, error: stepError, cutoff }
+      : { ok: true, deleted, cutoff };
   }
 
-  return json({
-    ok: true,
-    batchSize,
-    maxBatches: MAX_BATCHES_PER_RUN,
-    hourlyRollups: { refreshed: Number(rollupRows ?? 0), since: rollupSince },
-    results,
-  });
+  // Return success unless every step failed. Vercel surfaces 500s prominently
+  // in cron history, so we still want a 500 when nothing succeeded — but a
+  // single failing step shouldn't hide that retention + other policies ran.
+  const stepValues = Object.values(steps);
+  const anyOk = stepValues.some((step) => step.ok === true);
+  const anyFailed = stepValues.some((step) => step.ok === false);
+
+  return json(
+    {
+      ok: anyOk,
+      partial: anyFailed,
+      batchSize,
+      maxBatches: MAX_BATCHES_PER_RUN,
+      rollupRefreshHours: HOURLY_ROLLUP_REFRESH_HOURS,
+      steps,
+    },
+    anyOk ? 200 : 500,
+  );
 }
