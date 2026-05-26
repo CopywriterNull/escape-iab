@@ -3,6 +3,7 @@ import { Suspense, cache } from "react";
 import {
   getCurrentMerchant,
   getPeriodDelta,
+  getRollupFreshness,
   getRollups,
   getEnabledDashboardIabKinds,
   getSourceBreakdown,
@@ -17,6 +18,7 @@ import {
   type SourceRow,
   type IabKind,
 } from "@/lib/db";
+import { RollupFreshnessBanner } from "./_components/rollup-freshness-banner";
 import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
 import {
   ActivitySkeleton,
@@ -128,6 +130,7 @@ export default async function DashboardOverview({
 
   const m = merchant.id;
   const d = range.days;
+  const rollupFreshness = await getRollupFreshness();
 
   return (
     <Page
@@ -163,6 +166,8 @@ export default async function DashboardOverview({
       }
     >
       <ScopeBanner merchant={merchant} />
+
+      <RollupFreshnessBanner freshness={rollupFreshness} />
 
       <Suspense key={`hero-${range.key}`} fallback={<HeroSkeleton />}>
         <HeroSection merchantId={m} days={d} rangeLabel={range.label} />

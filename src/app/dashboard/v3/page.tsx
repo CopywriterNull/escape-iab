@@ -5,6 +5,7 @@ import {
   getEnabledDashboardIabKinds,
   getIabBreakdown,
   getPeriodDelta,
+  getRollupFreshness,
   getRollups,
   getSourceBreakdown,
   getTestFunnel,
@@ -15,6 +16,7 @@ import {
   type IabKind,
   type SourceRow,
 } from "@/lib/db";
+import { RollupFreshnessBanner } from "../_components/rollup-freshness-banner";
 import { TimeRangeSelector } from "../_components/time-range-selector";
 import { parseDashboardRange } from "@/lib/dashboard-ranges";
 
@@ -183,13 +185,14 @@ export default async function DashboardV3({ searchParams }: { searchParams: Sear
 
   const iabKinds = getEnabledDashboardIabKinds(merchant);
   const cumulativeDays = Math.max(range.days, 90);
-  const [funnel, sources, unattributed, rollups, period, iabBreakdown] = await Promise.all([
+  const [funnel, sources, unattributed, rollups, period, iabBreakdown, rollupFreshness] = await Promise.all([
     getTestFunnel(merchant.id, range.days),
     getSourceBreakdown(merchant.id, range.days, 8),
     getUnattributedPurchaseStats(merchant.id, range.days),
     getRollups(merchant.id, cumulativeDays),
     getPeriodDelta(merchant.id, range.days),
     getIabBreakdown(merchant.id, range.days),
+    getRollupFreshness(),
   ]);
 
   const s = summarize(funnel);
@@ -217,6 +220,8 @@ export default async function DashboardV3({ searchParams }: { searchParams: Sear
 
   return (
     <main className="space-y-3">
+      <RollupFreshnessBanner freshness={rollupFreshness} />
+
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-[0.2em] font-semibold text-[var(--color-fg-muted)]">

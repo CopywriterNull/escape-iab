@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   getCurrentMerchant,
   getEnabledDashboardIabKinds,
+  getRollupFreshness,
   getRollups,
   getSourceBreakdown,
   getTestFunnel,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/db";
 import { PixelIcon } from "@/components/PixelIcon";
 import { PorscheMeter } from "../_components/porsche-meter";
+import { RollupFreshnessBanner } from "../_components/rollup-freshness-banner";
 import { TimeRangeSelector } from "../_components/time-range-selector";
 import { parseDashboardRange } from "@/lib/dashboard-ranges";
 
@@ -165,11 +167,12 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
 
   const iabKinds = getEnabledDashboardIabKinds(merchant);
   const cumulativeDays = 365;
-  const [funnel, sources, unattributed, rollups] = await Promise.all([
+  const [funnel, sources, unattributed, rollups, rollupFreshness] = await Promise.all([
     getTestFunnel(merchant.id, range.days),
     getSourceBreakdown(merchant.id, range.days, 5),
     getUnattributedPurchaseStats(merchant.id, range.days),
     getRollups(merchant.id, cumulativeDays),
+    getRollupFreshness(),
   ]);
   const s = summarize(funnel);
   const cumulativeIncremental = computeCumulativeIncremental(rollups);
@@ -192,6 +195,8 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
 
   return (
     <main className="space-y-3">
+      <RollupFreshnessBanner freshness={rollupFreshness} />
+
       {/* Tight header: just merchant + range pills + nav */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 text-[12px] font-mono text-[var(--color-fg-muted)] truncate">

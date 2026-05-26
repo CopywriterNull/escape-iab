@@ -270,6 +270,38 @@ export async function getTestFunnel(
   return out;
 }
 
+export type RollupFreshness = {
+  stale: boolean;
+  ageHours: number;
+  lastRefresh: string | null;
+};
+
+/**
+ * Global rollup freshness — newest refreshed_at across all merchants.
+ * Used to decide whether to render the stale-rollups banner.
+ *
+ * Why global, not per-merchant: low-traffic merchants legitimately go
+ * hours/days without rollup row updates (the refresh RPC only writes hours
+ * with events). A global newest-refresh is "is the cron itself healthy",
+ * which is what we want to signal.
+ */
+export async function getRollupFreshness(): Promise<RollupFreshness> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { stale: false, ageHours: 0, lastRefresh: null };
+
+  const { data } = await supabase
+    .from("hourly_funnel_rollups")
+    .select("refreshed_at")
+    .order("refreshed_at", { ascending: false })
+    .limit(1);
+
+  const lastRefresh = ((data ?? []) as { refreshed_at: string | null }[])[0]?.refreshed_at ?? null;
+  if (!lastRefresh) return { stale: true, ageHours: Infinity, lastRefresh: null };
+
+  const ageHours = (new Date().getTime() - new Date(lastRefresh).getTime()) / 3600_000;
+  return { stale: ageHours > 2, ageHours, lastRefresh };
+}
+
 async function hasHourlyRollupCoverage(
   merchantId: string,
   sinceIso: string,
