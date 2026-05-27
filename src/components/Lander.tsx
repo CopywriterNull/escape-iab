@@ -17,6 +17,16 @@ export type LanderProof = {
   rpvLiftPct: number | null;
   escapesToday?: number;
   caseStudy?: CaseStudyData | null;
+  calculator?: CalculatorProof | null;
+};
+
+export type CalculatorProof = {
+  recoveryRate: number;
+  rpvLiftPct: number | null;
+  rpvDelta: number | null;
+  visitors: number;
+  activeBrands: number;
+  rangeLabel: string;
 };
 
 export type CaseStudyData = {
@@ -64,7 +74,7 @@ export function Lander({
       {isV2 ? <FeaturesV2 /> : <Features />}
       <ABCallout />
       <SnippetPreview />
-      <SpendCalculator />
+      <SpendCalculator proof={proof?.calculator ?? null} />
       <Pricing />
       <FAQ variant={variant} />
       <ClosingCTA />

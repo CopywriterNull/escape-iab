@@ -1,5 +1,6 @@
 "use client";
 
+import type { CalculatorProof } from "@/components/Lander";
 import { useMemo, useState } from "react";
 
 const spendSteps = [
@@ -17,7 +18,7 @@ const spendSteps = [
 
 const MODELED_ROAS = 2.5;
 const IG_IAB_TRAFFIC_SHARE = 0.28;
-const CONSERVATIVE_RECOVERY_RATE = 0.04;
+const FALLBACK_RECOVERY_RATE = 0.04;
 const THREE_DAY_SHARE = 3 / 30;
 
 const money = new Intl.NumberFormat("en-US", {
@@ -32,19 +33,43 @@ function fmtMoney(value: number): string {
   return money.format(value);
 }
 
-export function SpendCalculator() {
+function fmtPct(value: number): string {
+  return `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
+}
+
+function fmtSignedMoney(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "";
+  return `${value > 0 ? "+" : value < 0 ? "-" : ""}${money.format(Math.abs(value))}`;
+}
+
+function fmtCompact(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 10_000) return `${Math.round(value / 1_000)}K`;
+  return value.toLocaleString();
+}
+
+export function SpendCalculator({ proof }: { proof?: CalculatorProof | null }) {
   const [step, setStep] = useState(4);
   const spend = spendSteps[step] ?? 100_000;
+  const recoveryRate = proof?.recoveryRate ?? FALLBACK_RECOVERY_RATE;
   const estimate = useMemo(() => {
     const adDrivenRevenue = spend * MODELED_ROAS;
     const affectedRevenue = adDrivenRevenue * IG_IAB_TRAFFIC_SHARE;
-    const monthlyRecovered = affectedRevenue * CONSERVATIVE_RECOVERY_RATE;
+    const monthlyRecovered = affectedRevenue * recoveryRate;
     return {
       monthlyRecovered,
       threeDayGift: monthlyRecovered * THREE_DAY_SHARE,
       affectedRevenue,
     };
-  }, [spend]);
+  }, [recoveryRate, spend]);
+
+  const modelLabel = proof ? "Portfolio-backed" : "Conservative";
+  const modelSubcopy = proof
+    ? `${fmtPct(recoveryRate)} recovery model`
+    : `${fmtPct(FALLBACK_RECOVERY_RATE)} recovery model`;
+  const sourceLine = proof
+    ? `Uses the latest ${proof.rangeLabel} portfolio read across ${proof.activeBrands} brands: ${proof.rpvLiftPct != null ? fmtPct(proof.rpvLiftPct) : "positive"} RPV lift${proof.rpvDelta != null ? ` (${fmtSignedMoney(proof.rpvDelta)} per visitor)` : ""} across ${fmtCompact(proof.visitors)} IG-IAB visitors, then applies a conservative haircut.`
+    : `Uses 2.5x ROAS, 28% Instagram in-app browser exposure, and ${fmtPct(FALLBACK_RECOVERY_RATE)} recovered revenue.`;
 
   return (
     <section id="calculator" className="relative">
@@ -60,7 +85,7 @@ export function SpendCalculator() {
             </span>
           </h2>
           <p className="mt-4 max-w-[58ch] text-[15px] leading-relaxed text-[var(--color-fg-dim)]">
-            Start with monthly Meta spend. We model only a conservative slice of traffic that lands inside Instagram&apos;s in-app browser, then estimate recovered revenue from smoother Safari checkout.
+            Start with monthly Meta spend. We use recent portfolio A/B data as the baseline, then apply a conservative haircut before estimating recovered revenue from smoother Safari checkout.
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
             <a
@@ -92,9 +117,9 @@ export function SpendCalculator() {
             </div>
             <div className="rounded-2xl border border-[var(--color-success)]/25 bg-[var(--color-success-soft)] px-3 py-2 text-right">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-success)]">
-                Conservative
+                {modelLabel}
               </div>
-              <div className="mt-0.5 text-[12px] text-[var(--color-fg-dim)]">4% recovery model</div>
+              <div className="mt-0.5 text-[12px] text-[var(--color-fg-dim)]">{modelSubcopy}</div>
             </div>
           </div>
 
@@ -124,7 +149,7 @@ export function SpendCalculator() {
               Try us for 3 days free. If the test creates lift, keep the incremental revenue from those 3 days.
             </div>
             <p className="mt-1.5 text-[11.5px] leading-relaxed text-[var(--color-fg-muted)]">
-              Uses 2.5x ROAS, 28% Instagram in-app browser exposure, and 4% recovered revenue. Trial requires the snippet to stay installed and unmodified during measurement.
+              {sourceLine} Trial requires the snippet to stay installed and unmodified during measurement.
             </p>
           </div>
         </div>
