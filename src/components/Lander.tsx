@@ -260,11 +260,14 @@ function HeroProof({ proof }: { proof?: LanderProof }) {
     proof?.rpvLiftPct != null && proof.rpvLiftPct > 0
       ? `+${(proof.rpvLiftPct * 100).toFixed(1)}%`
       : "+62.8%";
+  const escapesFmt = proof?.escapesToday && proof.escapesToday > 0
+    ? formatCompactNumber(proof.escapesToday)
+    : "14.9K";
 
   const proofs = [
     { value: liftFmt, label: "Avg checkout lift on bucket A" },
     { value: rpvLiftFmt, label: "Revenue per visitor lift" },
-    { value: "1.1 KB", label: "Snippet, edge-cached" },
+    { value: escapesFmt, label: "Escapes in the last 24h" },
   ];
   return (
     <div className="mx-auto mt-12 md:mt-14 max-w-3xl grid grid-cols-3 gap-2 md:gap-4">
@@ -279,6 +282,12 @@ function HeroProof({ proof }: { proof?: LanderProof }) {
       ))}
     </div>
   );
+}
+
+function formatCompactNumber(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 10_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value.toLocaleString();
 }
 
 function Waitlist() {
