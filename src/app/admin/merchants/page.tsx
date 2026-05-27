@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
+import { parseAllowedDomains } from "@/lib/snippet";
 import {
   createMerchantAsAdmin,
   deleteMerchantAsAdmin,
@@ -102,6 +103,8 @@ export default async function AdminMerchants() {
         </button>
       </form>
 
+      <HostnameBindingAudit rows={rows} />
+
       <div className="space-y-3">
         {rows.map((r) => (
           <MerchantRow
@@ -114,6 +117,88 @@ export default async function AdminMerchants() {
         ))}
       </div>
     </div>
+  );
+}
+
+function HostnameBindingAudit({ rows }: { rows: Row[] }) {
+  const audited = rows.map((r) => ({
+    row: r,
+    allowed: parseAllowedDomains(r.domain),
+  }));
+  const unbound = audited.filter((a) => a.allowed.length === 0);
+  const bound = audited.filter((a) => a.allowed.length > 0);
+
+  if (audited.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)] p-5 space-y-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+            Hostname binding audit
+          </div>
+          <p className="mt-1 text-[12px] text-[var(--color-fg-dim)]">
+            Snippets only fire on these hostnames + their subdomains. Empty = no restriction (anyone who copies the script can use it).
+          </p>
+        </div>
+        <div className="text-[11px] font-mono text-[var(--color-fg-muted)]">
+          <span className="text-[var(--color-success)]">{bound.length} locked</span>
+          {" · "}
+          <span className={unbound.length > 0 ? "text-[var(--color-warn)]" : ""}>{unbound.length} unbound</span>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-[12px]">
+          <thead className="text-[9.5px] uppercase tracking-[0.14em] font-mono text-[var(--color-fg-muted)] border-b border-[var(--color-border-soft)]">
+            <tr>
+              <th className="text-left py-2 pr-3">Merchant</th>
+              <th className="text-left py-2 pr-3">Raw domain field</th>
+              <th className="text-left py-2 pr-3">Baked allowlist</th>
+              <th className="text-left py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {audited.map(({ row, allowed }) => {
+              const ok = allowed.length > 0;
+              return (
+                <tr key={row.id} className="border-b border-[var(--color-border-soft)]/60 last:border-b-0">
+                  <td className="py-2 pr-3 align-top">
+                    <div className="font-medium tracking-tight">{row.name ?? "(unnamed)"}</div>
+                    <div className="mt-0.5 font-mono text-[10px] text-[var(--color-fg-muted)] truncate max-w-[160px]" title={row.id}>
+                      {row.id.slice(0, 8)}…
+                    </div>
+                  </td>
+                  <td className="py-2 pr-3 align-top font-mono text-[11.5px] text-[var(--color-fg-dim)] max-w-[220px] truncate" title={row.domain ?? ""}>
+                    {row.domain && row.domain.length > 0 ? row.domain : <span className="text-[var(--color-warn)]">— empty —</span>}
+                  </td>
+                  <td className="py-2 pr-3 align-top font-mono text-[11.5px]">
+                    {ok ? (
+                      <span className="text-[var(--color-success)]">{allowed.join(", ")}</span>
+                    ) : (
+                      <span className="text-[var(--color-fg-muted)]">none — fires on any hostname</span>
+                    )}
+                  </td>
+                  <td className="py-2 align-top">
+                    {ok ? (
+                      <span className="inline-flex items-center gap-1.5 text-[var(--color-success)] text-[11px] font-mono">
+                        <span className="inline-block size-1.5 rounded-full bg-[var(--color-success)]" />
+                        locked
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-[var(--color-warn)] text-[11px] font-mono">
+                        <span className="inline-block size-1.5 rounded-full bg-[var(--color-warn)]" />
+                        unbound
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
+import Link from "next/link";
 import { getCurrentMerchant, getImpersonationStatus } from "@/lib/db";
 import { buildShopifyPixel } from "@/lib/pixel";
+import { parseAllowedDomains } from "@/lib/snippet";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,11 @@ export default async function InstallPage() {
     merchantId: merchant.id,
     ingestUrl: `${origin}/api/track/funnel`,
   });
+
+  // Hostname binding state — same parser the snippet route uses, so what
+  // we show here is exactly what'll get baked into /s/{id}.js.
+  const allowedDomains = parseAllowedDomains(merchant.domain);
+  const hostnameBound = allowedDomains.length > 0;
 
   return (
     <div className="space-y-8">
@@ -74,6 +81,32 @@ export default async function InstallPage() {
           {merchant.id}
         </span>
       </div>
+
+      {hostnameBound ? (
+        <div className="rounded-lg border border-[var(--color-success)]/30 bg-[var(--color-success)]/8 px-4 py-3 text-[12px]">
+          <div className="flex items-center gap-2 font-semibold tracking-tight text-[var(--color-success)]">
+            <span className="inline-block size-1.5 rounded-full bg-[var(--color-success)]" />
+            Snippet locked to {allowedDomains.join(", ")}
+          </div>
+          <div className="mt-1 font-mono text-[11px] text-[var(--color-fg-muted)]">
+            Only fires on these hostnames + any subdomain. Copies pasted on other sites will bail before escape.
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-[var(--color-warn)]/40 bg-[var(--color-warn)]/10 px-4 py-3 text-[12px] text-[var(--color-warn)]">
+          <div className="font-semibold tracking-tight">
+            Hostname binding not configured
+          </div>
+          <div className="mt-1 text-[11.5px] font-mono leading-relaxed text-[var(--color-fg-muted)]">
+            Your snippet currently fires on any hostname. Anyone who copies it from your storefront can reuse it on their own site.
+            {" "}
+            <Link href="/dashboard/settings" className="underline decoration-dotted underline-offset-2 text-[var(--color-fg-dim)] hover:text-[var(--color-fg)]">
+              Set your storefront domain in Settings
+            </Link>
+            {" "}to lock the snippet — supports `andar.com`, `https://andar.com`, or `andar.com, uk.andar.com` for multi-domain.
+          </div>
+        </div>
+      )}
 
       <div className="card-hi p-6 flex items-center gap-4">
         <div className="size-10 rounded-xl bg-[var(--color-accent)]/15 grid place-items-center shrink-0">
