@@ -200,11 +200,15 @@ export type Funnel = {
   revenue_cents: { a: number; b: number };
 };
 
-export async function getTestFunnel(
-  merchantId: string,
-  days = 14,
-): Promise<Funnel> {
-  const empty: Funnel = {
+type FunnelRpcRow = {
+  event_type: string;
+  bucket: "a" | "b";
+  cnt: number | string;
+  revenue_cents: number | string;
+};
+
+function emptyFunnel(): Funnel {
+  return {
     impressions: { a: 0, b: 0 },
     escape_attempts: { a: 0, b: 0 },
     product_viewed: { a: 0, b: 0 },
@@ -213,32 +217,11 @@ export async function getTestFunnel(
     purchases: { a: 0, b: 0 },
     revenue_cents: { a: 0, b: 0 },
   };
-  // Service-role client (no cookies) so the marketing lander stays
-  // static-renderable. The eh_test_funnel RPC is not granted to anon.
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return empty;
-  const since = new Date(Date.now() - days * 86400_000).toISOString();
-  // Sub-day windows go straight to exact. The 24h window falls back to exact
-  // when rollups look stale or incomplete. For 7d+ we always trust rollups —
-  // the exact RPC is too slow over multi-day windows on volume merchants
-  // (SquidHaus, COVE) and would return empty under timeout, which is worse
-  // than showing slightly-stale numbers. Staleness on multi-day is surfaced
-  // via the rollup-freshness banner instead.
-  const useExact =
-    days < 1 || (days <= 1 && !(await hasHourlyRollupCoverage(merchantId, since, days)));
-  const rpcName = useExact ? "eh_test_funnel_exact" : "eh_test_funnel";
-  const { data, error } = await supabase.rpc(rpcName, {
-    p_merchant_id: merchantId,
-    p_since: since,
-  });
-  if (error || !Array.isArray(data)) return empty;
-  const out: Funnel = empty;
-  for (const r of data as {
-    event_type: string;
-    bucket: "a" | "b";
-    cnt: number | string;
-    revenue_cents: number | string;
-  }[]) {
+}
+
+function rowsToFunnel(rows: FunnelRpcRow[]): Funnel {
+  const out = emptyFunnel();
+  for (const r of rows) {
     const b = r.bucket === "b" ? "b" : "a";
     const cnt = typeof r.cnt === "string" ? parseInt(r.cnt, 10) : r.cnt;
     const rev =
@@ -268,6 +251,49 @@ export async function getTestFunnel(
     }
   }
   return out;
+}
+
+export async function getTestFunnel(
+  merchantId: string,
+  days = 14,
+): Promise<Funnel> {
+  const empty = emptyFunnel();
+  // Service-role client (no cookies) so the marketing lander stays
+  // static-renderable. The eh_test_funnel RPC is not granted to anon.
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return empty;
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  // Sub-day windows go straight to exact. The 24h window falls back to exact
+  // when rollups look stale or incomplete. For 7d+ we always trust rollups —
+  // the exact RPC is too slow over multi-day windows on volume merchants
+  // (SquidHaus, COVE) and would return empty under timeout, which is worse
+  // than showing slightly-stale numbers. Staleness on multi-day is surfaced
+  // via the rollup-freshness banner instead.
+  const useExact =
+    days < 1 || (days <= 1 && !(await hasHourlyRollupCoverage(merchantId, since, days)));
+  const rpcName = useExact ? "eh_test_funnel_exact" : "eh_test_funnel";
+  const { data, error } = await supabase.rpc(rpcName, {
+    p_merchant_id: merchantId,
+    p_since: since,
+  });
+  if (!error && Array.isArray(data)) {
+    return rowsToFunnel(data as FunnelRpcRow[]);
+  }
+
+  // Exact 24h/sub-day can time out on volume merchants during DB pressure.
+  // Never turn that into a zero dashboard if rollups have usable data; show
+  // the rollup-backed read instead, with freshness surfaced by the banner.
+  if (useExact) {
+    const fallback = await supabase.rpc("eh_test_funnel", {
+      p_merchant_id: merchantId,
+      p_since: since,
+    });
+    if (!fallback.error && Array.isArray(fallback.data)) {
+      return rowsToFunnel(fallback.data as FunnelRpcRow[]);
+    }
+  }
+
+  return empty;
 }
 
 export type RollupFreshness = {
