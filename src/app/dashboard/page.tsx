@@ -430,11 +430,12 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
   const prevImpressions = period.previous.impressions;
   const prevRevenue = period.previous.revenue_cents / 100;
   const prevRpv = prevImpressions > 0 ? prevRevenue / prevImpressions : 0;
+  const revPerVisitor = totalImpressions > 0 ? totalRevenue / totalImpressions : 0;
+  const rpvDelta = prevRpv > 0 ? (revPerVisitor - prevRpv) / prevRpv : null;
 
   // Per-bucket RPV for the A vs B comparison on the RPV tile.
   const rpvA = baseA > 0 ? revA / baseA : null;
   const rpvB = baseB > 0 ? revB / baseB : null;
-  const rpvLiftValue = rpvA != null && rpvB != null ? rpvA - rpvB : null;
   const rpvLift = rpvA != null && rpvB != null && rpvB > 0 ? (rpvA - rpvB) / rpvB : null;
   const incrementalRevenue =
     rpvA != null && rpvB != null ? (rpvA - rpvB) * baseA : null;
@@ -453,8 +454,9 @@ async function KPISection({ merchantId, days }: { merchantId: string; days: numb
       incrementalRevenue={incrementalRevenue}
       rolloutIncrementalRevenue={rolloutIncrementalRevenue}
       purchases={funnel.purchases.a + funnel.purchases.b}
-      rpvLiftValue={rpvLiftValue}
+      revPerVisitor={revPerVisitor}
       rpvPrior={prevRpv > 0 ? prevRpv : null}
+      rpvDelta={rpvDelta}
       rpvA={rpvA}
       rpvB={rpvB}
       rpvLift={rpvLift}
@@ -754,8 +756,9 @@ function KPIGrid({
   incrementalRevenue,
   rolloutIncrementalRevenue,
   purchases,
-  rpvLiftValue,
+  revPerVisitor,
   rpvPrior,
+  rpvDelta,
   rpvA,
   rpvB,
   rpvLift,
@@ -771,8 +774,9 @@ function KPIGrid({
   incrementalRevenue: number | null;
   rolloutIncrementalRevenue: number | null;
   purchases: number;
-  rpvLiftValue: number | null;
+  revPerVisitor: number;
   rpvPrior: number | null;
+  rpvDelta: number | null;
   rpvA: number | null;
   rpvB: number | null;
   rpvLift: number | null;
@@ -796,18 +800,10 @@ function KPIGrid({
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
       <KPI
-        label="RPV lift"
+        label="Rev / visitor"
         icon="dollar"
-        value={rpvLiftValue != null ? fmtUSD(rpvLiftValue, { signed: true }) : "—"}
-        valueClass={
-          rpvLiftValue == null
-            ? ""
-            : rpvLiftValue > 0
-              ? "text-[var(--color-success)]"
-              : rpvLiftValue < 0
-                ? "text-[var(--color-danger)]"
-                : ""
-        }
+        value={fmtUSD(revPerVisitor)}
+        valueClass="text-[var(--color-success)]"
         sub={
           rpvA != null && rpvB != null
             ? `A $${rpvA.toFixed(2)} · B $${rpvB.toFixed(2)}${
@@ -819,6 +815,8 @@ function KPIGrid({
               ? `vs $${rpvPrior.toFixed(2)} ${period.priorLabel}`
               : `over ${fmtCompact(impressions)} visitors`
         }
+        delta={rpvDelta}
+        deltaLabel={period.priorLabel}
       />
       <KPI
         label="Impressions"

@@ -123,7 +123,6 @@ function summarize(funnel: Funnel) {
   const purchases = funnel.purchases.a + funnel.purchases.b;
   const rpvA = baseA > 0 ? revA / baseA : null;
   const rpvB = baseB > 0 ? revB / baseB : null;
-  const rpvLiftValue = rpvA != null && rpvB != null ? rpvA - rpvB : null;
   const rpvLift = rpvA != null && rpvB != null && rpvB > 0 ? (rpvA - rpvB) / rpvB : null;
   const incrementalRevenue = rpvA != null && rpvB != null ? (rpvA - rpvB) * baseA : null;
   const rolloutIncrementalRevenue =
@@ -143,7 +142,6 @@ function summarize(funnel: Funnel) {
     purchases,
     rpvA,
     rpvB,
-    rpvLiftValue,
     rpvLift,
     incrementalRevenue,
     rolloutIncrementalRevenue,
@@ -317,8 +315,8 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
             <MetricCard label="Visitors" value={fmtCompact(s.totalVisitors)} sub={`A ${fmtCompact(s.baseA)} / B ${fmtCompact(s.baseB)}`} icon="eye" />
             <MetricCard label="Revenue" value={fmtUSD(s.revenue, true)} sub={`${s.purchases.toLocaleString()} purchases`} icon="cart" />
             <MetricCard
-              label="RPV lift"
-              value={s.rpvLiftValue != null ? fmtUSD(s.rpvLiftValue, false, true) : "-"}
+              label="RPV"
+              value={fmtUSD(s.totalVisitors > 0 ? s.revenue / s.totalVisitors : 0)}
               sub={`A ${fmtUSD(s.rpvA ?? 0)} / B ${fmtUSD(s.rpvB ?? 0)}`}
               icon="dollar"
             />
