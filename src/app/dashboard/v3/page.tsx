@@ -38,10 +38,12 @@ function fmtCompact(value: number): string {
   return compactNF.format(value);
 }
 
-function fmtUSD(value: number, compact = false): string {
+function fmtUSD(value: number, compact = false, signed = false): string {
   if (!Number.isFinite(value)) return "-";
-  if (compact && Math.abs(value) >= 10_000) return `$${compactNF.format(value)}`;
-  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const sign = value < 0 ? "-" : signed && value > 0 ? "+" : "";
+  const abs = Math.abs(value);
+  if (compact && abs >= 10_000) return `${sign}$${compactNF.format(abs)}`;
+  return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: abs < 10 ? 2 : 0 })}`;
 }
 
 function fmtPct(value: number | null, digits = 1): string {
@@ -260,7 +262,7 @@ export default async function DashboardV3({ searchParams }: { searchParams: Sear
                     Incremental revenue
                   </div>
                   <div className={`mt-1 text-[54px] font-semibold leading-none tracking-tight md:text-[76px] tnum ${metricColor(incremental)}`}>
-                    {fmtUSD(incremental, true)}
+                    {fmtUSD(incremental, true, true)}
                   </div>
                   <p className="mt-3 max-w-[52ch] text-[13px] leading-relaxed text-[var(--color-fg-dim)]">
                     Calculated from revenue per visitor lift: A escape minus B holdout, multiplied by escaped visitors.
@@ -269,7 +271,7 @@ export default async function DashboardV3({ searchParams }: { searchParams: Sear
                 <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
                   <Score label="Lift" value={fmtPct(s.rpvLift)} tone={metricColor(s.rpvLift)} />
                   <Score label="Confidence" value={confidenceLabel} tone={s.significant ? "text-[var(--color-success)]" : "text-[var(--color-fg)]"} />
-                  <Score label="Rollout upside" value={fmtUSD(s.rolloutIncrementalRevenue ?? 0, true)} tone={metricColor(s.rolloutIncrementalRevenue)} />
+                  <Score label="Rollout upside" value={fmtUSD(s.rolloutIncrementalRevenue ?? 0, true, true)} tone={metricColor(s.rolloutIncrementalRevenue)} />
                 </div>
               </div>
 
@@ -343,7 +345,7 @@ export default async function DashboardV3({ searchParams }: { searchParams: Sear
                 priority={false}
               />
               <div className="mt-3 flex items-center justify-between gap-3 text-[10px] font-mono text-[var(--color-fg-muted)] tnum">
-                <span>{fmtUSD(incremental, true)}</span>
+                <span>{fmtUSD(incremental, true, true)}</span>
                 <span>{fmtUSD(PORSCHE_PRICE, true)}</span>
               </div>
               <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[var(--color-border-soft)]">
@@ -355,7 +357,7 @@ export default async function DashboardV3({ searchParams }: { searchParams: Sear
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <Score label="Realized to date" value={fmtUSD(cumulative, true)} tone={metricColor(cumulative)} />
+              <Score label="Realized to date" value={fmtUSD(cumulative, true, true)} tone={metricColor(cumulative)} />
               <Score label="Positive days" value={`${positiveDays}/${series.length || 0}`} />
             </div>
           </div>

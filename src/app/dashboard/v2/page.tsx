@@ -35,10 +35,12 @@ function fmtCompact(value: number): string {
   return compactNF.format(value);
 }
 
-function fmtUSD(value: number, compact = false): string {
+function fmtUSD(value: number, compact = false, signed = false): string {
   if (!Number.isFinite(value)) return "-";
-  if (compact && Math.abs(value) >= 10_000) return `$${compactNF.format(value)}`;
-  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const sign = value < 0 ? "-" : signed && value > 0 ? "+" : "";
+  const abs = Math.abs(value);
+  if (compact && abs >= 10_000) return `${sign}$${compactNF.format(abs)}`;
+  return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: abs < 10 ? 2 : 0 })}`;
 }
 
 function fmtPct(value: number | null, digits = 1): string {
@@ -254,7 +256,7 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
             <div
               className={`text-[44px] leading-none tracking-tight font-semibold tnum md:text-[64px] ${metricColor(cumulativeIncremental)}`}
             >
-              {fmtUSD(cumulativeIncremental, true)}
+              {fmtUSD(cumulativeIncremental, true, true)}
             </div>
             <div className="mt-3 text-[12px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
               Realized
@@ -312,7 +314,7 @@ export default async function DashboardV2({ searchParams }: { searchParams: Sear
           <div className="grid gap-3 md:grid-cols-4">
             <MetricCard label="Visitors" value={fmtCompact(s.totalVisitors)} sub={`A ${fmtCompact(s.baseA)} / B ${fmtCompact(s.baseB)}`} icon="eye" />
             <MetricCard label="Revenue" value={fmtUSD(s.revenue, true)} sub={`${s.purchases.toLocaleString()} purchases`} icon="cart" />
-            <MetricCard label="RPV" value={fmtUSD(s.totalVisitors > 0 ? s.revenue / s.totalVisitors : 0)} sub={`A ${fmtUSD(s.rpvA ?? 0)} / B ${fmtUSD(s.rpvB ?? 0)}`} icon="dollar" />
+            <MetricCard label="RPV" value={fmtUSD(s.totalVisitors > 0 ? s.revenue / s.totalVisitors : 0, false, true)} sub={`A ${fmtUSD(s.rpvA ?? 0)} / B ${fmtUSD(s.rpvB ?? 0)}`} icon="dollar" />
             <MetricCard label="Escapes" value={fmtCompact(funnel.escape_attempts.a)} sub="bucket A opens" icon="bolt" />
           </div>
 

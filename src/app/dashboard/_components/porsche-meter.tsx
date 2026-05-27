@@ -26,6 +26,11 @@ const compactUSD = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
 });
 
+function signedCompactUSD(value: number): string {
+  const sign = value < 0 ? "-" : value > 0 ? "+" : "";
+  return `${sign}${compactUSD.format(Math.abs(value))}`;
+}
+
 export function PorscheMeter({
   incrementalRevenue,
   rolloutIncrementalRevenue,
@@ -69,7 +74,7 @@ export function PorscheMeter({
             Incremental revenue
           </div>
           <div className={`mt-1 h-section text-[26px] md:text-[28px] tnum ${amountTone}`}>
-            {compactUSD.format(amount)}
+            {signedCompactUSD(amount)}
           </div>
           <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] tnum">
             {modeNote}
@@ -123,7 +128,7 @@ export function PorscheMeter({
           draggable={false}
         />
         <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] font-mono text-[var(--color-fg-muted)] tnum">
-          <span>{compactUSD.format(amount)}</span>
+          <span>{signedCompactUSD(amount)}</span>
           <span>{compactUSD.format(model.price)}</span>
         </div>
         <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--color-border-soft)]">

@@ -49,10 +49,12 @@ function fmtCompact(n: number): string {
   return compactNF.format(n);
 }
 
-function fmtUSD(n: number, opts?: { compact?: boolean }): string {
+function fmtUSD(n: number, opts?: { compact?: boolean; signed?: boolean }): string {
   if (!Number.isFinite(n)) return "—";
-  if (opts?.compact && Math.abs(n) >= 10_000) return `$${compactNF.format(n)}`;
-  return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  const sign = n < 0 ? "-" : opts?.signed && n > 0 ? "+" : "";
+  const abs = Math.abs(n);
+  if (opts?.compact && abs >= 10_000) return `${sign}$${compactNF.format(abs)}`;
+  return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: abs < 10 ? 2 : 0 })}`;
 }
 
 export const dynamic = "force-dynamic";
@@ -359,7 +361,7 @@ async function HeroSection({
         ) : revenueDelta >= 0 ? (
           <>
             Projected{" "}
-            <span className="text-[var(--color-fg)] font-medium tnum">{fmtUSD(revenueDelta, { compact: true })}</span>{" "}
+            <span className="text-[var(--color-fg)] font-medium tnum">{fmtUSD(revenueDelta, { compact: true, signed: true })}</span>{" "}
             more revenue if 100% of traffic got the escape.
           </>
         ) : (
@@ -800,7 +802,7 @@ function KPIGrid({
       <KPI
         label="Rev / visitor"
         icon="dollar"
-        value={`$${revPerVisitor.toFixed(2)}`}
+        value={fmtUSD(revPerVisitor, { signed: true })}
         valueClass="text-[var(--color-success)]"
         sub={
           rpvA != null && rpvB != null
@@ -827,7 +829,7 @@ function KPIGrid({
       <KPI
         label="Incremental"
         icon="dollar"
-        value={incrementalRevenue != null ? fmtUSD(incrementalRevenue, { compact: true }) : "—"}
+        value={incrementalRevenue != null ? fmtUSD(incrementalRevenue, { compact: true, signed: true }) : "—"}
         valueClass={
           incrementalRevenue == null
             ? ""
@@ -839,7 +841,7 @@ function KPIGrid({
         }
         sub={
           rolloutIncrementalRevenue != null
-            ? `${fmtUSD(rolloutIncrementalRevenue, { compact: true })} at full rollout`
+            ? `${fmtUSD(rolloutIncrementalRevenue, { compact: true, signed: true })} at full rollout`
             : "A vs B revenue per visitor"
         }
       />

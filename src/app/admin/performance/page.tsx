@@ -113,7 +113,7 @@ export default async function AdminPerformancePage({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
           label="Portfolio RPV delta"
-          value={money(portfolio.rpvDelta)}
+          value={money(portfolio.rpvDelta, { signed: true })}
           tone={tone(portfolio.rpvDelta)}
           sub={`A ${money(portfolio.rpvA)} · B ${money(portfolio.rpvB)}`}
         />
@@ -125,7 +125,7 @@ export default async function AdminPerformancePage({
         />
         <Stat
           label="Projected delta"
-          value={money(portfolio.projectedDelta, { compact: true })}
+          value={money(portfolio.projectedDelta, { compact: true, signed: true })}
           tone={tone(portfolio.projectedDelta)}
           sub={`if all ${fmt(portfolio.visitors)} visitors got escape`}
         />
@@ -204,7 +204,7 @@ export default async function AdminPerformancePage({
                   </Td>
                   <Td>{money(row.rpvA)}</Td>
                   <Td>{money(row.rpvB)}</Td>
-                  <Td><span className={toneClass(row.rpvDelta)}>{money(row.rpvDelta)}</span></Td>
+                  <Td><span className={toneClass(row.rpvDelta)}>{money(row.rpvDelta, { signed: true })}</span></Td>
                   <Td><span className={toneClass(row.rpvLift)}>{pct(row.rpvLift)}</span></Td>
                   <Td>
                     <div className="font-mono tnum">{rate(row.cvrA)} / {rate(row.cvrB)}</div>
@@ -212,7 +212,7 @@ export default async function AdminPerformancePage({
                       {row.purchasesA} / {row.purchasesB} orders
                     </div>
                   </Td>
-                  <Td><span className={toneClass(row.projectedDelta)}>{money(row.projectedDelta, { compact: true })}</span></Td>
+                  <Td><span className={toneClass(row.projectedDelta)}>{money(row.projectedDelta, { compact: true, signed: true })}</span></Td>
                   <Td>
                     <Signal row={row} />
                   </Td>
@@ -318,7 +318,7 @@ function buildExecNotes(rows: BrandPerf[], portfolio: ReturnType<typeof summariz
         : "Portfolio revenue lift is not ready to claim yet",
     body:
       portfolio.rpvDelta != null && portfolio.rpvDelta > 0
-        ? `Across ${fmt(portfolio.visitors)} IG in-app browser visitors in the last ${range.label}, escaped traffic is producing ${money(portfolio.rpvDelta)} more revenue per visitor than control.`
+        ? `Across ${fmt(portfolio.visitors)} IG in-app browser visitors in the last ${range.label}, escaped traffic is producing ${money(portfolio.rpvDelta, { signed: true })} more revenue per visitor than control.`
         : `Across ${fmt(portfolio.visitors)} IG in-app browser visitors in the last ${range.label}, the current revenue-per-visitor read is control-favored. Treat this as a measurement checkpoint, not a final conclusion.`,
     tone: portfolio.rpvDelta != null && portfolio.rpvDelta > 0 ? "good" : "neutral",
   });
@@ -334,7 +334,7 @@ function buildExecNotes(rows: BrandPerf[], portfolio: ReturnType<typeof summariz
     notes.push({
       label: "notable",
       title: `${biggest.name} is the strongest positive read`,
-      body: `${biggest.name} shows ${money(biggest.rpvDelta)} higher revenue per visitor on escaped traffic (${pct(biggest.rpvLift)} lift), with ${biggest.purchasesA + biggest.purchasesB} attributed purchases in-window.`,
+      body: `${biggest.name} shows ${money(biggest.rpvDelta, { signed: true })} higher revenue per visitor on escaped traffic (${pct(biggest.rpvLift)} lift), with ${biggest.purchasesA + biggest.purchasesB} attributed purchases in-window.`,
       tone: "good",
     });
   } else {
@@ -431,9 +431,9 @@ function fmt(n: number): string {
   return Math.abs(n) >= 10_000 ? compactNF.format(n) : n.toLocaleString();
 }
 
-function money(v: number | null, opts?: { compact?: boolean }): string {
+function money(v: number | null, opts?: { compact?: boolean; signed?: boolean }): string {
   if (v == null || !Number.isFinite(v)) return "-";
-  const sign = v < 0 ? "-" : "";
+  const sign = v < 0 ? "-" : opts?.signed && v > 0 ? "+" : "";
   const abs = Math.abs(v);
   if (opts?.compact && abs >= 10_000) return `${sign}$${compactNF.format(abs)}`;
   return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: abs < 10 ? 2 : 0 })}`;
