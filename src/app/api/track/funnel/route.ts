@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { isMerchantDisabled } from "@/lib/merchant-state";
 import { type NextRequest } from "next/server";
 
 const UUID_RE =
@@ -116,6 +117,9 @@ async function processFunnel(
   const admin = getSupabaseAdmin();
   if (!admin) {
     return json({ ok: true, joined: false, reason: "no_db" }, 200, origin);
+  }
+  if (await isMerchantDisabled(admin, merchantId)) {
+    return json({ ok: true, ignored: true, reason: "merchant_disabled" }, 200, origin);
   }
 
   // Multi-key join: shopify_client_id first (most precise), eh_sid as fallback

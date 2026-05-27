@@ -89,6 +89,21 @@ export async function assignMerchantToCurrentUser(formData: FormData) {
   revalidateMerchantSurfaces(id);
 }
 
+/** Admin kill switch. Disabling leaves install code in place but stops escape
+ * behavior on the hosted snippet and lets ingest endpoints ignore old pixels. */
+export async function setMerchantEnabledAsAdmin(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const admin = getSupabaseAdmin();
+  if (!admin) return;
+
+  const id = String(formData.get("id") ?? "").trim();
+  const enabled = formData.get("enabled") === "true";
+  if (!UUID_RE.test(id)) return;
+
+  await admin.from("merchants").update({ escape_enabled: enabled }).eq("id", id);
+  revalidateMerchantSurfaces(id);
+}
+
 /** Rename a merchant (name + domain). For fixing miskeyed/overwritten rows.
  *  Filters by strict UUID `id` only — no fallback. Every code path that
  *  could write to merchants goes through here for admin renames. */

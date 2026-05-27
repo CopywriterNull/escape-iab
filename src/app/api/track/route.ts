@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { isMerchantDisabled } from "@/lib/merchant-state";
 import { createHash } from "node:crypto";
 import { type NextRequest } from "next/server";
 
@@ -115,6 +116,13 @@ export async function POST(req: NextRequest) {
 
   const admin = getSupabaseAdmin();
   if (admin) {
+    if (await isMerchantDisabled(admin, merchantId)) {
+      return new Response(JSON.stringify({ ok: true, ignored: true, reason: "merchant_disabled" }), {
+        status: 200,
+        headers: { "content-type": "application/json", ...corsHeaders(origin) },
+      });
+    }
+
     if (eventType === "cart_check") {
       if (cartToken) {
         await admin.from("cart_attributions").upsert(

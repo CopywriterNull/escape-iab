@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { isMerchantDisabled } from "@/lib/merchant-state";
 import { type NextRequest } from "next/server";
 
 const UUID_RE =
@@ -98,6 +99,12 @@ async function processPurchase(
       console.log("[eh-purchase]", { merchantId, sy, orderId, valueCents, currency });
     }
     return new Response(JSON.stringify({ ok: true, joined: false, reason: "no_db" }), {
+      status: 200,
+      headers: { "content-type": "application/json", ...corsHeaders(origin) },
+    });
+  }
+  if (await isMerchantDisabled(admin, merchantId)) {
+    return new Response(JSON.stringify({ ok: true, ignored: true, reason: "merchant_disabled" }), {
       status: 200,
       headers: { "content-type": "application/json", ...corsHeaders(origin) },
     });

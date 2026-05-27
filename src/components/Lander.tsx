@@ -8,6 +8,7 @@ import { PointerTracker } from "@/components/magic/PointerTracker";
 import { TextHighlighter } from "@/components/magic/TextHighlighter";
 import { StickyMobileCTAInner } from "@/components/magic/StickyMobileCTAInner";
 import { HowItWorksDemo } from "@/components/HowItWorksDemo";
+import { SpendCalculator } from "@/components/SpendCalculator";
 
 type Theme = "dark" | "light";
 
@@ -63,6 +64,7 @@ export function Lander({
       {isV2 ? <FeaturesV2 /> : <Features />}
       <ABCallout />
       <SnippetPreview />
+      <SpendCalculator />
       <Pricing />
       <FAQ variant={variant} />
       <ClosingCTA />
@@ -1726,7 +1728,7 @@ function Pricing() {
             <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">for serious IG traffic.</span>
           </h2>
           <p className="mt-3 text-[var(--color-fg-dim)]">
-            Monthly plans for Shopify storefronts. High-volume and non-Shopify teams can run a scoped paid pilot with custom integration support.
+            Try it for 3 days free. If it works, we gift the incremental revenue from the trial window; after that, pricing is based on verified lift.
           </p>
         </div>
         <div className="mt-14 grid md:grid-cols-3 gap-7 md:gap-4 items-stretch">
@@ -1735,7 +1737,7 @@ function Pricing() {
           ))}
         </div>
         <p className="mt-8 text-center text-[12px] text-[var(--color-fg-muted)]">
-          All plans include the snippet, dashboard, A/B test infra, and patch auto-updates. Month-to-month, no annual lock-in. Overage on escapes is metered, not capped — your traffic keeps flowing.
+          All plans include the snippet, dashboard, A/B test infra, and patch auto-updates. Trial requires the snippet to stay installed and unmodified during measurement. Month-to-month, no annual lock-in.
         </p>
       </div>
     </section>

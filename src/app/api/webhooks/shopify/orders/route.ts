@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { isMerchantDisabled } from "@/lib/merchant-state";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { type NextRequest } from "next/server";
 
@@ -188,6 +189,12 @@ export async function POST(req: NextRequest) {
   const admin = getSupabaseAdmin();
   if (!admin) {
     return new Response(JSON.stringify({ ok: true, joined: false, reason: "no_db" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  if (await isMerchantDisabled(admin, merchantId)) {
+    return new Response(JSON.stringify({ ok: true, ignored: true, reason: "merchant_disabled" }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });

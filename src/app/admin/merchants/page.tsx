@@ -5,6 +5,7 @@ import {
   assignMerchantToCurrentUser,
   impersonateMerchant,
   renameMerchantAsAdmin,
+  setMerchantEnabledAsAdmin,
   setMerchantShopifyDomain,
   detectMerchantShopifyDomain,
 } from "@/app/actions/admin";
@@ -18,6 +19,7 @@ type Row = {
   shopify_domain: string | null;
   user_id: string | null;
   plan: string;
+  escape_enabled: boolean | null;
   created_at: string;
 };
 
@@ -38,7 +40,7 @@ export default async function AdminMerchants() {
     supabase!.auth.getUser(),
     admin!
       .from("merchants")
-      .select("id, name, domain, shopify_domain, user_id, plan, created_at")
+      .select("id, name, domain, shopify_domain, user_id, plan, escape_enabled, created_at")
       .order("created_at", { ascending: false }),
   ]);
   const user = authRes.data.user;
@@ -139,6 +141,7 @@ function MerchantRow({
   const unowned = !row.user_id;
   const snippet = `<script src="https://getescapehatch.com/s/${row.id}.js?v=12"></script>`;
   const tracking = eventsLast24h > 0;
+  const enabled = row.escape_enabled !== false;
   const lastSeenLabel = lastSeen
     ? `${Math.floor((new Date().getTime() - new Date(lastSeen).getTime()) / 60000)}m ago`
     : "—";
@@ -160,6 +163,9 @@ function MerchantRow({
             )}
             <span className={tracking ? "pill pill-success" : "pill pill-muted"}>
               {tracking ? `LIVE · ${eventsLast24h}` : "NO EVENTS 24h"}
+            </span>
+            <span className={enabled ? "pill pill-success" : "pill pill-danger"}>
+              {enabled ? "ESCAPE ON" : "DISABLED"}
             </span>
           </div>
           <div className="mt-1 text-[11px] font-mono text-[var(--color-fg-muted)] tnum">
@@ -268,6 +274,20 @@ function MerchantRow({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <form action={setMerchantEnabledAsAdmin}>
+            <input type="hidden" name="id" value={row.id} />
+            <input type="hidden" name="enabled" value={enabled ? "false" : "true"} />
+            <button
+              type="submit"
+              className={`text-[12px] px-3 py-1.5 rounded-md border press focus-ring transition-colors ${
+                enabled
+                  ? "border-[var(--color-danger)]/30 text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)]"
+                  : "border-[var(--color-success)]/30 text-[var(--color-success)] hover:bg-[var(--color-success-soft)]"
+              }`}
+            >
+              {enabled ? "Disable brand" : "Re-enable brand"}
+            </button>
+          </form>
           <a
             href={`/install/${row.id}`}
             target="_blank"
