@@ -98,12 +98,12 @@ export default async function SettingsPage({
               className="w-full px-3.5 py-2.5 rounded-lg bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-sm focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
             />
           </Field>
-          <Field label="Domain" hint="Display only — not enforced for tracking.">
+          <Field label="Storefront domain" hint="The snippet only fires on these hostnames + their subdomains. Use commas to add aliases: e.g. coveusa.co, shopcoveusa.com. Leave blank to allow any hostname (less secure).">
             <input
               type="text"
               name="domain"
               defaultValue={merchant.domain ?? ""}
-              placeholder="yourshop.com"
+              placeholder="yourshop.com, www.yourshop.com"
               className="w-full px-3.5 py-2.5 rounded-lg bg-[var(--color-bg-elev)] border border-[var(--color-border)] text-sm font-mono focus-ring focus:border-[var(--color-accent)]/60 transition-colors"
             />
           </Field>
