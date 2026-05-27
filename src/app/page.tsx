@@ -11,9 +11,14 @@ export const revalidate = 0;
 const G_FUEL_MERCHANT_ID = "8b6e80c0-88fd-4c9e-acab-39e21e6d7154";
 const CASE_STUDY_WINDOW_DAYS = 14;
 const CALCULATOR_WINDOW_DAYS = 7;
-const CALCULATOR_HAIRCUT = 0.25;
+// Apply 40% of observed portfolio recovery (was 25%). Still a haircut, but
+// stops compounding with the cap below to hide ~75% of the measured truth.
+const CALCULATOR_HAIRCUT = 0.4;
 const MIN_RECOVERY_RATE = 0.015;
-const MAX_RECOVERY_RATE = 0.06;
+// Raised from 6% → 12%. The portfolio's observed recovery on +78% RPV lift
+// is closer to 25-30%; even after the haircut, capping at 6% was clipping
+// the result to ~1/4 of an honest read.
+const MAX_RECOVERY_RATE = 0.12;
 
 type PortfolioRow = {
   merchant_id: string;
