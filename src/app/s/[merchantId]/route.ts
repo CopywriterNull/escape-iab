@@ -1,4 +1,4 @@
-import { buildSnippet, CURRENT_VERSION } from "@/lib/snippet";
+import { buildSnippet, CURRENT_VERSION, parseAllowedDomains } from "@/lib/snippet";
 import { obfuscateSnippet } from "@/lib/obfuscate";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { type NextRequest } from "next/server";
@@ -39,6 +39,7 @@ export async function GET(
   let escapeFacebook = false;
   let escapeMessenger = false;
   let escapeDiscord = false;
+  let allowedDomains: string[] = [];
   let valid = isValidShape;
   if (isValidShape) {
     const admin = getSupabaseAdmin();
@@ -72,6 +73,10 @@ export async function GET(
         escapeFacebook = m.escape_facebook === true;
         escapeMessenger = m.escape_messenger === true;
         escapeDiscord = m.escape_discord === true;
+        // Hostname binding allowlist. Empty when merchant.domain is null/
+        // blank — preserves the existing "works anywhere" behavior for F&F
+        // installs and pre-domain merchants.
+        allowedDomains = parseAllowedDomains(m.domain as string | null | undefined);
       } else {
         valid = false;
       }
@@ -104,6 +109,7 @@ export async function GET(
     escapeFacebook,
     escapeMessenger,
     escapeDiscord,
+    allowedDomains,
   });
   const body = await obfuscateSnippet(raw);
 

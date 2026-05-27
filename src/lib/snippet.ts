@@ -37,7 +37,50 @@ type SnippetOpts = {
   escapeFacebook?: boolean;
   escapeMessenger?: boolean;
   escapeDiscord?: boolean;
+  /** Hostname allowlist baked at compile time. Empty array = no restriction
+   *  (F&F installs, dev). When populated, the snippet bails before any
+   *  escape if location.hostname doesn't match an apex or any subdomain.
+   *  localhost, 127.0.0.1, and *.vercel.app are always allowed. */
+  allowedDomains?: string[];
 };
+
+/**
+ * Parse merchant.domain from various formats into a normalized list of
+ * apex hostnames for the snippet allowlist.
+ *
+ *   "andar.com"                    → ["andar.com"]
+ *   "https://andar.com"            → ["andar.com"]
+ *   "https://www.andar.com/"       → ["andar.com"]
+ *   "andar.com, uk.andar.com"      → ["andar.com", "uk.andar.com"]
+ *   "andar.com www.andar.com"      → ["andar.com"]   (dedup after www-strip)
+ *   null / "" / not-a-domain       → []
+ */
+export function parseAllowedDomains(input: string | null | undefined): string[] {
+  if (!input || typeof input !== "string") return [];
+  const parts = input
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  for (const raw of parts) {
+    let host: string;
+    try {
+      const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      host = new URL(withScheme).hostname.toLowerCase();
+    } catch {
+      continue;
+    }
+    // Strip leading www. — universally meaningless. Keep other subdomains
+    // intact (e.g. uk.andar.com stays uk.andar.com).
+    host = host.replace(/^www\./, "");
+    // Reject single-word garbage like "not", "domain". Every real public
+    // hostname has at least one dot; this filters typos and stray words
+    // that crept into the merchants.domain field.
+    if (!host.includes(".")) continue;
+    if (!out.includes(host)) out.push(host);
+  }
+  return out;
+}
 
 export function buildSnippet(opts: SnippetOpts): string {
   const merchantId = JSON.stringify(opts.merchantId);
@@ -65,10 +108,43 @@ export function buildSnippet(opts: SnippetOpts): string {
   const escapeFacebook = opts.escapeFacebook === true ? "true" : "false";
   const escapeMessenger = opts.escapeMessenger === true ? "true" : "false";
   const escapeDiscord = opts.escapeDiscord === true ? "true" : "false";
+  // Allowed hostnames baked at compile time. Empty array = no restriction
+  // (F&F installs and pre-domain merchants keep working).
+  const allowedDomains = JSON.stringify(opts.allowedDomains ?? []);
 
   return `(function(){
 try{
-  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord};
+  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord},AD=${allowedDomains};
+
+  // Async kill-switch — if a prior /api/escape/status response in this
+  // session marked us disabled, bail before doing anything. Lets inlined /
+  // stolen snippets be remotely muted within one session of impression.
+  try{if(sessionStorage.getItem("eh_dx")==="1")return;}catch(e){}
+
+  // Hostname binding. When AD is populated, the snippet only fires on
+  // hostnames in the allowlist (apex or any subdomain). Always allows
+  // localhost, 127.0.0.1, and *.vercel.app so dev/preview keeps working.
+  // We still send a single diagnostic beacon for visibility into stolen
+  // copies in the wild before bailing.
+  function HA(h){
+    if(!AD||!AD.length)return 1;
+    if(h==="localhost"||h==="127.0.0.1"||/\\.vercel\\.app$/i.test(h))return 1;
+    for(var i=0;i<AD.length;i++){
+      var d=AD[i];
+      if(h===d||h.length>d.length+1&&h.charCodeAt(h.length-d.length-1)===46&&h.lastIndexOf(d)===h.length-d.length)return 1;
+    }
+    return 0;
+  }
+  if(!HA((location.hostname||"").toLowerCase())){
+    // One-shot beacon with hr:1 so we can grep stolen-copy hostnames in
+    // /api/track logs. Body is the bare minimum — no cookies, no kind,
+    // no test population computation, no escape.
+    try{
+      var hrBody=JSON.stringify({m:M,v:V,t:"hostname_rejected",hr:1,u:location.href,ts:Date.now()});
+      if(navigator.sendBeacon){try{navigator.sendBeacon(I,new Blob([hrBody],{type:"text/plain;charset=UTF-8"}));}catch(e){}}
+    }catch(e){}
+    return;
+  }
   // Self-diagnostic: if our own <script> tag has async/defer, the redirect
   // path is structurally broken (IG webview paints before we run). Log a
   // visible warning so desktop QA catches it; stamp a flag on every beacon
@@ -178,6 +254,24 @@ try{
       var sent=false;
       if(navigator.sendBeacon){try{var bl=new Blob([body],{type:"text/plain;charset=UTF-8"});sent=navigator.sendBeacon(I,bl);}catch(e){}}
       if(!sent){try{fetch(I,{method:"POST",headers:{"content-type":"text/plain;charset=UTF-8"},body:body,keepalive:true,mode:"cors",credentials:"omit"}).catch(function(){});}catch(e){}}
+      // Piggyback the kill-check on every impression beacon. Fail-open: if
+      // /api/escape/status is down, the escape still fires (the redirect
+      // doesn't wait for this). If the merchant is disabled, the snippet
+      // sets eh_dx in sessionStorage and subsequent visits this session
+      // bail at the early check at the top. This is the only remote-kill
+      // path for inlined / stolen snippets.
+      if(t==="impression"){
+        try{
+          var su=I.replace(/\\/api\\/track$/,"/api/escape/status")+"?m="+encodeURIComponent(M);
+          fetch(su,{mode:"cors",credentials:"omit",keepalive:true})
+            .then(function(r){return r&&r.ok?r.json():null;})
+            .then(function(d){
+              if(d&&d.disabled){
+                try{sessionStorage.setItem("eh_dx","1");}catch(e){}
+              }
+            }).catch(function(){});
+        }catch(e){}
+      }
     }catch(e){}
   }
 
