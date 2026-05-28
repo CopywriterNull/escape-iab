@@ -263,14 +263,7 @@ export async function getTestFunnel(
   const supabase = getSupabaseAdmin();
   if (!supabase) return empty;
   const since = new Date(Date.now() - days * 86400_000).toISOString();
-  // Sub-day windows go straight to exact. The 24h window falls back to exact
-  // when rollups look stale or incomplete. For 7d+ we always trust rollups —
-  // the exact RPC is too slow over multi-day windows on volume merchants
-  // (SquidHaus, COVE) and would return empty under timeout, which is worse
-  // than showing slightly-stale numbers. Staleness on multi-day is surfaced
-  // via the rollup-freshness banner instead.
-  const useExact =
-    days < 1 || (days <= 1 && !(await hasHourlyRollupCoverage(merchantId, since, days)));
+  const useExact = await shouldUseExactFunnel(merchantId, since, days);
   const rpcName = useExact ? "eh_test_funnel_exact" : "eh_test_funnel";
   const { data, error } = await supabase.rpc(rpcName, {
     p_merchant_id: merchantId,
@@ -294,6 +287,51 @@ export async function getTestFunnel(
   }
 
   return empty;
+}
+
+async function shouldUseExactFunnel(
+  merchantId: string,
+  sinceIso: string,
+  days: number,
+): Promise<boolean> {
+  // Sub-day windows are intentionally live: hourly rollups are too coarse.
+  if (days < 1) return true;
+
+  // Fresh installs often have sparse or not-yet-backfilled rollups. If we use
+  // rollups for their 2d/14d first read, the dashboard can look empty even
+  // while exact events are streaming in. Keep the exact fallback bounded to
+  // fresh merchants so mature high-volume brands do not hit multi-day exact
+  // timeouts.
+  if (days <= 14 && (await merchantCreatedRecently(merchantId, 72))) {
+    return true;
+  }
+
+  const hasRollups = await hasHourlyRollupCoverage(merchantId, sinceIso, days);
+
+  // 24h and short custom day ranges are small enough to use exact when the
+  // rollup cron is stale or incomplete.
+  if (days <= 2) return !hasRollups;
+
+  // For mature 7d+ ranges, keep serving rollups. The exact RPC can timeout on
+  // volume merchants, and the rollup-freshness banner surfaces stale data.
+  return false;
+}
+
+async function merchantCreatedRecently(
+  merchantId: string,
+  maxAgeHours: number,
+): Promise<boolean> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return false;
+  const { data, error } = await supabase
+    .from("merchants")
+    .select("created_at")
+    .eq("id", merchantId)
+    .maybeSingle();
+  if (error || !data) return false;
+  const createdAt = new Date((data as { created_at?: string | null }).created_at ?? "").getTime();
+  if (!Number.isFinite(createdAt)) return false;
+  return createdAt > new Date().getTime() - maxAgeHours * 3600_000;
 }
 
 export type RollupFreshness = {
