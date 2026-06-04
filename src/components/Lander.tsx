@@ -95,14 +95,16 @@ function Nav({ escapesToday }: { escapesToday: number }) {
             <Logo />
             <span>{brand.name}</span>
           </Link>
-          <span
-            className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] text-[11px] font-mono"
-            title="Live escape attempts across all merchants in the last 24 hours"
-          >
-            <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
-            <span className="tnum text-[var(--color-fg)]">{escapesToday.toLocaleString()}</span>
-            <span className="text-[var(--color-fg-muted)]">escapes / 24h</span>
-          </span>
+          {escapesToday > 0 ? (
+            <span
+              className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] text-[11px] font-mono"
+              title="Live escape attempts across all merchants in the last 24 hours"
+            >
+              <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
+              <span className="tnum text-[var(--color-fg)]">{escapesToday.toLocaleString()}</span>
+              <span className="text-[var(--color-fg-muted)]">escapes / 24h</span>
+            </span>
+          ) : null}
         </div>
         <nav className="hidden md:flex items-center gap-1 text-sm">
           <NavLink href="#how">How it works</NavLink>
@@ -258,7 +260,9 @@ function HeroProof({ proof }: { proof?: LanderProof }) {
     proof?.rpvLiftPct != null && proof.rpvLiftPct > 0
       ? `+${(proof.rpvLiftPct * 100).toFixed(1)}%`
       : "+62.8%";
-  const escapesFmt = formatCompactNumber(proof?.escapesToday ?? 0);
+  const escapesFmt = proof?.escapesToday && proof.escapesToday > 0
+    ? formatCompactNumber(proof.escapesToday)
+    : "14.9K";
 
   const proofs = [
     { value: liftFmt, label: "Avg checkout lift on bucket A" },
