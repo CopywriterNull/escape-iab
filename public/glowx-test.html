@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex, nofollow" />
+<title>GlowX</title>
+
+<!--
+  EscapeHatch test lander → GlowX affiliate (AppsFlyer OneLink).
+
+  Flow:
+    1. Visitor taps a bio/affiliate link inside Instagram/Threads/Facebook's
+       in-app browser (IAB) and lands here.
+    2. This page detects the IAB and reopens ITSELF in the device's real
+       browser (Safari/Chrome) via the platform's deep-link scheme, carrying
+       ?eh_escape=1.
+    3. The native-browser load sees eh_escape=1 and forwards to the OneLink, so
+       the App Store handoff + AppsFlyer attribution (af_siteid=diego) happen in
+       a first-class browser instead of the broken IAB context.
+
+  The escape script is the FIRST script and runs synchronously before paint —
+  do NOT add async/defer or the redirect gets silently dropped.
+
+  Test:  open this URL inside Instagram (bio link / story link / DM to self).
+  Debug: append ?eh_debug=1 to see what was detected WITHOUT redirecting.
+-->
+
+<style>
+  :root {
+    --bg: #fafafa; --fg: #09090b; --dim: #52525b; --muted: #8b8d96;
+    --card: #ffffff; --border: #e4e4e7; --accent: #4f7cff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0a0a0b; --fg:#fafafa; --dim:#a1a1aa; --card:#161619; --border:#27272d; --muted:#6b6e78; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; min-height: 100dvh;
+  }
+  .card {
+    width: 100%; max-width: 360px; text-align: center;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 20px; padding: 36px 28px;
+    box-shadow: 0 24px 60px -24px rgba(15,23,42,0.12);
+  }
+  .mark { font-weight: 700; font-size: 22px; letter-spacing: -0.03em; }
+  .mark b { color: var(--accent); }
+  .spin {
+    width: 30px; height: 30px; margin: 22px auto 18px;
+    border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: r 0.7s linear infinite;
+  }
+  @keyframes r { to { transform: rotate(360deg); } }
+  h1 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
+  p { font-size: 13.5px; line-height: 1.5; color: var(--dim); margin: 0 0 22px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--fg); color: var(--bg); text-decoration: none;
+    font-weight: 600; font-size: 14px; padding: 12px 22px; border-radius: 9999px;
+    transition: transform .14s ease;
+  }
+  .btn:active { transform: scale(0.97); }
+  .hidden { display: none; }
+  .fb { font-size: 13.5px; line-height: 1.55; color: var(--fg); }
+  .fb b { color: var(--accent); }
+  .dbg {
+    margin-top: 22px; text-align: left; font-family: ui-monospace, Menlo, monospace;
+    font-size: 11px; color: var(--muted); word-break: break-all;
+    border-top: 1px solid var(--border); padding-top: 14px;
+  }
+  .dbg div { margin: 3px 0; }
+</style>
+
+<script>
+/* ---- EscapeHatch escape logic (synchronous, before paint) ---- */
+(function () {
+  var DEST = "https://glowx.onelink.me/1MX7/aff?af_siteid=diego";
+  var ua = navigator.userAgent || "";
+  var qs = new URLSearchParams(location.search);
+  var DEBUG = qs.get("eh_debug") === "1";
+
+  function forward() { try { location.replace(DEST); } catch (e) { location.href = DEST; } }
+
+  // Detect the in-app browser. Threads (Barcelona) is checked before Instagram
+  // because Threads UAs contain both tokens.
+  var kind = null;
+  if (/Barcelona/i.test(ua)) kind = "threads";
+  else if (/Instagram/i.test(ua)) kind = "instagram";
+  else if (/FBAN|FBAV/i.test(ua)) kind = "facebook";
+
+  // Expose detection for the debug readout / FB-iOS UI.
+  window.__EH = { kind: kind, ua: ua, escaped: qs.get("eh_escape") === "1", action: "" };
+
+  // In debug mode, never redirect — just let the page render the readout.
+  if (DEBUG) { window.__EH.action = "debug (no redirect)"; return; }
+
+  // Already escaped to the native browser, not mobile, or not a known IAB →
+  // go straight to the affiliate destination.
+  if (window.__EH.escaped) { window.__EH.action = "forward (post-escape)"; forward(); return; }
+  if (!/Mobile|iPhone|iPod|iPad|Android/i.test(ua)) { forward(); return; }
+  if (!kind) { forward(); return; }
+
+  // Loop guard: if the OS rejects the scheme, don't retry forever.
+  var tried = false;
+  try { tried = sessionStorage.getItem("eh_aff_tried") === "1"; } catch (e) {}
+  if (tried) { forward(); return; }
+  try { sessionStorage.setItem("eh_aff_tried", "1"); } catch (e) {}
+
+  // Reopen THIS page (+ eh_escape=1) in the native browser.
+  var here = location.href.split("#")[0];
+  here += (here.indexOf("?") > -1 ? "&" : "?") + "eh_escape=1";
+  var isAndroid = /Android/i.test(ua);
+
+  if (kind === "instagram" || kind === "threads") {
+    var scheme = kind === "threads"
+      ? "barcelona://extbrowser/?url="
+      : "instagram://extbrowser/?url=";
+    setTimeout(function () {
+      try { location.replace(scheme + encodeURIComponent(here)); }
+      catch (e) { location.href = scheme + encodeURIComponent(here); }
+    }, 60);
+    setTimeout(forward, 2500); // scheme rejected / old version → forward in place
+    return;
+  }
+
+  if (kind === "facebook") {
+    if (isAndroid) {
+      // Android: intent:// hands the URL off to Chrome.
+      try {
+        var url = new URL(here);
+        var intent = "intent://" + url.host + url.pathname + url.search +
+          "#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=" +
+          encodeURIComponent(DEST) + ";end";
+        setTimeout(function () {
+          try { location.replace(intent); } catch (e) { location.href = intent; }
+        }, 60);
+        setTimeout(forward, 2500);
+      } catch (e) { forward(); }
+      return;
+    }
+    // Facebook on iOS has no extbrowser scheme — show the manual prompt instead.
+    window.__EH.action = "fb-ios manual";
+    window.__EH_FB_IOS = 1;
+    return;
+  }
+
+  forward();
+})();
+</script>
+</head>
+
+<body>
+  <div class="card">
+    <div class="mark">Glow<b>X</b></div>
+
+    <!-- Default: escaping / redirecting state -->
+    <div id="state-go">
+      <div class="spin"></div>
+      <h1>Opening in your browser…</h1>
+      <p>One sec — taking you to GlowX in a secure browser for the best experience.</p>
+      <a class="btn" href="https://glowx.onelink.me/1MX7/aff?af_siteid=diego">Continue to GlowX →</a>
+    </div>
+
+    <!-- Facebook on iOS: no programmatic escape, ask the user to open in Safari -->
+    <div id="state-fb" class="hidden">
+      <h1>Almost there</h1>
+      <p class="fb">
+        Tap the <b>•••</b> menu in the top-right corner and choose
+        <b>“Open in Safari”</b> — then you’ll be taken to GlowX automatically.
+      </p>
+      <a class="btn" href="https://glowx.onelink.me/1MX7/aff?af_siteid=diego">Continue anyway →</a>
+    </div>
+
+    <!-- Debug readout (?eh_debug=1) -->
+    <div id="dbg" class="dbg hidden"></div>
+  </div>
+
+  <script>
+    (function () {
+      var eh = window.__EH || {};
+      if (window.__EH_FB_IOS) {
+        document.getElementById("state-go").classList.add("hidden");
+        document.getElementById("state-fb").classList.remove("hidden");
+      }
+      if (new URLSearchParams(location.search).get("eh_debug") === "1") {
+        var d = document.getElementById("dbg");
+        d.classList.remove("hidden");
+        d.innerHTML =
+          "<div><b>detected:</b> " + (eh.kind || "none / not an in-app browser") + "</div>" +
+          "<div><b>escaped:</b> " + (eh.escaped ? "yes" : "no") + "</div>" +
+          "<div><b>action:</b> " + (eh.action || "would forward to OneLink") + "</div>" +
+          "<div style='margin-top:8px'><b>ua:</b> " + (eh.ua || "") + "</div>";
+      }
+    })();
+  </script>
+</body>
+</html>
