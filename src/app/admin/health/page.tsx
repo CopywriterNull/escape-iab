@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { InstallCheck } from "./_components/install-check";
+import { RollupRefreshButton } from "./_components/rollup-refresh-button";
 
 export const dynamic = "force-dynamic";
 
@@ -80,13 +81,14 @@ export default async function AdminHealth() {
   const summaries = await Promise.all(
     merchants.map(async (merchant) => {
       const health = await loadMerchantHealth(admin, merchant.id, since30);
-      return summarize(merchant, health.events, health.counts, health.error);
+      return summarize(merchant, health.events, health.counts, health.latestRollupHour, health.error);
     }),
   );
   const redCount = summaries.filter((s) => s.tone === "danger").length;
   const warnCount = summaries.filter((s) => s.tone === "warn").length;
   const liveCount = summaries.filter((s) => s.tone === "success").length;
   const totalRecentEvents = summaries.reduce((sum, s) => sum + s.recentCount, 0);
+  const staleRollups = summaries.filter((s) => s.rollupStale);
 
   return (
     <div className="space-y-7">
@@ -101,12 +103,15 @@ export default async function AdminHealth() {
             Showing exact 30d counts plus the latest {SAMPLE_LIMIT} relevant rows per merchant · {totalRecentEvents.toLocaleString()} sampled rows loaded
           </p>
         </div>
-        <Link
-          href="/admin/simulator"
-          className="hidden sm:inline-flex h-9 items-center rounded-md border border-[var(--color-border)] px-3 text-[12px] font-medium hover:bg-[var(--color-bg-elev)] focus-ring"
-        >
-          Open simulator
-        </Link>
+        <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
+          <RollupRefreshButton />
+          <Link
+            href="/admin/simulator"
+            className="hidden h-9 items-center rounded-md border border-[var(--color-border)] px-3 text-[12px] font-medium hover:bg-[var(--color-bg-elev)] focus-ring sm:inline-flex"
+          >
+            Open simulator
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -114,6 +119,19 @@ export default async function AdminHealth() {
         <Stat label="Watch" value={warnCount.toString()} tone="warn" />
         <Stat label="Needs fix" value={redCount.toString()} tone="danger" />
       </div>
+
+      {staleRollups.length > 0 ? (
+        <div className="rounded-xl border border-[var(--color-danger)]/35 bg-[var(--color-danger-soft)]/30 px-4 py-3">
+          <div className="text-[12px] font-semibold text-[var(--color-danger)]">
+            {staleRollups.length} merchant{staleRollups.length === 1 ? "" : "s"} with stale rollups
+          </div>
+          <div className="mt-1 text-[11.5px] text-[var(--color-fg-dim)]">
+            Live traffic is outrunning the hourly rollups for{" "}
+            {staleRollups.map((s) => s.merchant.name ?? s.merchant.id).join(", ")}. Hit{" "}
+            <span className="font-mono">Roll up last 24h</span> above, or check the retention cron — this is the signal that froze 2026-06-15.
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-3">
         {summaries.map((summary) => (
@@ -149,7 +167,7 @@ function MerchantHealthCard({ summary }: { summary: HealthSummary }) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
         <InstallCheck domain={merchant.domain} merchantId={merchant.id} />
         <CheckTile
           label="Last IG impression"
@@ -175,6 +193,12 @@ function MerchantHealthCard({ summary }: { summary: HealthSummary }) {
           value={summary.purchaseLabel}
           detail={summary.purchaseDetail}
         />
+        <CheckTile
+          label="Rollup freshness"
+          tone={summary.rollupTone}
+          value={summary.rollupLabel}
+          detail={summary.rollupDetail}
+        />
       </div>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -199,7 +223,13 @@ function MerchantHealthCard({ summary }: { summary: HealthSummary }) {
 
 type HealthSummary = ReturnType<typeof summarize>;
 
-function summarize(merchant: MerchantRow, events: EventRow[], counts: EventCounts, dataError: string | null) {
+function summarize(
+  merchant: MerchantRow,
+  events: EventRow[],
+  counts: EventCounts,
+  latestRollupHour: string | null,
+  dataError: string | null,
+) {
   const lastIgImpression = events.find((e) => e.event_type === "impression" && e.iab_kind === "instagram") ?? null;
   const lastPixelEvent =
     events.find((e) => e.event_type === "checkout_started" || e.event_type === "add_to_cart") ?? null;
@@ -229,6 +259,38 @@ function summarize(merchant: MerchantRow, events: EventRow[], counts: EventCount
     : lastPurchase
       ? "Purchase seen, join needs review"
       : "Waiting for webhook/order event";
+
+  // Rollup freshness: compare this merchant's newest rolled-up hour against its
+  // newest live event. A merchant with recent traffic whose rollups lag well
+  // behind = the refresh/cron isn't keeping up (the failure mode that silently
+  // froze rollups 2026-06-15 -> 2026-06-23). Quiet merchants legitimately have
+  // no recent rollup rows, so only flag when there IS recent traffic.
+  const latestEventTime = lastAnyEvent ? new Date(lastAnyEvent.created_at).getTime() : null;
+  const latestRollupTime = latestRollupHour ? new Date(latestRollupHour).getTime() : null;
+  const hasRecentTraffic = latestEventTime != null && Date.now() - latestEventTime < 24 * 3600_000;
+  const rollupGapHours =
+    latestEventTime != null && latestRollupTime != null
+      ? (latestEventTime - latestRollupTime) / 3600_000
+      : null;
+  let rollupTone: Tone = "muted";
+  let rollupLabel = "No rollups yet";
+  let rollupDetail = "No hourly rollup rows for this merchant";
+  let rollupStale = false;
+  if (latestRollupTime != null) {
+    rollupLabel = ago(latestRollupHour as string);
+    if (hasRecentTraffic && rollupGapHours != null && rollupGapHours > 2) {
+      rollupTone = "danger";
+      rollupStale = true;
+      rollupDetail = `${Math.round(rollupGapHours)}h behind live events — refresh/cron lag`;
+    } else {
+      rollupTone = "success";
+      rollupDetail = "Rollups current with live events";
+    }
+  } else if (hasRecentTraffic) {
+    rollupTone = "danger";
+    rollupStale = true;
+    rollupDetail = "Live traffic but no rollups — cron not running";
+  }
 
   let tone: Exclude<Tone, "muted"> = "success";
   let label = "Healthy";
@@ -267,6 +329,10 @@ function summarize(merchant: MerchantRow, events: EventRow[], counts: EventCount
     purchaseTone,
     purchaseLabel,
     purchaseDetail,
+    rollupTone,
+    rollupLabel,
+    rollupDetail,
+    rollupStale,
     dataError,
   };
 }
@@ -276,7 +342,7 @@ async function loadMerchantHealth(
   merchantId: string,
   sinceIso: string,
 ) {
-  const [eventsResult, countsResult] = await Promise.all([
+  const [eventsResult, countsResult, rollupResult] = await Promise.all([
     admin
       .from("escape_events")
       .select("merchant_id,event_type,iab_kind,in_test,order_id,cart_token,created_at")
@@ -286,14 +352,22 @@ async function loadMerchantHealth(
       .order("created_at", { ascending: false })
       .limit(SAMPLE_LIMIT),
     loadMerchantCounts(admin, merchantId, sinceIso),
+    admin
+      .from("hourly_funnel_rollups")
+      .select("hour,refreshed_at")
+      .eq("merchant_id", merchantId)
+      .order("hour", { ascending: false })
+      .limit(1),
   ]);
 
   const eventError = eventsResult.error?.message ?? null;
   const countError = countsResult.error;
+  const latestRollup = ((rollupResult.data ?? []) as { hour: string | null; refreshed_at: string | null }[])[0] ?? null;
 
   return {
     events: ((eventsResult.data ?? []) as EventRow[]),
     counts: countsResult.counts,
+    latestRollupHour: latestRollup?.hour ?? null,
     error: eventError ?? countError,
   };
 }
