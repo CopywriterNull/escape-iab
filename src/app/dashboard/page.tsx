@@ -57,6 +57,11 @@ function fmtUSD(n: number, opts?: { compact?: boolean; signed?: boolean }): stri
   return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: abs < 10 ? 2 : 0 })}`;
 }
 
+function clampBlocks(value: number, max: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(max, Math.max(0, Math.round(value)));
+}
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -141,20 +146,6 @@ export default async function DashboardOverview({
       subtitle={<span>Last {range.label}</span>}
       action={
         <div className="flex items-center gap-2">
-          <Link
-            href={`/dashboard/v2?range=${range.key}`}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)] text-[12px] font-mono text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] focus-ring"
-          >
-            <span className="inline-block size-1.5 rounded-full bg-[var(--color-accent)]" />
-            Try v2 preview
-          </Link>
-          <Link
-            href={`/dashboard/v3?range=${range.key}`}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-[var(--color-success)]/25 bg-[var(--color-success)]/8 text-[12px] font-mono text-[var(--color-success)] hover:bg-[var(--color-success)]/12 focus-ring"
-          >
-            <span className="inline-block size-1.5 rounded-full bg-[var(--color-success)]" />
-            Try v3 board
-          </Link>
           <Link
             href="/dashboard/install"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-[12.5px] font-medium press lift focus-ring"
@@ -989,11 +980,12 @@ function FunnelTable({
             const sig = z?.significant === true;
             const pStr =
               z?.pValue != null ? (z.pValue < 0.001 ? "<.001" : z.pValue.toFixed(3)) : null;
-            // ASCII block bars — 40 wide on desktop, 24 on mobile.
-            const aBlocks40 = Math.max(1, Math.round(cvrA * 40));
-            const bBlocks40 = Math.max(1, Math.round(cvrB * 40));
-            const aBlocks24 = Math.max(1, Math.round(cvrA * 24));
-            const bBlocks24 = Math.max(1, Math.round(cvrB * 24));
+            // Corrected funnel mode can show later stages above the measured
+            // impression denominator. Clamp the visual bars, keep counts exact.
+            const aBlocks40 = clampBlocks(cvrA * 40, 40);
+            const bBlocks40 = clampBlocks(cvrB * 40, 40);
+            const aBlocks24 = clampBlocks(cvrA * 24, 24);
+            const bBlocks24 = clampBlocks(cvrB * 24, 24);
             const prevTotal = prev ? prev.a + prev.b : null;
             const stageTotal = stage.a + stage.b;
             const dropPct =
@@ -1110,7 +1102,7 @@ function SourcesCard({ sources, rangeLabel = "14d" }: { sources: SourceRow[]; ra
       <div className="space-y-2">
         {sources.map((s) => {
           const sharePct = max > 0 ? s.total / max : 0;
-          const blocks = Math.max(1, Math.round(sharePct * 28));
+          const blocks = clampBlocks(sharePct * 28, 28);
           const cvr = s.total > 0 ? (s.purchases / s.total) * 100 : 0;
           return (
             <div key={s.utm_source} className="flex items-baseline gap-3">
