@@ -82,7 +82,7 @@ export default async function AdminHealth() {
   const summaries = await Promise.all(
     merchants.map(async (merchant) => {
       const health = await loadMerchantHealth(admin, merchant.id, since30);
-      return summarize(merchant, health.events, health.counts, health.latestRollupHour, health.error);
+      return summarize(merchant, health.events, health.counts, health.latestRollupHour, health.lastIgImpressionAt, health.error);
     }),
   );
   const redCount = summaries.filter((s) => s.tone === "danger").length;
@@ -90,6 +90,7 @@ export default async function AdminHealth() {
   const liveCount = summaries.filter((s) => s.tone === "success").length;
   const totalRecentEvents = summaries.reduce((sum, s) => sum + s.recentCount, 0);
   const staleRollups = summaries.filter((s) => s.rollupStale);
+  const darkMerchants = summaries.filter((s) => s.wentDark);
 
   return (
     <div className="space-y-7">
@@ -120,6 +121,21 @@ export default async function AdminHealth() {
         <Stat label="Watch" value={warnCount.toString()} tone="warn" />
         <Stat label="Needs fix" value={redCount.toString()} tone="danger" />
       </div>
+
+      {darkMerchants.length > 0 ? (
+        <div className="rounded-xl border border-[var(--color-danger)]/45 bg-[var(--color-danger-soft)]/40 px-4 py-3">
+          <div className="text-[12px] font-semibold text-[var(--color-danger)]">
+            {darkMerchants.length} merchant{darkMerchants.length === 1 ? "" : "s"} went dark (snippet stopped firing IG impressions)
+          </div>
+          <div className="mt-1 text-[11.5px] text-[var(--color-fg-dim)]">
+            Active {darkMerchants.length === 1 ? "store" : "stores"} with no Instagram impressions in 48h+:{" "}
+            {darkMerchants
+              .map((s) => `${s.merchant.name ?? s.merchant.id} (${s.hoursSinceIg != null ? Math.round(s.hoursSinceIg / 24) + "d" : "?"})`)
+              .join(", ")}
+            . Their dashboards will read ~zero for recent ranges — this is real, not a rollup bug. Check the install + IG ad destination.
+          </div>
+        </div>
+      ) : null}
 
       {staleRollups.length > 0 ? (
         <div className="rounded-xl border border-[var(--color-danger)]/35 bg-[var(--color-danger-soft)]/30 px-4 py-3">
@@ -214,6 +230,15 @@ function MerchantHealthCard({ summary }: { summary: HealthSummary }) {
         <MiniMetric label="ATC 30d" value={summary.addToCartCount.toString()} />
         <MiniMetric label="Latest sample" value={`${summary.recentCount}/${SAMPLE_LIMIT}`} />
       </div>
+      {summary.wentDark ? (
+        <div className="mt-3 rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger-soft)]/40 px-3 py-2 text-[12px] text-[var(--color-danger)]">
+          <span className="font-semibold">Snippet dark.</span> Last Instagram impression{" "}
+          {summary.lastIgImpressionAt ? ago(summary.lastIgImpressionAt) : "—"}
+          {summary.hoursSinceIg != null ? ` (${Math.round(summary.hoursSinceIg / 24)}d)` : ""}, but the
+          store is still active. IG escape traffic has stopped — check the install tag on the live
+          store and whether their IG ads still point at the snippet-bearing domain.
+        </div>
+      ) : null}
       {summary.dataError ? (
         <div className="mt-3 rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger-soft)]/30 px-3 py-2 text-[12px] text-[var(--color-danger)]">
           Supabase data issue: {summary.dataError}
@@ -230,6 +255,7 @@ function summarize(
   events: EventRow[],
   counts: EventCounts,
   latestRollupHour: string | null,
+  lastIgImpressionAt: string | null,
   dataError: string | null,
 ) {
   const lastIgImpression = events.find((e) => e.event_type === "impression" && e.iab_kind === "instagram") ?? null;
@@ -294,6 +320,22 @@ function summarize(
     rollupDetail = "Live traffic but no rollups — cron not running";
   }
 
+  // "Went dark" detector: the snippet WAS firing Instagram impressions but has
+  // gone quiet while the merchant is still active (events/purchases flowing).
+  // This is the Elavi failure mode — IG impressions cliff-dropped 2026-05-28
+  // while purchases kept coming via the webhook, and nobody noticed for ~26
+  // days. We want this surfaced in hours. (A merchant that NEVER had IG
+  // impressions is "Needs traffic", not dark.)
+  const lastIgTime = lastIgImpressionAt ? new Date(lastIgImpressionAt).getTime() : null;
+  const hoursSinceIg = lastIgTime != null ? (Date.now() - lastIgTime) / 3600_000 : null;
+  const isActive = latestEventTime != null && Date.now() - latestEventTime < 7 * 86400_000;
+  const wentDark =
+    merchant.escape_enabled !== false &&
+    isActive &&
+    lastIgTime != null &&
+    hoursSinceIg != null &&
+    hoursSinceIg > 48;
+
   let tone: Exclude<Tone, "muted"> = "success";
   let label = "Healthy";
   if (dataError) {
@@ -302,6 +344,9 @@ function summarize(
   } else if (merchant.escape_enabled === false) {
     tone = "danger";
     label = "Paused";
+  } else if (wentDark) {
+    tone = "danger";
+    label = "Snippet dark";
   } else if (!merchant.domain || !lastIgImpression) {
     tone = "warn";
     label = "Needs traffic";
@@ -335,6 +380,9 @@ function summarize(
     rollupLabel,
     rollupDetail,
     rollupStale,
+    wentDark,
+    lastIgImpressionAt,
+    hoursSinceIg,
     dataError,
   };
 }
@@ -344,7 +392,7 @@ async function loadMerchantHealth(
   merchantId: string,
   sinceIso: string,
 ) {
-  const [eventsResult, countsResult, rollupResult] = await Promise.all([
+  const [eventsResult, countsResult, rollupResult, lastIgResult] = await Promise.all([
     admin
       .from("escape_events")
       .select("merchant_id,event_type,iab_kind,in_test,order_id,cart_token,created_at")
@@ -360,16 +408,28 @@ async function loadMerchantHealth(
       .eq("merchant_id", merchantId)
       .order("hour", { ascending: false })
       .limit(1),
+    // True last IG impression, independent of the 30d sample window — this is
+    // the "is the snippet still firing" signal. Uses the partial IG-entry index.
+    admin
+      .from("escape_events")
+      .select("created_at")
+      .eq("merchant_id", merchantId)
+      .eq("event_type", "impression")
+      .eq("iab_kind", "instagram")
+      .order("created_at", { ascending: false })
+      .limit(1),
   ]);
 
   const eventError = eventsResult.error?.message ?? null;
   const countError = countsResult.error;
   const latestRollup = ((rollupResult.data ?? []) as { hour: string | null; refreshed_at: string | null }[])[0] ?? null;
+  const lastIgAt = ((lastIgResult.data ?? []) as { created_at: string | null }[])[0]?.created_at ?? null;
 
   return {
     events: ((eventsResult.data ?? []) as EventRow[]),
     counts: countsResult.counts,
     latestRollupHour: latestRollup?.hour ?? null,
+    lastIgImpressionAt: lastIgAt,
     error: eventError ?? countError,
   };
 }
