@@ -297,16 +297,14 @@ async function shouldUseExactFunnel(
   // Sub-day windows are intentionally live: hourly rollups are too coarse.
   if (days < 1) return true;
 
-  // Fresh installs often have sparse or not-yet-backfilled rollups. If we use
-  // rollups for their 2d/14d first read, the dashboard can look empty even
-  // while exact events are streaming in. Keep the exact fallback bounded to
-  // fresh merchants so mature high-volume brands do not hit multi-day exact
-  // timeouts.
-  if (days <= 14 && (await merchantCreatedRecently(merchantId, 72))) {
+  const hasRollups = await hasHourlyRollupCoverage(merchantId, sinceIso, days);
+
+  // Fresh installs can temporarily outrun the hourly rollup backfill. Use the
+  // exact path only when their rollups are not healthy yet; otherwise 7d/14d
+  // clicks should stay on the fast rollup-backed RPC.
+  if (days <= 14 && !hasRollups && (await merchantCreatedRecently(merchantId, 7 * 24))) {
     return true;
   }
-
-  const hasRollups = await hasHourlyRollupCoverage(merchantId, sinceIso, days);
 
   // 24h and short custom day ranges are small enough to use exact when the
   // rollup cron is stale or incomplete.
@@ -366,6 +364,39 @@ export async function getRollupFreshness(): Promise<RollupFreshness> {
   return { stale: ageHours > 2, ageHours, lastRefresh };
 }
 
+export type MerchantRollupFreshness = {
+  lastRefresh: string | null;
+  ageMinutes: number;
+  stale: boolean;
+};
+
+/**
+ * Per-merchant rollup freshness — newest refreshed_at for ONE merchant.
+ * Powers the "Updated X ago" counter + refresh-on-load on the dashboard.
+ * Threshold is minutes (not hours like the global banner) because the
+ * per-merchant recent-window refresh is cheap, so we want near-live data.
+ */
+export async function getMerchantRollupFreshness(
+  merchantId: string,
+  staleAfterMinutes = 2,
+): Promise<MerchantRollupFreshness> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { lastRefresh: null, ageMinutes: Number.POSITIVE_INFINITY, stale: false };
+
+  const { data } = await supabase
+    .from("hourly_funnel_rollups")
+    .select("refreshed_at")
+    .eq("merchant_id", merchantId)
+    .order("refreshed_at", { ascending: false })
+    .limit(1);
+
+  const lastRefresh = ((data ?? []) as { refreshed_at: string | null }[])[0]?.refreshed_at ?? null;
+  if (!lastRefresh) return { lastRefresh: null, ageMinutes: Number.POSITIVE_INFINITY, stale: true };
+
+  const ageMinutes = (Date.now() - new Date(lastRefresh).getTime()) / 60_000;
+  return { lastRefresh, ageMinutes, stale: ageMinutes > staleAfterMinutes };
+}
+
 async function hasHourlyRollupCoverage(
   merchantId: string,
   sinceIso: string,
@@ -408,6 +439,17 @@ async function hasHourlyRollupCoverage(
   if (days <= 1) {
     const hours = new Set(rows.map((row) => row.hour).filter(Boolean));
     return hours.size >= Math.max(1, expectedHours - 2);
+  }
+
+  // Young merchants with real traffic should have many hourly rows after the
+  // fresh-merchant backfill. A tiny row sample is a partial backfill, not a
+  // trustworthy 7d/14d dashboard source.
+  if (days <= 14) {
+    return rows.length >= Math.min(
+      sampleLimit,
+      expectedHours,
+      Math.max(12, Math.floor(expectedHours * 0.4)),
+    );
   }
 
   return true;
@@ -674,6 +716,24 @@ export async function getUnattributedPurchaseStats(
   const supabase = await getTelemetryClient();
   if (!supabase) return { count: 0, revenue_cents: 0 };
   const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    "eh_unattributed_purchase_stats",
+    {
+      p_merchant_id: merchantId,
+      p_since: since,
+    },
+  );
+  if (!rpcError && Array.isArray(rpcData)) {
+    const row = rpcData[0] as { count?: number | string; revenue_cents?: number | string } | undefined;
+    return {
+      count: typeof row?.count === "string" ? parseInt(row.count, 10) : row?.count ?? 0,
+      revenue_cents:
+        typeof row?.revenue_cents === "string"
+          ? parseInt(row.revenue_cents, 10)
+          : row?.revenue_cents ?? 0,
+    };
+  }
+
   const { data } = await supabase
     .from("escape_events")
     .select("order_id, value_cents")

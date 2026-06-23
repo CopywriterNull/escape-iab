@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense, cache } from "react";
 import {
   getCurrentMerchant,
+  getMerchantRollupFreshness,
   getPeriodDelta,
   getRollupFreshness,
   getRollups,
@@ -19,6 +20,7 @@ import {
   type IabKind,
 } from "@/lib/db";
 import { RollupFreshnessBanner } from "./_components/rollup-freshness-banner";
+import { RollupRefreshControl } from "./_components/rollup-refresh-control";
 import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
 import {
   ActivitySkeleton,
@@ -138,6 +140,7 @@ export default async function DashboardOverview({
   const m = merchant.id;
   const d = range.days;
   const rollupFreshness = await getRollupFreshness();
+  const merchantFreshness = await getMerchantRollupFreshness(m);
 
   return (
     <Page
@@ -146,6 +149,10 @@ export default async function DashboardOverview({
       subtitle={<span>Last {range.label}</span>}
       action={
         <div className="flex items-center gap-2">
+          <RollupRefreshControl
+            lastRefresh={merchantFreshness.lastRefresh}
+            stale={merchantFreshness.stale}
+          />
           <Link
             href="/dashboard/install"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-[12.5px] font-medium press lift focus-ring"

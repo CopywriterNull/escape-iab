@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { InstallCheck } from "./_components/install-check";
 import { RollupRefreshButton } from "./_components/rollup-refresh-button";
+import { MerchantRefreshButton } from "./_components/merchant-refresh-button";
 
 export const dynamic = "force-dynamic";
 
@@ -158,6 +159,7 @@ function MerchantHealthCard({ summary }: { summary: HealthSummary }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <MerchantRefreshButton merchantId={merchant.id} />
           <Link href={`/install/${merchant.id}`} className="text-[12px] rounded-md border border-[var(--color-border)] px-2.5 py-1.5 hover:bg-[var(--color-bg-elev)]">
             Install guide
           </Link>

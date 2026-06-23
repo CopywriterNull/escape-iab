@@ -49,11 +49,17 @@ export async function POST(req: NextRequest) {
   const until = new Date();
   const since = new Date(until.getTime() - hours * 3600_000);
 
-  const { data: merchantRows, error: merchantError } = await admin
+  // Optional single-merchant scope (per-card "Refresh" on /admin/health).
+  const merchantId = req.nextUrl.searchParams.get("merchantId");
+
+  let merchantQuery = admin
     .from("merchants")
     .select("id,name")
     .order("created_at", { ascending: true })
     .limit(50);
+  if (merchantId) merchantQuery = merchantQuery.eq("id", merchantId);
+
+  const { data: merchantRows, error: merchantError } = await merchantQuery;
 
   if (merchantError) {
     return json({ ok: false, error: merchantError.message }, 500);
