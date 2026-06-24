@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { isMerchantDisabled } from "@/lib/merchant-state";
+import { normalizeShopifyOrderRevenue } from "@/lib/revenue";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { type NextRequest } from "next/server";
 
@@ -87,42 +88,53 @@ function findKey(order: Record<string, unknown>, key: string, max: number): stri
 }
 
 export async function POST(req: NextRequest) {
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
+  const globalSecret = process.env.SHOPIFY_WEBHOOK_SECRET ?? null;
   const fallbackMerchantId = process.env.SHOPIFY_WEBHOOK_MERCHANT_ID;
 
-  if (!secret) {
+  const rawBody = await req.text();
+  const hmacHeader = req.headers.get("x-shopify-hmac-sha256");
+
+  // Multi-tenant routing: resolve the merchant (and its per-store webhook
+  // secret) from the shop-domain header BEFORE verifying HMAC. Shopify signs
+  // Notifications-created webhooks with a per-STORE secret, so a single global
+  // secret can't validate every store (this is why Huppy's orders 401'd).
+  // The header is untrusted — it only picks which secret to TRY; the HMAC check
+  // below is still the real auth, so a forged domain can't inject orders
+  // without also forging a valid signature.
+  const shopDomain = req.headers.get("x-shopify-shop-domain")?.toLowerCase() ?? null;
+  const admin = getSupabaseAdmin();
+  let merchantId: string | null = null;
+  let merchantSecret: string | null = null;
+  if (shopDomain && admin) {
+    const { data } = await admin
+      .from("merchants")
+      .select("id,shopify_webhook_secret")
+      .eq("shopify_domain", shopDomain)
+      .maybeSingle();
+    if (data?.id) {
+      merchantId = data.id as string;
+      merchantSecret = (data.shopify_webhook_secret as string | null) ?? null;
+    }
+  }
+
+  // Verify against the merchant's own Notifications secret first, then the
+  // global app secret (app-created webhooks / legacy single-merchant install).
+  const candidateSecrets = [merchantSecret, globalSecret].filter(
+    (s): s is string => typeof s === "string" && s.length > 0,
+  );
+  if (candidateSecrets.length === 0) {
     return new Response(
       JSON.stringify({ ok: false, error: "webhook_not_configured" }),
       { status: 503, headers: { "content-type": "application/json" } },
     );
   }
-
-  const rawBody = await req.text();
-  const hmacHeader = req.headers.get("x-shopify-hmac-sha256");
-  if (!verifyHmac(rawBody, hmacHeader, secret)) {
+  if (!candidateSecrets.some((s) => verifyHmac(rawBody, hmacHeader, s))) {
     return new Response(JSON.stringify({ ok: false, error: "bad_hmac" }), {
       status: 401,
       headers: { "content-type": "application/json" },
     });
   }
 
-  // Multi-tenant routing: look up the merchant by Shopify shop domain so
-  // every merchant can share this single webhook URL. Falls back to the
-  // env-var merchant ID (legacy single-merchant install for G FUEL) only
-  // if the header doesn't match any merchant row.
-  const shopDomain = req.headers.get("x-shopify-shop-domain")?.toLowerCase() ?? null;
-  let merchantId: string | null = null;
-  if (shopDomain) {
-    const admin = getSupabaseAdmin();
-    if (admin) {
-      const { data } = await admin
-        .from("merchants")
-        .select("id")
-        .eq("shopify_domain", shopDomain)
-        .maybeSingle();
-      if (data?.id) merchantId = data.id as string;
-    }
-  }
   if (!merchantId) merchantId = fallbackMerchantId ?? null;
   if (!merchantId) {
     return new Response(
@@ -155,25 +167,15 @@ export async function POST(req: NextRequest) {
   }
 
   const orderId = (order.id != null ? String(order.id) : null) as string | null;
-  const totalPrice = order.total_price != null ? parseFloat(String(order.total_price)) : NaN;
-  // Sanity cap at $99,999 — anything higher is corrupt data from a bad
-  // line-item integration or test order. Don't let one row torch the totals.
-  const MAX_CENTS = 99_999_99;
-  const rawCents =
-    Number.isFinite(totalPrice) && totalPrice > 0
-      ? Math.round(totalPrice * 100)
-      : null;
-  const valueCents = rawCents != null && rawCents > MAX_CENTS ? null : rawCents;
-  const currency = typeof order.currency === "string" ? order.currency.slice(0, 8) : null;
+  const revenue = normalizeShopifyOrderRevenue(order);
   const landingSite = typeof order.landing_site === "string" ? order.landing_site : null;
   const referringSite = typeof order.referring_site === "string" ? order.referring_site : null;
   const cartToken = typeof order.cart_token === "string" ? order.cart_token : null;
   const ehSid = findKey(order, "eh_sid", 64);
   const fbclid = findKey(order, "fbclid", 512);
 
-  // Diagnostic: surface what fields Shopify is/isn't sending so we can see
-  // it in the webhook response logs for a few minutes while debugging.
-  if (process.env.NODE_ENV !== "production" || true) {
+  // Diagnostic: opt in briefly when debugging Shopify payload shape.
+  if (process.env.NODE_ENV !== "production" || process.env.EH_DEBUG_SHOPIFY_WEBHOOK === "1") {
     console.log("[shopify-webhook]", {
       orderId,
       cart_token: cartToken,
@@ -186,7 +188,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const admin = getSupabaseAdmin();
   if (!admin) {
     return new Response(JSON.stringify({ ok: true, joined: false, reason: "no_db" }), {
       status: 200,
@@ -283,8 +284,11 @@ export async function POST(req: NextRequest) {
     fbclid,
     cart_token: cartToken,
     order_id: orderId,
-    value_cents: valueCents,
-    currency,
+    value_cents: revenue.valueCents,
+    currency: revenue.currency,
+    original_value_cents: revenue.originalValueCents,
+    original_currency: revenue.originalCurrency,
+    value_currency: revenue.valueCurrency,
     url: landingSite ? landingSite.slice(0, 1024) : null,
     referrer: referringSite ? referringSite.slice(0, 1024) : null,
   });
@@ -296,15 +300,29 @@ export async function POST(req: NextRequest) {
       headers: { "content-type": "application/json" },
     });
   }
+  if (error && String(error.message).includes("duplicate") && orderId) {
+    await admin
+      .from("escape_events")
+      .update({
+        value_cents: revenue.valueCents,
+        currency: revenue.currency,
+        original_value_cents: revenue.originalValueCents,
+        original_currency: revenue.originalCurrency,
+        value_currency: revenue.valueCurrency,
+      })
+      .eq("merchant_id", merchantId)
+      .eq("event_type", "purchase")
+      .eq("order_id", orderId);
+  }
 
-  if (inTest) {
+  if (inTest && !error) {
     const today = new Date().toISOString().slice(0, 10);
     await admin.rpc("eh_increment_rollup", {
       p_merchant_id: merchantId,
       p_day: today,
       p_bucket: bucket,
       p_field: "purchases",
-      p_revenue_cents: valueCents ?? 0,
+      p_revenue_cents: revenue.valueCents ?? 0,
     });
   }
 
