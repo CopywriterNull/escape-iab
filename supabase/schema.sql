@@ -91,29 +91,85 @@ alter table public.merchants enable row level security;
 alter table public.escape_events enable row level security;
 alter table public.daily_rollups enable row level security;
 
-drop policy if exists "merchants self read" on public.merchants;
-create policy "merchants self read" on public.merchants
+-- ============================================================================
+-- merchant_members: multi-user tenancy (Phase 1). Source of truth for who
+-- can access a merchant. merchants.user_id is retained as legacy.
+-- ============================================================================
+create table if not exists public.merchant_members (
+  id uuid primary key default gen_random_uuid(),
+  merchant_id uuid not null references public.merchants(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role text not null check (role in ('owner', 'member', 'viewer')),
+  created_at timestamptz not null default now(),
+  unique (merchant_id, user_id)
+);
+
+create index if not exists merchant_members_user_idx
+  on public.merchant_members (user_id);
+
+alter table public.merchant_members enable row level security;
+
+-- Users may read their own membership rows (dashboard resolution + switcher).
+-- All WRITES go through the service-role client in server actions.
+drop policy if exists "members self read" on public.merchant_members;
+create policy "members self read" on public.merchant_members
   for select using (auth.uid() = user_id);
 
+-- security definer helpers: keep policy bodies short and index-friendly.
+create or replace function public.eh_is_member(p_merchant_id uuid)
+returns boolean
+language sql stable security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.merchant_members mm
+    where mm.merchant_id = p_merchant_id and mm.user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.eh_member_role(p_merchant_id uuid)
+returns text
+language sql stable security definer
+set search_path = public
+as $$
+  select mm.role from public.merchant_members mm
+  where mm.merchant_id = p_merchant_id and mm.user_id = auth.uid()
+  limit 1;
+$$;
+
+-- ── Membership-based RLS (replaces legacy user_id-ownership policies) ───────
+
+drop policy if exists "merchants self read" on public.merchants;
+drop policy if exists "merchants member read" on public.merchants;
+create policy "merchants member read" on public.merchants
+  for select using (public.eh_is_member(id));
+
 drop policy if exists "merchants self insert" on public.merchants;
-create policy "merchants self insert" on public.merchants
-  for insert with check (auth.uid() = user_id);
 
 drop policy if exists "merchants self update" on public.merchants;
-create policy "merchants self update" on public.merchants
-  for update using (auth.uid() = user_id);
+drop policy if exists "merchants owner update" on public.merchants;
+create policy "merchants owner update" on public.merchants
+  for update using (public.eh_member_role(id) = 'owner');
 
 drop policy if exists "events self read" on public.escape_events;
-create policy "events self read" on public.escape_events
-  for select using (
-    exists (select 1 from public.merchants m where m.id = merchant_id and m.user_id = auth.uid())
-  );
+drop policy if exists "events member read" on public.escape_events;
+create policy "events member read" on public.escape_events
+  for select using (public.eh_is_member(merchant_id));
 
 drop policy if exists "rollups self read" on public.daily_rollups;
-create policy "rollups self read" on public.daily_rollups
-  for select using (
-    exists (select 1 from public.merchants m where m.id = merchant_id and m.user_id = auth.uid())
-  );
+drop policy if exists "rollups member read" on public.daily_rollups;
+create policy "rollups member read" on public.daily_rollups
+  for select using (public.eh_is_member(merchant_id));
+
+drop policy if exists "hourly rollups self read" on public.hourly_funnel_rollups;
+drop policy if exists "hourly rollups member read" on public.hourly_funnel_rollups;
+create policy "hourly rollups member read" on public.hourly_funnel_rollups
+  for select using (public.eh_is_member(merchant_id));
+
+drop policy if exists "cart attributions self read" on public.cart_attributions;
+drop policy if exists "cart attributions member read" on public.cart_attributions;
+create policy "cart attributions member read" on public.cart_attributions
+  for select using (public.eh_is_member(merchant_id));
 
 -- ============================================================================
 -- RPC: atomic daily-rollup increment. Called by /api/track.
