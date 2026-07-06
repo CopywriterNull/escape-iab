@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { impersonateMerchant, stopImpersonating } from "@/app/actions/admin";
+import { setActiveMerchant } from "@/app/actions/merchant";
 
 export type SwitcherRow = {
   id: string;
@@ -14,10 +15,12 @@ export function MerchantSwitcher({
   current,
   rows,
   impersonating,
+  mode,
 }: {
   current: { id: string; name: string | null; domain: string | null } | null;
   rows: SwitcherRow[];
   impersonating: boolean;
+  mode: "impersonate" | "switch";
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -67,13 +70,13 @@ export function MerchantSwitcher({
           style={{ boxShadow: "0 12px 32px rgba(0,0,0,0.18)" }}
         >
           <div className="px-3 pt-2.5 pb-1.5 text-[9.5px] uppercase tracking-[0.16em] font-mono text-[var(--color-fg-muted)]">
-            Switch merchant
+            {mode === "impersonate" ? "Switch merchant" : "Switch workspace"}
           </div>
           <div className="max-h-[320px] overflow-y-auto">
             {rows.map((r) => {
               const isCurrent = current?.id === r.id;
               return (
-                <form key={r.id} action={impersonateMerchant} className="contents">
+                <form key={r.id} action={mode === "impersonate" ? impersonateMerchant : setActiveMerchant} className="contents">
                   <input type="hidden" name="id" value={r.id} />
                   <button
                     type="submit"
@@ -107,26 +110,28 @@ export function MerchantSwitcher({
               );
             })}
           </div>
-          <div className="border-t border-[var(--color-border-soft)] flex items-center justify-between text-[11px]">
-            {impersonating ? (
-              <form action={stopImpersonating} className="contents">
-                <button
-                  type="submit"
-                  className="px-3 py-2 text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-elev)]/60 transition-colors"
-                >
-                  Exit impersonation
-                </button>
-              </form>
-            ) : (
-              <span />
-            )}
-            <a
-              href="/admin/merchants"
-              className="px-3 py-2 text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] font-mono"
-            >
-              Manage →
-            </a>
-          </div>
+          {mode === "impersonate" ? (
+            <div className="border-t border-[var(--color-border-soft)] flex items-center justify-between text-[11px]">
+              {impersonating ? (
+                <form action={stopImpersonating} className="contents">
+                  <button
+                    type="submit"
+                    className="px-3 py-2 text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] hover:bg-[var(--color-bg-elev)]/60 transition-colors"
+                  >
+                    Exit impersonation
+                  </button>
+                </form>
+              ) : (
+                <span />
+              )}
+              <a
+                href="/admin/merchants"
+                className="px-3 py-2 text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] font-mono"
+              >
+                Manage →
+              </a>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

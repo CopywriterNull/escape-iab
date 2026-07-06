@@ -1,10 +1,14 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getCurrentMerchant } from "@/lib/db";
+import { ACTIVE_MERCHANT_COOKIE, getCurrentMerchant } from "@/lib/db";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/admin";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function updateMerchantSettings(formData: FormData) {
   // Resolve which merchant the *current view* is showing (honors the
@@ -118,4 +122,38 @@ export async function updateMerchantSettings(formData: FormData) {
   // seconds instead of waiting for the 1h edge cache TTL.
   revalidatePath(`/s/${merchant.id}.js`);
   redirect("/dashboard/settings?saved=1");
+}
+
+/** Switch the active workspace for a multi-membership user. Cookie is only
+ *  honored by getCurrentMerchant when a matching membership row exists, so a
+ *  forged cookie confers nothing — this validation is UX, not security. */
+export async function setActiveMerchant(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
+  if (!UUID_RE.test(id)) redirect("/dashboard");
+
+  const supabase = await getSupabaseServer();
+  if (!supabase) redirect("/dashboard");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: membership } = await supabase
+    .from("merchant_members")
+    .select("merchant_id")
+    .eq("user_id", user.id)
+    .eq("merchant_id", id)
+    .maybeSingle();
+  if (!membership) redirect("/dashboard");
+
+  const cookieStore = await cookies();
+  cookieStore.set(ACTIVE_MERCHANT_COOKIE, id, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  });
+  revalidatePath("/dashboard", "layout");
+  redirect("/dashboard");
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentMerchant, getImpersonationStatus } from "@/lib/db";
+import { getCurrentMerchant, getImpersonationStatus, getMemberships } from "@/lib/db";
 import { supabaseConfigured, getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { brand } from "@/lib/branding";
 import { signOut } from "@/app/actions/auth";
@@ -76,7 +76,7 @@ export default async function DashboardLayout({
   // so it's chained inside the same promise — the chain still runs in
   // parallel with the impersonation + switcher fetches. Cuts ~4 round
   // trips down to ~2.
-  const [merchantAndLive, impersonation, switcherDataRaw] = await Promise.all([
+  const [merchantAndLive, impersonation, switcherDataRaw, memberships] = await Promise.all([
     (async () => {
       const merchant = await getCurrentMerchant();
       const live = merchant ? await getRecentForSidebar(merchant.id, 3) : [];
@@ -90,6 +90,7 @@ export default async function DashboardLayout({
           .order("created_at", { ascending: true })
           .then((r: { data: unknown }) => r.data)
       : Promise.resolve(null),
+    getMemberships(),
   ]);
   const { merchant, live } = merchantAndLive;
 
@@ -130,6 +131,16 @@ export default async function DashboardLayout({
     domain: r.domain,
     ownedByMe: r.user_id === user.id,
   }));
+
+  const memberRows: SwitcherRow[] = memberships.map((m) => ({
+    id: m.merchant_id,
+    name: m.name,
+    domain: m.domain,
+    ownedByMe: m.role === "owner",
+  }));
+  const switcherMode: "impersonate" | "switch" = isAdmin ? "impersonate" : "switch";
+  const finalRows = isAdmin ? switcherRows : memberRows;
+  const showSwitcher = isAdmin ? switcherRows.length > 0 : memberRows.length > 1;
 
   return (
     <>
@@ -277,11 +288,12 @@ export default async function DashboardLayout({
             {brand.name}
           </Link>
           <div className="flex items-center gap-1 text-[12px]">
-            {isAdmin && switcherRows.length > 0 ? (
+            {showSwitcher ? (
               <MerchantSwitcher
                 current={merchant ? { id: merchant.id, name: merchant.name, domain: merchant.domain } : null}
-                rows={switcherRows}
+                rows={finalRows}
                 impersonating={impersonation.active}
+                mode={switcherMode}
               />
             ) : null}
             <nav className="flex items-center gap-1">
@@ -300,11 +312,12 @@ export default async function DashboardLayout({
         <div className="hidden md:flex items-center justify-between gap-3 px-6 h-11 border-b border-[var(--color-border-soft)] bg-[var(--color-bg)]/85 backdrop-blur sticky top-0 z-20">
           <div className="flex items-center gap-2 text-[12.5px] min-w-0">
             <PixelIcon name="home" size={12} className="text-[var(--color-fg-muted)]" />
-            {isAdmin && switcherRows.length > 0 ? (
+            {showSwitcher ? (
               <MerchantSwitcher
                 current={merchant ? { id: merchant.id, name: merchant.name, domain: merchant.domain } : null}
-                rows={switcherRows}
+                rows={finalRows}
                 impersonating={impersonation.active}
+                mode={switcherMode}
               />
             ) : (
               <span className="text-[var(--color-fg-muted)]">{merchant?.name ?? "Workspace"}</span>
