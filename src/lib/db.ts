@@ -64,6 +64,45 @@ export type Merchant = {
   created_at: string;
 };
 
+export const ACTIVE_MERCHANT_COOKIE = "eh_active_merchant_id";
+
+export type MemberRole = "owner" | "member" | "viewer";
+
+export type Membership = {
+  merchant_id: string;
+  role: MemberRole;
+  name: string | null;
+  domain: string | null;
+};
+
+type MembershipRow = {
+  merchant_id: string;
+  role: MemberRole;
+  created_at: string;
+  merchants: { id: string; name: string | null; domain: string | null } | null;
+};
+
+/** Current user's memberships, oldest first. Empty when logged out. */
+export async function getMemberships(): Promise<Membership[]> {
+  const supabase = await getSupabaseServer();
+  if (!supabase) return [];
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data } = await supabase
+    .from("merchant_members")
+    .select("merchant_id, role, created_at, merchants ( id, name, domain )")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true });
+  return ((data ?? []) as unknown as MembershipRow[]).map((r) => ({
+    merchant_id: r.merchant_id,
+    role: r.role,
+    name: r.merchants?.name ?? null,
+    domain: r.merchants?.domain ?? null,
+  }));
+}
+
 export type DailyRollup = {
   merchant_id: string;
   day: string;
@@ -139,9 +178,23 @@ export async function getCurrentMerchant(): Promise<Merchant | null> {
     }
   }
 
-  // Use limit(1) instead of maybeSingle() — maybeSingle returns null when
-  // there's more than one row, which silently breaks the dashboard if a
-  // user accidentally owns multiple merchants. Return the oldest.
+  // Membership resolution: active-merchant cookie (validated against the
+  // user's memberships) → oldest membership → legacy user_id fallback.
+  const memberships = await getMemberships();
+  if (memberships.length > 0) {
+    const cookieStore = await cookies();
+    const activeId = cookieStore.get(ACTIVE_MERCHANT_COOKIE)?.value;
+    const chosen =
+      memberships.find((m) => m.merchant_id === activeId) ?? memberships[0];
+    const { data } = await supabase
+      .from("merchants")
+      .select("*")
+      .eq("id", chosen.merchant_id)
+      .maybeSingle();
+    if (data) return data as Merchant;
+  }
+
+  // Legacy fallback: direct user_id ownership (backfill safety net).
   const { data } = await supabase
     .from("merchants")
     .select("*")
