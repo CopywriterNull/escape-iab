@@ -86,6 +86,18 @@ export async function assignMerchantToCurrentUser(formData: FormData) {
   if (!UUID_RE.test(id)) return;
 
   await admin.from("merchants").update({ user_id: user.id }).eq("id", id);
+
+  // Post-migration, merchants.user_id alone no longer grants read access —
+  // the only merchants SELECT policy is membership-based. Create the owner
+  // membership row too, so the assign-to-me flow actually resolves a
+  // workspace instead of landing on the "No workspace yet" card.
+  await admin
+    .from("merchant_members")
+    .upsert(
+      { merchant_id: id, user_id: user.id, role: "owner" },
+      { onConflict: "merchant_id,user_id", ignoreDuplicates: true },
+    );
+
   revalidateMerchantSurfaces(id);
 }
 

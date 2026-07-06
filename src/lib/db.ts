@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/admin";
 
@@ -83,7 +84,7 @@ type MembershipRow = {
 };
 
 /** Current user's memberships, oldest first. Empty when logged out. */
-export async function getMemberships(): Promise<Membership[]> {
+export const getMemberships = cache(async (): Promise<Membership[]> => {
   const supabase = await getSupabaseServer();
   if (!supabase) return [];
   const {
@@ -101,7 +102,7 @@ export async function getMemberships(): Promise<Membership[]> {
     name: r.merchants?.name ?? null,
     domain: r.merchants?.domain ?? null,
   }));
-}
+});
 
 export type DailyRollup = {
   merchant_id: string;
@@ -194,7 +195,12 @@ export async function getCurrentMerchant(): Promise<Merchant | null> {
     if (data) return data as Merchant;
   }
 
-  // Legacy fallback: direct user_id ownership (backfill safety net).
+  // Legacy fallback: direct user_id ownership. limit(1) + oldest-first is
+  // deliberate for users who own multiple merchants (pick the original one).
+  // Under membership-based RLS this query only returns rows for users whose
+  // membership was backfilled — post-migration user_id-only assignments are
+  // not readable here, which is why assignMerchantToCurrentUser also creates
+  // a merchant_members row.
   const { data } = await supabase
     .from("merchants")
     .select("*")

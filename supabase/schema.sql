@@ -161,10 +161,14 @@ drop policy if exists "rollups member read" on public.daily_rollups;
 create policy "rollups member read" on public.daily_rollups
   for select using (public.eh_is_member(merchant_id));
 
+alter table public.hourly_funnel_rollups enable row level security;
+
 drop policy if exists "hourly rollups self read" on public.hourly_funnel_rollups;
 drop policy if exists "hourly rollups member read" on public.hourly_funnel_rollups;
 create policy "hourly rollups member read" on public.hourly_funnel_rollups
   for select using (public.eh_is_member(merchant_id));
+
+alter table public.cart_attributions enable row level security;
 
 drop policy if exists "cart attributions self read" on public.cart_attributions;
 drop policy if exists "cart attributions member read" on public.cart_attributions;

@@ -71,11 +71,11 @@ export default async function DashboardLayout({
   const isAdmin = isAdminEmail(user.email);
   const adminClient = isAdmin ? getSupabaseAdmin() : null;
 
-  // Parallelize the four independent fetches that previously ran serial
+  // Parallelize the five independent fetches that previously ran serial
   // on every dashboard navigation. Live activity still depends on merchant
   // so it's chained inside the same promise — the chain still runs in
-  // parallel with the impersonation + switcher fetches. Cuts ~4 round
-  // trips down to ~2.
+  // parallel with the impersonation + switcher + membership fetches. Cuts
+  // ~5 round trips down to ~2.
   const [merchantAndLive, impersonation, switcherDataRaw, memberships] = await Promise.all([
     (async () => {
       const merchant = await getCurrentMerchant();
@@ -343,7 +343,6 @@ export default async function DashboardLayout({
         </div>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-5 sm:py-6">{children}</div>
       </main>
-
       </div>
     </>
   );
