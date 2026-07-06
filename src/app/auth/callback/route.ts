@@ -22,18 +22,5 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // First-time login: create a merchants row if one doesn't exist yet.
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) {
-    const { data: existing } = await supabase
-      .from("merchants")
-      .select("id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (!existing) {
-      await supabase.from("merchants").insert({ user_id: user.id });
-    }
-  }
-
   return NextResponse.redirect(new URL(next, url.origin));
 }

@@ -92,6 +92,31 @@ export default async function DashboardLayout({
       : Promise.resolve(null),
   ]);
   const { merchant, live } = merchantAndLive;
+
+  if (!merchant) {
+    return (
+      <div className="min-h-dvh grid place-items-center px-5 bg-[var(--color-bg)] text-[var(--color-fg)]">
+        <div className="max-w-md card-hi p-8 text-center">
+          <h1 className="text-xl font-semibold tracking-tight">No workspace yet</h1>
+          <p className="mt-2 text-sm text-[var(--color-fg-dim)]">
+            Your account ({user.email}) isn&apos;t a member of any brand workspace.
+            Ask your team owner for an invite, or contact us to get set up.
+          </p>
+          <div className="mt-5 flex items-center justify-center gap-3 text-sm">
+            <a href="mailto:lenny@getescapehatch.com" className="text-[var(--color-accent)] link-grow">
+              Contact us →
+            </a>
+            <form action={signOut}>
+              <button type="submit" className="text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">
+                Sign out
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const impersonationMismatch =
     impersonation.active && merchant?.id && impersonation.merchant?.id
       ? merchant.id !== impersonation.merchant.id
@@ -306,11 +331,6 @@ export default async function DashboardLayout({
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-5 sm:py-6">{children}</div>
       </main>
 
-      {!merchant ? (
-        <div className="fixed bottom-3 left-1/2 -translate-x-1/2 text-[11px] text-[var(--color-fg-muted)] font-mono">
-          Provisioning your merchant record…
-        </div>
-      ) : null}
       </div>
     </>
   );
