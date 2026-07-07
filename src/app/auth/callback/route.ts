@@ -4,11 +4,21 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
-  // Only same-origin relative paths — an absolute URL (or protocol-relative
-  // "//host") in `next` would make the auth callback an open redirect.
+  // Only same-origin paths in `next` — anything that resolves off-origin
+  // (absolute URLs, protocol-relative "//host", backslash tricks like
+  // "/\evil.com" that the URL parser normalizes to a host) would make the
+  // auth callback an open redirect. Resolve against our origin and keep
+  // the result only when the origin is unchanged.
   const rawNext = url.searchParams.get("next") ?? "/dashboard";
-  const next =
-    rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard";
+  let next = "/dashboard";
+  try {
+    const candidate = new URL(rawNext, url.origin);
+    if (candidate.origin === url.origin) {
+      next = candidate.pathname + candidate.search;
+    }
+  } catch {
+    // Unparseable next → keep the /dashboard fallback.
+  }
 
   if (!code) {
     return NextResponse.redirect(new URL("/login?error=missing_code", url.origin));
