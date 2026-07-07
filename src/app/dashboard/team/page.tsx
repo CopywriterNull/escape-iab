@@ -87,7 +87,13 @@ export default async function TeamPage({
   const invites = ((invitesRes.data ?? []) as InviteRow[]);
   const now = Date.now();
 
-  const banner = sp.msg ? MESSAGES[sp.msg] : undefined;
+  // Missing service-role client = no data source, not an empty team.
+  // Surface it as an error banner instead of the empty-list copy.
+  const banner = !admin
+    ? MESSAGES.no_backend
+    : sp.msg
+      ? MESSAGES[sp.msg]
+      : undefined;
 
   return (
     <div className="space-y-8">
