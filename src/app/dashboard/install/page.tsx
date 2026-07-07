@@ -1,8 +1,10 @@
 import { headers } from "next/headers";
 import Link from "next/link";
-import { getCurrentMerchant, getImpersonationStatus } from "@/lib/db";
+import { redirect } from "next/navigation";
+import { getCurrentMerchant, getCurrentRole, getImpersonationStatus } from "@/lib/db";
 import { buildShopifyPixel } from "@/lib/pixel";
 import { parseAllowedDomains } from "@/lib/snippet";
+import { roleAtLeast } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,11 @@ export default async function InstallPage() {
   if (!merchant) {
     return <div className="card p-8">No merchant yet — refresh in a moment.</div>;
   }
+
+  // Spec §4: install page is owner+member; viewers land back on overview.
+  const role = await getCurrentRole(merchant);
+  if (!roleAtLeast(role, "member")) redirect("/dashboard");
+
   const impersonationMismatch =
     impersonation.active && impersonation.merchant?.id
       ? impersonation.merchant.id !== merchant.id

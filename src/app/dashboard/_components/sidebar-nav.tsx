@@ -3,19 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PixelIcon } from "@/components/PixelIcon";
+import { roleAtLeast, type MemberRole } from "@/lib/roles";
 
 const NAV = [
-  { href: "/dashboard", label: "Overview", icon: "home" as const },
-  { href: "/dashboard/report", label: "Report", icon: "chart" as const },
-  { href: "/dashboard/install", label: "Install", icon: "terminal" as const },
-  { href: "/dashboard/settings", label: "Settings", icon: "gear" as const },
+  { href: "/dashboard", label: "Overview", icon: "home" as const, minRole: "viewer" as const },
+  { href: "/dashboard/report", label: "Report", icon: "chart" as const, minRole: "viewer" as const },
+  { href: "/dashboard/install", label: "Install", icon: "terminal" as const, minRole: "member" as const },
+  { href: "/dashboard/team", label: "Team", icon: "user" as const, minRole: "member" as const },
+  { href: "/dashboard/settings", label: "Settings", icon: "gear" as const, minRole: "owner" as const },
 ];
 
-export function SidebarNav() {
+export function SidebarNav({ role }: { role: MemberRole | null }) {
   const pathname = usePathname();
   return (
     <nav className="px-2 flex flex-col gap-0.5">
-      {NAV.map((item) => {
+      {NAV.filter((item) => roleAtLeast(role, item.minRole)).map((item) => {
         const active =
           item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
         return (

@@ -1,4 +1,5 @@
-import { getCurrentMerchant, getImpersonationStatus } from "@/lib/db";
+import { redirect } from "next/navigation";
+import { getCurrentMerchant, getCurrentRole, getImpersonationStatus } from "@/lib/db";
 import { updateMerchantSettings } from "@/app/actions/merchant";
 import { PlatformPresets } from "./_components/platform-presets";
 import { SplitSlider } from "./_components/split-slider";
@@ -24,6 +25,12 @@ export default async function SettingsPage({
   if (!merchant) {
     return <div className="card p-8">No merchant yet — refresh in a moment.</div>;
   }
+
+  // Spec §4: settings edits are owner-only. Members/viewers who deep-link
+  // here land back on the overview. Admin allowlist resolves to owner.
+  const role = await getCurrentRole(merchant);
+  if (role !== "owner") redirect("/dashboard");
+
   const impersonationMismatch =
     impersonation.active && impersonation.merchant?.id
       ? impersonation.merchant.id !== merchant.id

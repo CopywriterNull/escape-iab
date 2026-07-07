@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getCurrentMerchant, getImpersonationStatus, getMemberships } from "@/lib/db";
+import { getCurrentMerchant, getCurrentRole, getImpersonationStatus, getMemberships } from "@/lib/db";
+import { roleAtLeast } from "@/lib/roles";
 import { supabaseConfigured, getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { brand } from "@/lib/branding";
 import { signOut } from "@/app/actions/auth";
@@ -118,6 +119,11 @@ export default async function DashboardLayout({
     );
   }
 
+  // Role drives which nav items render. getMemberships() is request-cached,
+  // so this adds no extra round trip after the Promise.all above. Null role
+  // is treated as viewer: show the read-only nav rather than nothing.
+  const role = (await getCurrentRole(merchant)) ?? "viewer";
+
   const impersonationMismatch =
     impersonation.active && merchant?.id && impersonation.merchant?.id
       ? merchant.id !== impersonation.merchant.id
@@ -186,7 +192,7 @@ export default async function DashboardLayout({
         <div className="px-3 pt-4 pb-1.5 text-[10px] uppercase tracking-[0.12em] font-mono text-[var(--color-fg-muted)] font-medium">
           Workspace
         </div>
-        <SidebarNav />
+        <SidebarNav role={role} />
 
         {/* Test status card */}
         <div className="mt-5 mx-3 px-3 py-2.5 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)]">
@@ -299,8 +305,15 @@ export default async function DashboardLayout({
             <nav className="flex items-center gap-1">
               <Link href="/dashboard" className="px-2 py-1 text-[var(--color-fg)] font-medium">Overview</Link>
               <Link href="/dashboard/report" className="px-2 py-1 text-[var(--color-fg-muted)]">Report</Link>
-              <Link href="/dashboard/install" className="px-2 py-1 text-[var(--color-fg-muted)]">Install</Link>
-              <Link href="/dashboard/settings" className="px-2 py-1 text-[var(--color-fg-muted)]">Settings</Link>
+              {roleAtLeast(role, "member") ? (
+                <Link href="/dashboard/install" className="px-2 py-1 text-[var(--color-fg-muted)]">Install</Link>
+              ) : null}
+              {roleAtLeast(role, "member") ? (
+                <Link href="/dashboard/team" className="px-2 py-1 text-[var(--color-fg-muted)]">Team</Link>
+              ) : null}
+              {roleAtLeast(role, "owner") ? (
+                <Link href="/dashboard/settings" className="px-2 py-1 text-[var(--color-fg-muted)]">Settings</Link>
+              ) : null}
             </nav>
           </div>
         </div>
