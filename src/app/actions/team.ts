@@ -61,10 +61,13 @@ export async function inviteMember(formData: FormData) {
   if (!EMAIL_RE.test(email)) teamRedirect("bad_email");
   if (!ROLES.includes(role as MemberRole)) teamRedirect("bad_role");
 
-  // Already a member → no-op with message (spec §3 edge case).
-  const { data: members } = await admin.rpc("eh_team_members", {
+  // Already a member → no-op with message (spec §3 edge case). Fail safe:
+  // if the membership lookup errors we cannot prove non-membership, so
+  // abort rather than risk a duplicate invite.
+  const { data: members, error: membersError } = await admin.rpc("eh_team_members", {
     p_merchant_id: merchant.id,
   });
+  if (membersError) teamRedirect("invite_failed");
   const memberRows = (members ?? []) as { email: string | null }[];
   if (memberRows.some((m) => (m.email ?? "").toLowerCase() === email)) {
     teamRedirect("already_member", { email });
