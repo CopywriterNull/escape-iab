@@ -10,6 +10,7 @@ import { SidebarNav } from "./_components/sidebar-nav";
 import { MerchantSwitcher, type SwitcherRow } from "./_components/merchant-switcher";
 import { PixelIcon } from "@/components/PixelIcon";
 import { isAdminEmail } from "@/lib/admin";
+import { PendingApprovalScreen } from "./_components/pending-approval";
 
 type LiveRow = {
   event_type: string;
@@ -120,6 +121,13 @@ export default async function DashboardLayout({
         </div>
       </div>
     );
+  }
+
+  // Gated signup: pending merchants get the approval experience instead of
+  // the live dashboard. Admins (incl. impersonation) still see the real
+  // dashboard so they can inspect a pending workspace before approving.
+  if (merchant.status === "pending" && !isAdmin) {
+    return <PendingApprovalScreen merchant={merchant} userEmail={user.email ?? ""} />;
   }
 
   // Role drives which nav items render. getMemberships() is request-cached,

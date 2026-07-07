@@ -63,6 +63,10 @@ export type Merchant = {
   escape_facebook?: boolean;
   escape_messenger?: boolean;
   escape_discord?: boolean;
+  /** live = normal dashboard; pending = gated-signup approval experience. */
+  status?: "live" | "pending";
+  /** Storefront platform captured at self-serve signup. */
+  platform?: string | null;
   created_at: string;
 };
 
