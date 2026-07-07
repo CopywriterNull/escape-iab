@@ -201,6 +201,12 @@ try{
 
   var qsP=new URLSearchParams(location.search);
   var us=qsP.get("utm_source")||null,um=qsP.get("utm_medium")||null,uc=qsP.get("utm_campaign")||null,uct=qsP.get("utm_content")||null,ut=qsP.get("utm_term")||null,fc=qsP.get("fbclid")||null;
+  // iOS Instagram strips the literal fbclid param on the extbrowser handoff to
+  // Safari (utm_* and other params survive — only fbclid is removed by name).
+  // We re-carry it below as eh_fbclid, which IG leaves untouched like our other
+  // appended params. Read either name here so every beacon (and the post-escape
+  // side) keeps the click id even after the strip.
+  var ehfc=qsP.get("eh_fbclid")||null;if(!fc&&ehfc)fc=ehfc;
   // QA force flag: ?eh_force=a pins bucket A (escape fires regardless of
   // AB/PO/eh_a state). ?eh_force=b pins bucket B (silent-return, lets you
   // preview control behavior). Forced visits do NOT write the eh_b cookie
@@ -321,6 +327,7 @@ try{
       fbu.searchParams.set("source_browser","facebook_in_app");
       fbu.searchParams.set("eh_sid",sid);
       fbu.searchParams.set("eh_escape","1");
+      if(fc)fbu.searchParams.set("eh_fbclid",fc);
       fbDest=fbu.toString();
     }catch(e){}
     if(!FORCED){try{sessionStorage.setItem("eh_fb","1");}catch(e){}}
@@ -442,6 +449,14 @@ try{
   }
   function writeCartAttr(){touchCart();}
 
+  // Restore the fbclid that iOS Instagram stripped on the handoff. We carried
+  // it through as eh_fbclid; put it back on the URL so the merchant's own Meta
+  // pixel reads it and attributes the conversion. This snippet is first and
+  // synchronous in <head>, so replaceState runs before the pixel initializes.
+  // history API only — no reload. Covers IG/Threads and FB escapes (all land
+  // in Safari with kind=null and reach this point).
+  if(postEscape&&ehfc){try{if(location.search.indexOf("fbclid=")===-1){var ru=new URL(location.href);ru.searchParams.set("fbclid",ehfc);history.replaceState(null,"",ru.toString());}}catch(e){}}
+
   // Post-escape Safari side: no escape urgency. Wait up to 1.5s for sy cookie
   // before beaconing the impression so the funnel pixel can join back.
   if(postEscape){
@@ -466,7 +481,7 @@ try{
   if(!KE&&!FORCED){beacon("escape_skipped",{r:"k"});return;}
 
   var dest=location.href;
-  try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");nu.searchParams.set("eh_sid",sid);nu.searchParams.set("eh_escape","1");dest=nu.toString();}catch(e){}
+  try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");nu.searchParams.set("eh_sid",sid);nu.searchParams.set("eh_escape","1");if(fc)nu.searchParams.set("eh_fbclid",fc);dest=nu.toString();}catch(e){}
   // Threads uses barcelona://extbrowser/?url= ; Instagram uses instagram://
   // Both schemes accept identical payloads and hand off to system default.
   var schemePrefix=kind==="threads"

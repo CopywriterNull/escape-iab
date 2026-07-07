@@ -32,7 +32,7 @@ export default async function InstallPage() {
   const origin = `${proto}://${host}`;
   // Bump the ?v= when you ship a config change so Vercel's 5-min edge cache
   // on /s/[id].js doesn't keep serving the old baked-in flags.
-  const snippetUrl = `${origin}/s/${merchant.id}.js?v=13`;
+  const snippetUrl = `${origin}/s/${merchant.id}.js?v=14`;
 
   // CRITICAL: no `async`, no `defer`. The IG IAB redirect must fire before
   // Instagram's webview commits to rendering — once it paints, the
