@@ -14,6 +14,7 @@ import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { UUID_RE } from "@/lib/uuid";
 import { sendInviteEmail } from "@/lib/email";
 import { siteOrigin } from "@/lib/site";
+import { isAdminEmail } from "@/lib/admin";
 
 const TEAM_PATH = "/dashboard/team";
 const ROLES: readonly MemberRole[] = ["owner", "member", "viewer"] as const;
@@ -47,6 +48,11 @@ async function requireOwner(): Promise<{
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  // Pending workspaces have no live config: block team mutations (invite
+  // spam vector) until approval. Admins keep inspect/edit parity.
+  if (merchant.status === "pending" && !isAdminEmail(user.email)) {
+    redirect("/dashboard");
+  }
   return { merchant, admin, userId: user.id, userEmail: user.email ?? null };
 }
 

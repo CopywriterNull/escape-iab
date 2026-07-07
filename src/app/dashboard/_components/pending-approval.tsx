@@ -1,6 +1,7 @@
 import type { Merchant } from "@/lib/db";
 import { brand } from "@/lib/branding";
 import { signOut } from "@/app/actions/auth";
+import { setActiveMerchant } from "@/app/actions/merchant";
 
 /** Full-screen experience for status='pending' merchants: what the product
  *  does (static sample metrics — clearly labeled), their install snippet
@@ -9,9 +10,11 @@ import { signOut } from "@/app/actions/auth";
 export function PendingApprovalScreen({
   merchant,
   userEmail,
+  otherWorkspaces = [],
 }: {
   merchant: Merchant;
   userEmail: string;
+  otherWorkspaces?: { id: string; name: string }[];
 }) {
   const snippet = `<script src="https://${brand.domain}/s/${merchant.id}.js?v=13"></script>`;
   const SAMPLE = [
@@ -77,6 +80,27 @@ export function PendingApprovalScreen({
             Place as the first &lt;script&gt; in &lt;head&gt; — no async, no defer.
           </p>
         </div>
+
+        {otherWorkspaces.length > 0 ? (
+          <div className="card-hi p-7">
+            <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+              Your other workspaces
+            </div>
+            <div className="mt-3 space-y-2">
+              {otherWorkspaces.map((w) => (
+                <form key={w.id} action={setActiveMerchant}>
+                  <input type="hidden" name="id" value={w.id} />
+                  <button
+                    type="submit"
+                    className="w-full text-left px-3.5 py-2.5 rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-card)] text-sm hover:bg-[var(--color-bg-elev)] press focus-ring transition-colors"
+                  >
+                    Switch to <strong className="font-medium">{w.name}</strong> →
+                  </button>
+                </form>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="flex items-center justify-between text-sm px-1">
           <a href="mailto:lenny@getescapehatch.com" className="text-[var(--color-accent)] link-grow">

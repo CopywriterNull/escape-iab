@@ -315,3 +315,17 @@ alter table public.merchants
 create unique index if not exists merchants_one_pending_per_user
   on public.merchants (user_id)
   where status = 'pending' and user_id is not null;
+
+-- ── Phase 3 hardening: pending merchants owner-immutable (20260707160000) ──
+-- Self-serve signups get an owner membership on their PENDING merchant,
+-- and the Phase 1 owner-update policy had no status restriction — an
+-- unapproved owner could PATCH status='live' (self-approve) through
+-- PostgREST with the public anon key. Restrict session-client owner
+-- updates to live rows, and forbid writing any status other than 'live'
+-- so no owner can transition status at all. Admin approve/reject go
+-- through the service-role client, which bypasses RLS.
+drop policy if exists "merchants owner update" on public.merchants;
+create policy "merchants owner update" on public.merchants
+  for update
+  using (public.eh_member_role(id) = 'owner' and status = 'live')
+  with check (status = 'live');

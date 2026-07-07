@@ -127,7 +127,19 @@ export default async function DashboardLayout({
   // the live dashboard. Admins (incl. impersonation) still see the real
   // dashboard so they can inspect a pending workspace before approving.
   if (merchant.status === "pending" && !isAdmin) {
-    return <PendingApprovalScreen merchant={merchant} userEmail={user.email ?? ""} />;
+    // A user can hold live memberships alongside a pending workspace; the
+    // full-screen pending state must not dead-end them (the cookie lasts a
+    // year and the switcher only renders inside the live dashboard).
+    const otherWorkspaces = memberships
+      .filter((m) => m.merchant_id !== merchant.id)
+      .map((m) => ({ id: m.merchant_id, name: m.name ?? m.domain ?? "Workspace" }));
+    return (
+      <PendingApprovalScreen
+        merchant={merchant}
+        userEmail={user.email ?? ""}
+        otherWorkspaces={otherWorkspaces}
+      />
+    );
   }
 
   // Role drives which nav items render. getMemberships() is request-cached,

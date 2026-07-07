@@ -56,6 +56,9 @@ export async function GET(
         // The four below are no-op defaults until the matching migration
         // (0011 / 0012) is applied — `undefined` reads as the safe default.
         escapeEnabled = m.escape_enabled !== false;
+        // Gated signup: pending merchants must never serve a live snippet, even
+        // if escape_enabled were flipped by other means. Belt for the RLS brace.
+        if (m.status === "pending") escapeEnabled = false;
         fallbackText = (m.fallback_text as string | null | undefined) ?? null;
         // Only an explicit `true` in the DB keeps paid-only on. Missing
         // column or `false`/null reads as escape-all (the new default).

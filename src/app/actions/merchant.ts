@@ -11,6 +11,7 @@ import {
 } from "@/lib/db";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { UUID_RE } from "@/lib/uuid";
+import { isAdminEmail } from "@/lib/admin";
 
 export async function updateMerchantSettings(formData: FormData) {
   // Resolve which merchant the *current view* is showing (honors the
@@ -45,6 +46,12 @@ export async function updateMerchantSettings(formData: FormData) {
   const role = await getCurrentRole(merchant);
   if (role !== "owner") {
     redirect("/dashboard/settings?saved=0&err=forbidden");
+  }
+
+  // Same status gate as the layout: pending workspaces are read-only for
+  // their owners until approved (admins retain edit parity for inspection).
+  if (merchant.status === "pending" && !isAdminEmail(user.email)) {
+    redirect("/dashboard");
   }
 
   const ab = formData.get("ab_enabled") === "on";

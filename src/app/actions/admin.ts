@@ -113,13 +113,14 @@ export async function approveMerchantAsAdmin(formData: FormData) {
     .maybeSingle();
   if (!merchant || merchant.status !== "pending") return;
 
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from("merchants")
     .update({ status: "live", escape_enabled: true })
     .eq("id", id)
-    .eq("status", "pending");
-  if (error) {
-    console.error("[approveMerchantAsAdmin] update failed", { id, error });
+    .eq("status", "pending")
+    .select("id");
+  if (error || !updated || updated.length === 0) {
+    if (error) console.error("[approveMerchantAsAdmin] update failed", { id, error });
     return;
   }
 
