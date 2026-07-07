@@ -278,3 +278,13 @@ revoke execute on function public.eh_is_member(uuid) from public, anon;
 revoke execute on function public.eh_member_role(uuid) from public, anon;
 grant execute on function public.eh_is_member(uuid) to authenticated, service_role;
 grant execute on function public.eh_member_role(uuid) to authenticated, service_role;
+
+-- ── Phase 2 fix: one pending invite per email (20260707100000) ──
+-- One live (pending) invitation per email per merchant. inviteMember
+-- refreshes the existing pending row instead of inserting, but that
+-- select-then-insert has a double-submit race; enforce the invariant at
+-- the DB layer so a losing racer fails the insert (surfaced as
+-- invite_failed) instead of silently creating a duplicate token.
+create unique index if not exists invitations_one_pending_per_email
+  on public.invitations (merchant_id, email)
+  where status = 'pending';

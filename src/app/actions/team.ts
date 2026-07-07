@@ -75,13 +75,14 @@ export async function inviteMember(formData: FormData) {
 
   // Existing pending invite for this address → refresh it instead of
   // inserting a duplicate row (keeps one live token per email).
-  const { data: existing } = await admin
+  const { data: existing, error: existingError } = await admin
     .from("invitations")
     .select("id, token")
     .eq("merchant_id", merchant.id)
     .eq("email", email)
     .eq("status", "pending")
     .maybeSingle();
+  if (existingError) teamRedirect("invite_failed");
 
   let token: string;
   if (existing) {
