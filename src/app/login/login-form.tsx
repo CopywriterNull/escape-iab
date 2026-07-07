@@ -7,8 +7,14 @@ import { getSupabaseBrowser } from "@/lib/supabase/client";
 // cookie is written by the browser client directly. Doing this on the server
 // (via a server action) doesn't reliably persist the Set-Cookie across the
 // redirect, which is why callbacks fail with "PKCE code verifier not found".
-export function LoginForm() {
-  const [email, setEmail] = useState("");
+export function LoginForm({
+  initialEmail = "",
+  next,
+}: {
+  initialEmail?: string;
+  next?: string;
+} = {}) {
+  const [email, setEmail] = useState(initialEmail);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -28,7 +34,11 @@ export function LoginForm() {
     setStatus("sending");
     const { error: err } = await supabase.auth.signInWithOtp({
       email: trimmed,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback${
+          next ? `?next=${encodeURIComponent(next)}` : ""
+        }`,
+      },
     });
     if (err) {
       setStatus("error");
