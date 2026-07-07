@@ -105,8 +105,11 @@ export default async function DashboardLayout({
             Ask your team owner for an invite, or contact us to get set up.
           </p>
           <div className="mt-5 flex items-center justify-center gap-3 text-sm">
-            <a href="mailto:lenny@getescapehatch.com" className="text-[var(--color-accent)] link-grow">
-              Contact us →
+            <Link href="/signup" className="text-[var(--color-accent)] link-grow">
+              Create a workspace →
+            </Link>
+            <a href="mailto:lenny@getescapehatch.com" className="text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">
+              Contact us
             </a>
             <form action={signOut}>
               <button type="submit" className="text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">
