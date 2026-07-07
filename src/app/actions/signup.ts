@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { ACTIVE_MERCHANT_COOKIE, getMemberships } from "@/lib/db";
+import { ACTIVE_MERCHANT_COOKIE } from "@/lib/db";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 
 const PLATFORMS = ["shopify", "woocommerce", "custom", "other"] as const;
@@ -16,11 +16,21 @@ export async function createPendingMerchant(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/signup");
 
+  const admin = getSupabaseAdmin();
+  if (!admin) redirect("/signup?err=no_backend");
+
   // One workspace per self-serve signup: users who already belong
-  // somewhere go to their dashboard instead of minting another
-  // pending merchant on a double-submit or revisit.
-  const memberships = await getMemberships();
-  if (memberships.length > 0) redirect("/dashboard");
+  // somewhere go to their dashboard instead of minting another pending
+  // merchant. Explicit error handling (not getMemberships, which swallows
+  // errors into []) so a failed lookup blocks signup instead of opening
+  // the gate; the partial unique index on merchants is the backstop for
+  // the concurrent double-submit race this check can't see.
+  const { count: membershipCount, error: membershipError } = await admin
+    .from("merchant_members")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if (membershipError) redirect("/signup?err=create_failed");
+  if ((membershipCount ?? 0) > 0) redirect("/dashboard");
 
   const name = String(formData.get("name") ?? "").trim().slice(0, 80);
   const domain = String(formData.get("domain") ?? "").trim().toLowerCase().slice(0, 120);
@@ -29,9 +39,6 @@ export async function createPendingMerchant(formData: FormData) {
     ? platformRaw
     : "other";
   if (!name || !domain) redirect("/signup?err=missing_fields");
-
-  const admin = getSupabaseAdmin();
-  if (!admin) redirect("/signup?err=no_backend");
 
   // status=pending routes the dashboard into the approval experience;
   // escape_enabled=false keeps the hosted snippet inert until approval.
