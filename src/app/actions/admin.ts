@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/admin";
 import { UUID_RE } from "@/lib/uuid";
+import { sendApprovalEmail } from "@/lib/email";
 
 const IMP_COOKIE = "eh_imp_merchant_id";
 
@@ -93,6 +94,65 @@ export async function assignMerchantToCurrentUser(formData: FormData) {
       { onConflict: "merchant_id,user_id", ignoreDuplicates: true },
     );
 
+  revalidateMerchantSurfaces(id);
+}
+
+/** Approve a pending (gated-signup) merchant: status → live, snippet
+ *  un-killed, best-effort "you're in" email to every owner. */
+export async function approveMerchantAsAdmin(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const admin = getSupabaseAdmin();
+  if (!admin) return;
+  const id = String(formData.get("id") ?? "").trim();
+  if (!UUID_RE.test(id)) return;
+
+  const { data: merchant } = await admin
+    .from("merchants")
+    .select("id, name, domain, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (!merchant || merchant.status !== "pending") return;
+
+  const { error } = await admin
+    .from("merchants")
+    .update({ status: "live", escape_enabled: true })
+    .eq("id", id)
+    .eq("status", "pending");
+  if (error) {
+    console.error("[approveMerchantAsAdmin] update failed", { id, error });
+    return;
+  }
+
+  // Email failures never undo the approval — the queue is the source of
+  // truth and the owner still sees the live dashboard on next load.
+  const { data: members } = await admin.rpc("eh_team_members", {
+    p_merchant_id: id,
+  });
+  const owners = ((members ?? []) as { email: string | null; role: string }[]).filter(
+    (m) => m.role === "owner" && m.email,
+  );
+  for (const owner of owners) {
+    await sendApprovalEmail({
+      to: owner.email as string,
+      merchantName: merchant.name ?? merchant.domain ?? "your workspace",
+    });
+  }
+
+  revalidateMerchantSurfaces(id);
+}
+
+/** Reject a pending merchant = delete it (spec §6 "mark rejected / delete";
+ *  there is no rejected status in the schema). Scoped to status='pending'
+ *  so this can never delete a live merchant — those use the existing
+ *  Delete affordance. FK cascades remove memberships + invitations. */
+export async function rejectMerchantAsAdmin(formData: FormData) {
+  if (!(await requireAdmin())) return;
+  const admin = getSupabaseAdmin();
+  if (!admin) return;
+  const id = String(formData.get("id") ?? "").trim();
+  if (!UUID_RE.test(id)) return;
+
+  await admin.from("merchants").delete().eq("id", id).eq("status", "pending");
   revalidateMerchantSurfaces(id);
 }
 

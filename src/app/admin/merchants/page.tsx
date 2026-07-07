@@ -9,6 +9,8 @@ import {
   setMerchantEnabledAsAdmin,
   setMerchantShopifyDomain,
   detectMerchantShopifyDomain,
+  approveMerchantAsAdmin,
+  rejectMerchantAsAdmin,
 } from "@/app/actions/admin";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +24,8 @@ type Row = {
   plan: string;
   escape_enabled: boolean | null;
   created_at: string;
+  status: string | null;
+  platform: string | null;
 };
 
 type ActivityRow = {
@@ -41,11 +45,12 @@ export default async function AdminMerchants() {
     supabase!.auth.getUser(),
     admin!
       .from("merchants")
-      .select("id, name, domain, shopify_domain, user_id, plan, escape_enabled, created_at")
+      .select("id, name, domain, shopify_domain, user_id, plan, escape_enabled, created_at, status, platform")
       .order("created_at", { ascending: false }),
   ]);
   const user = authRes.data.user;
   const rows: Row[] = (merchantsRes.data as Row[]) ?? [];
+  const pending = rows.filter((r) => r.status === "pending");
 
   const eventCounts = new Map<string, number>();
   const eventLastSeen = new Map<string, string>();
@@ -68,6 +73,55 @@ export default async function AdminMerchants() {
           </p>
         </div>
       </div>
+
+      {pending.length > 0 ? (
+        <section className="rounded-2xl border border-[var(--color-warn)]/40 bg-[var(--color-card)] p-5 space-y-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-warn)]">
+              Approval queue · {pending.length} pending
+            </div>
+          </div>
+          <div className="space-y-2">
+            {pending.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between gap-4 flex-wrap rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-bg-elev)]/40 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[13.5px] font-medium tracking-tight">{r.name ?? "(unnamed)"}</span>
+                    <span className="text-[12px] font-mono text-[var(--color-fg-dim)]">{r.domain ?? "—"}</span>
+                    {r.platform ? <span className="pill pill-muted">{r.platform.toUpperCase()}</span> : null}
+                  </div>
+                  <div className="mt-0.5 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
+                    signed up {new Date(r.created_at).toLocaleDateString()} · {r.id.slice(0, 8)}…
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <form action={impersonateMerchant}>
+                    <input type="hidden" name="id" value={r.id} />
+                    <button type="submit" className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-border-soft)] hover:bg-[var(--color-bg-elev)] press transition-colors">
+                      Inspect
+                    </button>
+                  </form>
+                  <form action={approveMerchantAsAdmin}>
+                    <input type="hidden" name="id" value={r.id} />
+                    <button type="submit" className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-success)]/40 text-[var(--color-success)] hover:bg-[var(--color-success-soft)] press transition-colors">
+                      Approve
+                    </button>
+                  </form>
+                  <form action={rejectMerchantAsAdmin}>
+                    <input type="hidden" name="id" value={r.id} />
+                    <button type="submit" className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-danger)]/30 text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] press transition-colors">
+                      Reject
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <form
         action={createMerchantAsAdmin}
@@ -252,6 +306,7 @@ function MerchantRow({
             <span className={enabled ? "pill pill-success" : "pill pill-danger"}>
               {enabled ? "ESCAPE ON" : "DISABLED"}
             </span>
+            {row.status === "pending" ? <span className="pill pill-warn">PENDING</span> : null}
           </div>
           <div className="mt-1 text-[11px] font-mono text-[var(--color-fg-muted)] tnum">
             {row.id} · last event {lastSeenLabel} · created {new Date(row.created_at).toLocaleDateString()}
