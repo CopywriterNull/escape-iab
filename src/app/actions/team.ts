@@ -13,6 +13,7 @@ import type { MemberRole } from "@/lib/roles";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { UUID_RE } from "@/lib/uuid";
 import { sendInviteEmail } from "@/lib/email";
+import { siteOrigin } from "@/lib/site";
 
 const TEAM_PATH = "/dashboard/team";
 const ROLES: readonly MemberRole[] = ["owner", "member", "viewer"] as const;
@@ -21,10 +22,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function teamRedirect(msg: string, extra: Record<string, string> = {}): never {
   const params = new URLSearchParams({ msg, ...extra });
   redirect(`${TEAM_PATH}?${params.toString()}`);
-}
-
-function siteOrigin(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "https://getescapehatch.com";
 }
 
 type SupabaseAdminClient = NonNullable<ReturnType<typeof getSupabaseAdmin>>;

@@ -9,6 +9,7 @@ import {
   updateMemberRole,
 } from "@/app/actions/team";
 import { CopyLinkButton } from "./_components/copy-link-button";
+import { siteOrigin } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -54,9 +55,10 @@ const MESSAGES: Record<string, { text: string; error: boolean }> = {
   no_backend: { text: "Backend not configured.", error: true },
 };
 
-function siteOrigin(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "https://getescapehatch.com";
-}
+// Reflected into the banner from the query string — only render values
+// that actually look like an email so a crafted link can't put arbitrary
+// attacker-chosen text inside a trusted banner.
+const BANNER_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default async function TeamPage({
   searchParams,
@@ -118,7 +120,9 @@ export default async function TeamPage({
           }`}
         >
           {banner.text}
-          {sp.email ? <span className="font-mono text-[12px]"> ({sp.email})</span> : null}
+          {sp.email && BANNER_EMAIL_RE.test(sp.email) ? (
+            <span className="font-mono text-[12px]"> ({sp.email})</span>
+          ) : null}
         </div>
       ) : null}
 

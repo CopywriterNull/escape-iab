@@ -152,7 +152,12 @@ export function getEnabledDashboardIabKinds(merchant: Pick<
   return kinds.length > 0 ? kinds : ["instagram"];
 }
 
-export async function getCurrentMerchant(): Promise<Merchant | null> {
+/** Request-cached: layout + page + server actions all resolve the same
+ *  merchant in one request; cache() collapses the repeated auth.getUser
+ *  and merchants reads. Caching this also makes the returned object
+ *  reference-stable, which is what lets cache() dedupe getCurrentRole
+ *  (its cache key is the merchant argument's identity). */
+export const getCurrentMerchant = cache(async (): Promise<Merchant | null> => {
   const supabase = await getSupabaseServer();
   if (!supabase) return null;
   const {
@@ -210,7 +215,7 @@ export async function getCurrentMerchant(): Promise<Merchant | null> {
     .limit(1);
   if (!data || data.length === 0) return null;
   return data[0] as Merchant;
-}
+});
 
 /** Effective role of the current user on the given merchant.
  *  Admin-allowlist emails act as owner everywhere (impersonation parity).
@@ -218,7 +223,7 @@ export async function getCurrentMerchant(): Promise<Merchant | null> {
  *  accounts that lack a membership row keep full access.
  *  getMemberships() is request-cached, so calling this after
  *  getCurrentMerchant() costs no extra round trip. */
-export async function getCurrentRole(merchant: Merchant): Promise<MemberRole | null> {
+export const getCurrentRole = cache(async (merchant: Merchant): Promise<MemberRole | null> => {
   const supabase = await getSupabaseServer();
   if (!supabase) return null;
   const {
@@ -230,7 +235,7 @@ export async function getCurrentRole(merchant: Merchant): Promise<MemberRole | n
   const membership = memberships.find((m) => m.merchant_id === merchant.id);
   if (membership) return membership.role;
   return merchant.user_id === user.id ? "owner" : null;
-}
+});
 
 /** True if the current user is admin AND impersonating a non-self merchant. */
 export async function getImpersonationStatus(): Promise<{
