@@ -5,14 +5,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/admin";
+import { UUID_RE } from "@/lib/uuid";
 
 const IMP_COOKIE = "eh_imp_merchant_id";
-
-// UUID guard: every admin merchant write must filter by a real PK shape.
-// Prevents any chance of accidental "match many rows" if a form field
-// arrived empty or partially typed.
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function requireAdmin(): Promise<boolean> {
   const supabase = await getSupabaseServer();

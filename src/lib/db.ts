@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/admin";
+import type { MemberRole } from "@/lib/roles";
 
 const IMP_COOKIE = "eh_imp_merchant_id";
 
@@ -67,7 +68,7 @@ export type Merchant = {
 
 export const ACTIVE_MERCHANT_COOKIE = "eh_active_merchant_id";
 
-export type MemberRole = "owner" | "member" | "viewer";
+export type { MemberRole } from "@/lib/roles";
 
 export type Membership = {
   merchant_id: string;
@@ -209,6 +210,26 @@ export async function getCurrentMerchant(): Promise<Merchant | null> {
     .limit(1);
   if (!data || data.length === 0) return null;
   return data[0] as Merchant;
+}
+
+/** Effective role of the current user on the given merchant.
+ *  Admin-allowlist emails act as owner everywhere (impersonation parity).
+ *  Legacy merchants.user_id ownership maps to owner so pre-migration
+ *  accounts that lack a membership row keep full access.
+ *  getMemberships() is request-cached, so calling this after
+ *  getCurrentMerchant() costs no extra round trip. */
+export async function getCurrentRole(merchant: Merchant): Promise<MemberRole | null> {
+  const supabase = await getSupabaseServer();
+  if (!supabase) return null;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  if (isAdminEmail(user.email)) return "owner";
+  const memberships = await getMemberships();
+  const membership = memberships.find((m) => m.merchant_id === merchant.id);
+  if (membership) return membership.role;
+  return merchant.user_id === user.id ? "owner" : null;
 }
 
 /** True if the current user is admin AND impersonating a non-self merchant. */

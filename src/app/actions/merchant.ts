@@ -3,12 +3,14 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { ACTIVE_MERCHANT_COOKIE, getCurrentMerchant } from "@/lib/db";
+import {
+  ACTIVE_MERCHANT_COOKIE,
+  getCurrentMerchant,
+  getCurrentRole,
+  getMemberships,
+} from "@/lib/db";
 import { getSupabaseServer, getSupabaseAdmin } from "@/lib/supabase/server";
-import { isAdminEmail } from "@/lib/admin";
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { UUID_RE } from "@/lib/uuid";
 
 export async function updateMerchantSettings(formData: FormData) {
   // Resolve which merchant the *current view* is showing (honors the
@@ -37,9 +39,11 @@ export async function updateMerchantSettings(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const isAdmin = isAdminEmail(user.email);
-  const owns = merchant.user_id === user.id;
-  if (!owns && !isAdmin) {
+  // Role-based gate (Phase 2): settings writes are owner-only. Admin
+  // allowlist emails resolve to owner inside getCurrentRole, so the
+  // impersonation path keeps working unchanged.
+  const role = await getCurrentRole(merchant);
+  if (role !== "owner") {
     redirect("/dashboard/settings?saved=0&err=forbidden");
   }
 
@@ -62,10 +66,15 @@ export async function updateMerchantSettings(formData: FormData) {
     ? Math.min(99, Math.max(1, rawSplit))
     : 50;
 
-  // Service role only for the admin-impersonating-other-merchant path so
-  // RLS doesn't block writes on rows the admin doesn't own. Owners go
-  // through their auth context so RLS still governs regular users.
-  const client = isAdmin && !owns ? getSupabaseAdmin() : supabase;
+  // Owner-by-membership goes through the user's auth context so the
+  // "merchants owner update" RLS policy still governs the write. Admins
+  // impersonating (no membership row) and legacy user_id-only owners
+  // need service role — RLS would reject their session client.
+  const memberships = await getMemberships();
+  const isOwnerMember = memberships.some(
+    (m) => m.merchant_id === merchant.id && m.role === "owner",
+  );
+  const client = isOwnerMember ? supabase : getSupabaseAdmin();
   if (!client) {
     redirect("/dashboard/settings?saved=0&err=no_client");
   }
