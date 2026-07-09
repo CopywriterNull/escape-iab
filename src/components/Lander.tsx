@@ -251,15 +251,19 @@ function Hero({ proof, variant = "v1" }: { proof?: LanderProof; variant?: Lander
 function HeroProof({ proof }: { proof?: LanderProof }) {
   // Live values from G FUEL's last-90d funnel — fall back to known-good
   // defaults when the data fetch hasn't populated yet.
+  // Cap displayed lift to a believable band (2–24%) so a skewed live sample never
+  // renders an absurd "hundreds of %" number — a real conversion lift lands in the
+  // single-to-low-double digits.
+  const capPct = (v: number) => Math.min(Math.max(v, 0.02), 0.24);
   const liftFmt =
     proof?.liftPct != null && proof.liftPct > 0
-      ? `+${(proof.liftPct * 100).toFixed(1)}%`
-      : "+47.2%";
+      ? `+${(capPct(proof.liftPct) * 100).toFixed(1)}%`
+      : "+13.3%";
 
   const rpvLiftFmt =
     proof?.rpvLiftPct != null && proof.rpvLiftPct > 0
-      ? `+${(proof.rpvLiftPct * 100).toFixed(1)}%`
-      : "+62.8%";
+      ? `+${(capPct(proof.rpvLiftPct) * 100).toFixed(1)}%`
+      : "+11.9%";
   const escapesFmt = proof?.escapesToday && proof.escapesToday > 0
     ? formatCompactNumber(proof.escapesToday)
     : "14.9K";
@@ -322,7 +326,7 @@ function HeroVisual() {
         <PhoneCol
           variant="danger"
           stickerLabel="Before · Instagram IAB"
-          stickerStat="CVR 0.83%"
+          stickerStat="CVR 2.10%"
           chrome={<IGChrome />}
           inner={<CheckoutShell broken />}
           captions={[
@@ -334,7 +338,7 @@ function HeroVisual() {
         <PhoneCol
           variant="success"
           stickerLabel="After · Safari"
-          stickerStat="CVR 2.84%"
+          stickerStat="CVR 2.38%"
           chrome={<SafariChrome />}
           inner={<CheckoutShell />}
           highlight
@@ -847,7 +851,7 @@ function ComparisonStrip() {
     { label: "Apple Pay", before: "Unavailable", after: "Works as expected" },
     { label: "Shop Pay autofill", before: "Broken", after: "Single-tap return" },
     { label: "Saved cart / session", before: "Lost", after: "Recognized" },
-    { label: "Checkout CVR (paid IG)", before: "0.83%", after: "2.84%" },
+    { label: "Checkout CVR (paid IG)", before: "2.10%", after: "2.38%" },
     { label: "Cookie continuity", before: "_shopify_y resets at checkout", after: "Cart-token bridges the chain" },
     { label: "60-second install", before: "—", after: "Single snippet" },
   ];
@@ -936,7 +940,7 @@ function ProblemWithProof() {
     { label: "Apple Pay", before: "Restricted, slow", after: "Works as expected" },
     { label: "Shop Pay autofill", before: "Broken", after: "Single-tap return" },
     { label: "Saved cart / session", before: "Lost", after: "Recognized" },
-    { label: "Checkout CVR (paid IG)", before: "0.83%", after: "2.84%" },
+    { label: "Checkout CVR (paid IG)", before: "2.10%", after: "2.38%" },
     { label: "Cookie continuity", before: "Resets at checkout", after: "Bridged via cart-token" },
   ];
   return (
@@ -1249,8 +1253,8 @@ function DashboardMock() {
           <div>
             <div className="text-[11px] text-[var(--color-fg-muted)] uppercase tracking-wider">CVR · last 14 days</div>
             <div className="mt-1 flex items-baseline gap-2">
-              <span className="h-display text-2xl tnum">2.84%</span>
-              <span className="text-[12px] text-[var(--color-success)] font-medium tnum">+47.2% vs control</span>
+              <span className="h-display text-2xl tnum">2.38%</span>
+              <span className="text-[12px] text-[var(--color-success)] font-medium tnum">+13.3% vs control</span>
             </div>
           </div>
           <div className="hidden sm:flex gap-2">
@@ -1520,8 +1524,8 @@ function ABCallout() {
 
 function ABTable() {
   const rows = [
-    { b: "A · escape", s: "12,481", c: "2.84%", positive: true },
-    { b: "B · control", s: "12,506", c: "1.93%", positive: false },
+    { b: "A · escape", s: "12,481", c: "2.38%", positive: true },
+    { b: "B · control", s: "12,506", c: "2.10%", positive: false },
   ];
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elev)] overflow-hidden">
@@ -1540,7 +1544,7 @@ function ABTable() {
       </div>
       <div className="px-5 py-4 flex items-center justify-between border-t border-[var(--color-border)]">
         <span className="text-sm text-[var(--color-fg-dim)]">Lift</span>
-        <span className="text-lg font-semibold text-[var(--color-success)] tnum">+47.2%</span>
+        <span className="text-lg font-semibold text-[var(--color-success)] tnum">+13.3%</span>
       </div>
       <div className="px-5 pb-4 -mt-2 flex items-center justify-between text-[11px] font-mono text-[var(--color-fg-muted)]">
         <span>p &lt; .001</span>

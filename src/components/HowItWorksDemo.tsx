@@ -34,7 +34,7 @@ export function HowItWorksDemo() {
   }, [step]);
 
   return (
-    <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-10 md:gap-16 items-center">
+    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-10 md:gap-16 items-center">
       <div className="order-2 md:order-1 mx-auto md:mx-0">
         <PhoneDemo step={step} />
       </div>
@@ -114,7 +114,7 @@ function PhoneDemo({ step }: { step: Step }) {
     <div className="relative pb-12">
       {/* Phone shell */}
       <div
-        className="relative rounded-[42px] p-2 mx-auto w-full max-w-[290px]"
+        className="relative rounded-[42px] p-2 mx-auto w-[290px] max-w-full"
         style={{
           background: "linear-gradient(180deg, #1a1a1d 0%, #0d0d0f 100%)",
           boxShadow:
