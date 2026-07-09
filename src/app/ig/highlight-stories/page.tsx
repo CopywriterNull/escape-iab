@@ -70,20 +70,22 @@ export default function HighlightStories() {
 
       {/* A/B */}
       <Frame id="ab" label="A/B">
-        {big("Measured, not modeled.", 82)}
-        <div style={{ marginTop: 80, display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 120, height: 620 }}>
-          <div style={{ display: "grid", gap: 22, justifyItems: "center" }}>
-            <span className="tnum" style={{ fontSize: 40, color: C.muted }}>$1.00</span>
-            <div style={{ width: 150, height: 300, background: C.border, borderRadius: 16 }} />
-            <span style={{ fontSize: 38, color: C.muted }}>Control</span>
+        <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 40 }}>
+          {big("Measured, not modeled.", 78)}
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 120, height: 540 }}>
+            <div style={{ display: "grid", gap: 22, justifyItems: "center" }}>
+              <span className="tnum" style={{ fontSize: 40, color: C.muted }}>$1.00</span>
+              <div style={{ width: 150, height: 280, background: C.border, borderRadius: 16 }} />
+              <span style={{ fontSize: 38, color: C.muted }}>Control</span>
+            </div>
+            <div style={{ display: "grid", gap: 22, justifyItems: "center" }}>
+              <span className="tnum" style={{ fontSize: 44, fontWeight: 700, color: C.accent }}>$1.45</span>
+              <div style={{ width: 150, height: 500, background: C.accent, borderRadius: 16 }} />
+              <span style={{ fontSize: 38, color: C.accent }}>EscapeHatch</span>
+            </div>
           </div>
-          <div style={{ display: "grid", gap: 22, justifyItems: "center" }}>
-            <span className="tnum" style={{ fontSize: 44, fontWeight: 700, color: C.accent }}>$1.45</span>
-            <div style={{ width: 150, height: 560, background: C.accent, borderRadius: 16 }} />
-            <span style={{ fontSize: 38, color: C.accent }}>EscapeHatch</span>
-          </div>
+          <p style={{ fontSize: 40, color: C.dim, textAlign: "center", margin: 0 }}>Revenue per visitor, vs a live control.</p>
         </div>
-        <p style={{ fontSize: 40, color: C.dim, marginTop: 70, textAlign: "center" }}>Revenue per visitor, vs a live control.</p>
       </Frame>
 
       {/* BRANDS */}

@@ -77,6 +77,16 @@ export default function IGBrands() {
         </div>
         <p style={{ fontSize: 34, color: C.dim, margin: 0 }}>Measured against live A/B controls. getescapehatch.com</p>
       </Card>
+
+      {/* ending CTA */}
+      <Card i="cta" hero>
+        {kicker("Your turn")}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 36, padding: "40px 0" }}>
+          <div style={{ fontSize: 104, fontWeight: 600, letterSpacing: "-0.03em", lineHeight: 1.02, color: C.fg }}>Your brand could be next.</div>
+          <p style={{ fontSize: 40, color: C.dim, margin: 0, maxWidth: "20ch", lineHeight: 1.35 }}>See your own lift — measured against a live A/B holdout, live in ~15 minutes.</p>
+        </div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 16, fontSize: 48, fontWeight: 600, color: C.accent }}>getescapehatch.com <span aria-hidden>→</span></div>
+      </Card>
     </div>
   );
 }
