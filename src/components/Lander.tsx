@@ -1356,7 +1356,7 @@ function Features() {
           </p>
         </div>
 
-        <div className="mt-14 grid grid-cols-1 md:grid-cols-6 auto-rows-[minmax(0,_180px)] gap-4">
+        <div className="mt-14 grid grid-cols-1 md:grid-cols-6 md:auto-rows-[minmax(0,_180px)] gap-4">
           {/* Hero feature spans 4 cols + 2 rows */}
           <div className="md:col-span-4 md:row-span-2 card p-7 lift relative overflow-hidden">
             <div className="absolute inset-0 mesh-bg opacity-60 pointer-events-none" />
