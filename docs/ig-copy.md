@@ -48,6 +48,18 @@ Every result is measured against a live A/B control, with authoritative purchase
 **9 — CTA**
 Stop leaking the revenue you already paid for. See your own lift → getescapehatch.com
 
+## Brand-result cards — caption (post as one carousel)
+Real brands. Real lift. Measured against a live control.
+
+Every number here is revenue per visitor, measured against a holdout that never got EscapeHatch — so it's incremental, not modeled. Andar +38%. Cove +52%. G FUEL +47%. Across 30 brands in the portfolio, the average is +45% RPV.
+
+The mechanism is boring on purpose: we escape your paid-social clicks out of Instagram's in-app browser and into Safari, where people actually buy and their session sticks.
+
+Want your own number? Link in bio → getescapehatch.com
+
+**Single-card template** (if posting one at a time):
+> {Brand} ran EscapeHatch against a live holdout. Result: +{X}% revenue per visitor. Same traffic — just sent to the real browser instead of Instagram's in-app one. Your number's in bio ↗
+
 ## Notes
 - The `/ig` page is `data-theme="dark"` and token-driven — safe to screenshot at phone width.
 - The **+45% RPV** stat is your portfolio average across 30 brands. The follower count (`1,842`) is a placeholder — swap before launch.
