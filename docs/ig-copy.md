@@ -9,7 +9,7 @@ below to set up the real account and post the tiles.
 **Display name:** `EscapeHatch` (or `EscapeHatch · Conversion infra`)
 
 ## Bio (Instagram caps at 150 chars)
-> We escape the Instagram in-app browser so your ads stop leaking revenue. Real browser, real checkout, measured RPV lift. Setup in ~15 min ↓
+> We escape your paid clicks out of Instagram's in-app browser into Safari — where people actually buy and sessions stick. +45% RPV, 30 brands ↓
 
 **Website field:** `https://getescapehatch.com`  (swap for your real domain)
 
@@ -22,19 +22,19 @@ below to set up the real account and post the tiles.
 > 1→9 top-to-bottom, post them in **reverse** (tile 9 first, tile 1 last).
 
 **1 — Hook**
-Every paid click you send from link-in-bio opens inside an in-app browser. It quietly taxes your conversion — and none of it shows up in analytics. Here's the leak, and how we close it. ↓
+Every paid click you send from link-in-bio opens inside Instagram's in-app browser — the worst place to close a sale. Here's why escaping into the real browser wins. ↓
 
-**2 — Cookies**
-Inside the in-app browser, cookies get wiped. Returning shoppers look brand-new, every session starts cold, and retargeting can't find them.
+**2 — Conversion**
+People don't shop in the in-app browser. It feels cramped and off, so they bounce. Escape them into Safari or Chrome and they land somewhere they actually buy.
 
-**3 — Checkout**
-Apple Pay and Shop Pay often don't fire in an in-app browser. One-tap checkout drops to a manual form — and a chunk of ready buyers fall off.
+**3 — Persistence**
+This is the big one. Escape into the real browser and their cookies and session persist. They swipe away, come back days later, open a new tab — and your site is right there. In the in-app browser, that memory is gone the moment they leave.
 
-**4 — Invisible**
-The worst part: it's invisible. GA and Shopify can't tell an in-app session from a real one, so you're optimizing spend against blurry data.
+**4 — Experience**
+A real browser isn't a stripped-down shell. Autofill, saved logins, saved payment, password managers — the full, familiar path to purchase, not a frustrating one.
 
 **5 — The fix**
-The fix is one line. EscapeHatch hands users off to their real browser — Safari or Chrome — with cookies, one-tap checkout and pixels intact.
+The fix is one line. EscapeHatch hands users off to their real browser — Safari or Chrome — so the session sticks and the buying experience is the one they know.
 
 **6 — Setup**
 Live in about 15 minutes: paste the snippet, add a Customer Events pixel, add an order-paid webhook. Zero performance cost.

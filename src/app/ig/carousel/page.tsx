@@ -38,11 +38,11 @@ export default function IGCarousel() {
         <p style={{ fontSize: 38, color: C.dim, marginTop: 28, maxWidth: "24ch" }}>it opens in Instagram&apos;s in-app browser, a stripped-down shell.</p>
       </Slide>
 
-      {/* 3 the three leaks */}
+      {/* 3 the three benefits */}
       <Slide n={3}>
-        <div style={{ fontSize: 30, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: C.accent, marginBottom: 28 }}>Three silent leaks</div>
+        <div style={{ fontSize: 30, fontWeight: 600, letterSpacing: "0.14em", textTransform: "uppercase", color: C.accent, marginBottom: 28 }}>Three reasons to escape</div>
         <div style={{ display: "grid", gap: 30 }}>
-          {["Cookies get wiped — every shopper looks brand-new.", "One-tap checkout breaks — Apple Pay falls back to forms.", "It's invisible — GA & Shopify can't see it."].map((t, i) => (
+          {["Conversion — people bounce in-app; they buy in the real browser.", "Persistence — their session sticks, so they come back later.", "Experience — a full browser, not a stripped-down shell."].map((t, i) => (
             <div key={i} style={{ display: "flex", gap: 24, alignItems: "baseline" }}>
               <span className="tnum" style={{ fontSize: 44, fontWeight: 700, color: C.accent }}>{i + 1}</span>
               <span style={{ fontSize: 46, fontWeight: 500, lineHeight: 1.2, color: C.fg }}>{t}</span>

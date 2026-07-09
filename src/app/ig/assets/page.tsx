@@ -27,8 +27,14 @@ function Cover({ id, children }: { id: string; children: React.ReactNode }) {
 export default function IGAssets() {
   return (
     <div data-theme="dark" style={{ background: "#050506", display: "flex", flexWrap: "wrap", gap: 40, padding: 40, alignItems: "flex-start" }}>
-      {/* profile picture — full-bleed blue, circle-cropped by IG */}
-      <div data-asset="pfp" style={{ width: 640, height: 640, background: "#4f7cff", display: "grid", placeItems: "center" }}>
+      {/* profile picture variants — circle-cropped by IG */}
+      <div data-asset="pfp-blue" style={{ width: 640, height: 640, background: "#4f7cff", display: "grid", placeItems: "center" }}>
+        <Mark s={300} />
+      </div>
+      <div data-asset="pfp-dark" className="grain" style={{ width: 640, height: 640, background: "radial-gradient(circle at 50% 42%, rgba(91,140,255,0.20), #0d0e11 70%)", display: "grid", placeItems: "center" }}>
+        <Mark s={300} stroke={C.accent} />
+      </div>
+      <div data-asset="pfp-black" style={{ width: 640, height: 640, background: "#0a0a0b", display: "grid", placeItems: "center" }}>
         <Mark s={300} />
       </div>
 

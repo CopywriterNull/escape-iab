@@ -140,8 +140,8 @@ export default function IGKitPage() {
             </div>
             <p style={{ fontSize: 12.5, lineHeight: 1.45, color: C.fg, margin: "6px 0 0" }}>
               Recover the revenue your paid social ads leak.<br />
-              One snippet escapes the in-app browser → real browser, real cookies, one-tap checkout.<br />
-              <span style={{ color: C.dim }}>Measured RPV lift vs a live A/B control. Live in ~15 min.</span>
+              One snippet escapes shoppers out of the in-app browser and into Safari — where they actually buy and their session sticks.<br />
+              <span style={{ color: C.dim }}>+45% RPV across 30 brands. Live in ~15 min.</span>
             </p>
             <a style={{ display: "inline-block", fontSize: 12.5, fontWeight: 600, color: C.accent, marginTop: 6, textDecoration: "none" }}>↗ getescapehatch.com</a>
           </div>
@@ -164,24 +164,24 @@ export default function IGKitPage() {
 
         {/* the 3×3 feed */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
-          {/* row 1 — problem */}
+          {/* row 1 — hook + benefits */}
           <Tile>
-            {kicker("The hidden tax")}
-            <div className="h-editorial" style={{ fontSize: 22, color: C.fg, marginTop: "auto" }}>The in-app browser is quietly taxing every paid click.</div>
+            {kicker("The setup")}
+            <div className="h-editorial" style={{ fontSize: 22, color: C.fg, marginTop: "auto" }}>The in-app browser is the worst place to close a sale.</div>
           </Tile>
           <Tile>
-            <Icon d="M12 3a9 9 0 109 9 4 4 0 01-5-5 4 4 0 01-4-4Z|9 12h.01|13 15h.01|15 10h.01" />
-            <div style={{ marginTop: "auto", display: "grid", gap: 5 }}>{headline("Cookies get wiped.")}{sub("Returning shoppers look brand-new. Every session starts cold.")}</div>
+            <Icon d="M3 4h2l1.6 10.4a1 1 0 001 .85h9.2a1 1 0 001-.8L19 7H6|9 21h.01|17 21h.01" />
+            <div style={{ marginTop: "auto", display: "grid", gap: 5 }}>{headline("People don't shop in-app.")}{sub("They bounce out of Instagram's browser. The real browser is where they buy.")}</div>
           </Tile>
           <Tile>
-            <Icon d="M5 11V8a4 4 0 018 0|3 11h12v9H3z|9 15v2" />
-            <div style={{ marginTop: "auto", display: "grid", gap: 5 }}>{headline("One-tap checkout breaks.")}{sub("Apple Pay & Shop Pay fall back to manual forms. Conversion drops.")}</div>
+            <Icon d="M6 3h12v18l-6-4-6 4z" />
+            <div style={{ marginTop: "auto", display: "grid", gap: 5 }}>{headline("The session sticks.")}{sub("Escape to Safari and cookies persist — they come back later, your site's still there.")}</div>
           </Tile>
 
-          {/* row 2 — solution */}
+          {/* row 2 — experience + fix */}
           <Tile>
-            <Icon d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z|12 9v6|9 12h6" />
-            <div style={{ marginTop: "auto", display: "grid", gap: 5 }}>{headline("Invisible in your analytics.")}{sub("GA & Shopify can't see the in-app tax — so you optimize blind.")}</div>
+            <Icon d="M3 5h18v14H3z|3 9h18|6.5 7h.01|9 7h.01" />
+            <div style={{ marginTop: "auto", display: "grid", gap: 5 }}>{headline("A real browser, not a shell.")}{sub("Autofill, saved logins, one-tap payment — the full path to purchase.")}</div>
           </Tile>
           <Tile hero>
             {kicker("The fix")}

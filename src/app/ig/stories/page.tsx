@@ -49,7 +49,7 @@ export default function IGStories() {
         <div>
           <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: C.accent }}>Did you know?</span>
           {big("Your Instagram ads don't open in Safari.", 96)}
-          <p style={{ fontSize: 40, color: C.dim, marginTop: 32, maxWidth: "22ch" }}>They open in an in-app browser that wipes cookies and breaks one-tap checkout.</p>
+          <p style={{ fontSize: 40, color: C.dim, marginTop: 32, maxWidth: "22ch" }}>They open in an in-app browser — a worse place to shop, and the session vanishes the moment they leave.</p>
         </div>
         <div style={{ marginBottom: 60 }}>
           <div style={{ display: "flex", borderRadius: 24, overflow: "hidden", border: `1px solid ${C.border}`, fontSize: 44, fontWeight: 600 }}>

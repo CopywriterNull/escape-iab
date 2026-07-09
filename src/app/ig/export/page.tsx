@@ -85,24 +85,24 @@ export default function IGExport() {
   return (
     <div data-theme="dark" style={{ background: "#050506", display: "flex", flexDirection: "column", alignItems: "center", gap: 24, padding: 24 }}>
       {/* 1 — hook */}
-      <Post i={1} label="The hidden tax" icon="M14 4h6v6|20 4l-8 8|M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5"
-        body={serif("The in-app browser is quietly taxing every paid click.", 116)}
-        footer={detail("A thread on the leak — and how we close it.")} />
+      <Post i={1} label="The setup" icon="M14 4h6v6|20 4l-8 8|M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5"
+        body={serif("The in-app browser is the worst place to close a sale.", 120)}
+        footer={detail("Here's why escaping into the real browser wins.")} />
 
-      {/* 2 — cookies */}
-      <Post i={2} label="The problem" icon="M12 3a9 9 0 109 9 4 4 0 01-5-5 4 4 0 01-4-4Z|9 12h.01|13 15h.01|15 10h.01"
-        body={headline("Cookies get wiped.", 108)}
-        footer={detail("Returning shoppers look brand-new. Every session starts cold.")} />
+      {/* 2 — conversion */}
+      <Post i={2} label="Conversion" icon="M3 4h2l1.6 10.4a1 1 0 001 .85h9.2a1 1 0 001-.8L19 7H6|9 21h.01|17 21h.01"
+        body={headline("People don't shop in-app.", 100)}
+        footer={detail("They bounce out of Instagram's browser. The real browser is where they actually buy.")} />
 
-      {/* 3 — checkout */}
-      <Post i={3} label="The problem" icon="M5 11V8a4 4 0 018 0|3 11h12v9H3z|9 15v2"
-        body={headline("One-tap checkout breaks.", 100)}
-        footer={detail("Apple Pay & Shop Pay fall back to manual forms. Conversion drops.")} />
+      {/* 3 — persistent sessions (the big one) */}
+      <Post i={3} label="Persistence" icon="M6 3h12v18l-6-4-6 4z"
+        body={headline("The session sticks.", 108)}
+        footer={detail("Escape to Safari and their cookies persist — they come back days later and your site's still there.")} />
 
-      {/* 4 — invisible */}
-      <Post i={4} label="The problem" icon="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z|12 9v6|9 12h6"
-        body={headline("Invisible in your analytics.", 100)}
-        footer={detail("GA & Shopify can't see the in-app tax — so you optimize blind.")} />
+      {/* 4 — experience */}
+      <Post i={4} label="Experience" icon="M3 5h18v14H3z|3 9h18|6.5 7h.01|9 7h.01"
+        body={headline("A real browser, not a shell.", 100)}
+        footer={detail("Autofill, saved logins, one-tap payment — the full, familiar path to purchase.")} />
 
       {/* 5 — the fix (hero) */}
       <Post i={5} hero label="The fix" icon="M14 4h6v6|20 4l-8 8|M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5"
