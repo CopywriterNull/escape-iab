@@ -206,7 +206,7 @@ export default function IGKitPage() {
           <Tile>
             {kicker("Measured lift")}
             <div style={{ marginTop: "auto" }}>
-              <div className="tnum" style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.03em", color: C.accent, lineHeight: 1 }}>+14.2%</div>
+              <div className="tnum" style={{ fontSize: 34, fontWeight: 700, letterSpacing: "-0.035em", color: C.accent, lineHeight: 1 }}>+14.2<span style={{ fontSize: "0.6em" }}>%</span></div>
               <div style={{ fontSize: 12, fontWeight: 600, color: C.fg, marginTop: 2 }}>RPV</div>
               {sub("Revenue per visitor, vs a live holdout.")}
             </div>
