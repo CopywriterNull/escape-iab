@@ -47,7 +47,7 @@ function Avatar({ size = 84, ring = true }: { size?: number; ring?: boolean }) {
 }
 
 function Watermark() {
-  return <span style={{ position: "absolute", right: 10, bottom: 8, fontSize: 9, letterSpacing: "0.04em", color: C.muted, opacity: 0.8 }}>@escapehatch</span>;
+  return <span style={{ position: "absolute", right: 10, bottom: 8, fontSize: 9, letterSpacing: "0.04em", color: C.muted, opacity: 0.8 }}>@getescapehatch</span>;
 }
 
 function Tile({ children, hero = false }: { children: React.ReactNode; hero?: boolean }) {
@@ -115,7 +115,7 @@ export default function IGKitPage() {
       <div style={{ width: "100%", maxWidth: 440, background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`, overflow: "hidden", fontFamily: "var(--font-sans)", color: C.fg }}>
         {/* top chrome */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 6px" }}>
-          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>escapehatch</span>
+          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>getescapehatch</span>
           <span style={{ display: "flex", gap: 16, color: C.fg }}>
             <Icon d="M12 5v14|5 12h14" s={20} />
             <Icon d="M4 6h16|4 12h16|4 18h16" s={20} />
@@ -143,7 +143,7 @@ export default function IGKitPage() {
               One snippet escapes the in-app browser → real browser, real cookies, one-tap checkout.<br />
               <span style={{ color: C.dim }}>Measured RPV lift vs a live A/B control. Live in ~15 min.</span>
             </p>
-            <a style={{ display: "inline-block", fontSize: 12.5, fontWeight: 600, color: C.accent, marginTop: 6, textDecoration: "none" }}>↗ escapehatch.app</a>
+            <a style={{ display: "inline-block", fontSize: 12.5, fontWeight: 600, color: C.accent, marginTop: 6, textDecoration: "none" }}>↗ getescapehatch.com</a>
           </div>
 
           {/* highlights */}
@@ -187,7 +187,7 @@ export default function IGKitPage() {
             {kicker("The fix")}
             <div style={{ marginTop: "auto" }}>
               <div className="h-editorial" style={{ fontSize: 24, color: C.fg }}>One snippet. Real browser.</div>
-              <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 9.5, color: C.accent, background: C.accentSoft, border: `1px solid ${C.border}`, borderRadius: 7, padding: "6px 8px" }}>&lt;script src=&quot;escapehatch.app/e.js&quot;&gt;</div>
+              <div style={{ marginTop: 8, fontFamily: "var(--font-mono)", fontSize: 9.5, color: C.accent, background: C.accentSoft, border: `1px solid ${C.border}`, borderRadius: 7, padding: "6px 8px" }}>&lt;script src=&quot;getescapehatch.com/e.js&quot;&gt;</div>
             </div>
           </Tile>
           <Tile>
@@ -206,9 +206,9 @@ export default function IGKitPage() {
           <Tile>
             {kicker("Measured lift")}
             <div style={{ marginTop: "auto" }}>
-              <div className="tnum" style={{ fontSize: 34, fontWeight: 700, letterSpacing: "-0.035em", color: C.accent, lineHeight: 1 }}>+14.2<span style={{ fontSize: "0.6em" }}>%</span></div>
+              <div className="tnum" style={{ fontSize: 34, fontWeight: 700, letterSpacing: "-0.035em", color: C.accent, lineHeight: 1 }}>+45<span style={{ fontSize: "0.6em" }}>%</span></div>
               <div style={{ fontSize: 12, fontWeight: 600, color: C.fg, marginTop: 2 }}>RPV</div>
-              {sub("Revenue per visitor, vs a live holdout.")}
+              {sub("Avg RPV lift across 30 brands, vs a live holdout.")}
             </div>
           </Tile>
           <Tile>
@@ -230,7 +230,7 @@ export default function IGKitPage() {
           <Tile hero>
             <div style={{ marginTop: "auto" }}>
               <div style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.15, letterSpacing: "-0.02em", color: C.fg }}>Recover the revenue your ads leak.</div>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 12, fontWeight: 600, color: C.accent }}>escapehatch.app <span aria-hidden>→</span></div>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 12, fontWeight: 600, color: C.accent }}>getescapehatch.com <span aria-hidden>→</span></div>
             </div>
           </Tile>
         </div>

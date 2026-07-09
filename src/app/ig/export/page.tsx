@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 
-// Native 1080×1080 render of each feed tile — typography and spacing tuned for the real
-// export size (not DPI-upscaled from the tiny profile grid). Screenshot each [data-post]
-// element to get clean Instagram posts. View at /ig/export.
+// Native 1080×1080 render of each feed tile. Full-bleed editorial composition:
+// label + index at top, a big statement filling the middle, a supporting detail at the
+// bottom — so tiles read full, not empty. Screenshot each [data-post]. View at /ig/export.
 
 export const metadata: Metadata = { title: "EscapeHatch — IG export", robots: { index: false } };
 
 const C = {
-  bg: "var(--color-bg)",
   card: "var(--color-card)",
   border: "var(--color-border)",
   fg: "var(--color-fg)",
@@ -17,26 +16,30 @@ const C = {
   accentSoft: "var(--color-accent-soft)",
 };
 
-const PAD = 88;
+const PAD = 84;
+const HANDLE = "@getescapehatch";
 
-const Icon = ({ d, s = 96 }: { d: string; s?: number }) => (
-  <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke={C.accent} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+const Icon = ({ d, s = 46 }: { d: string; s?: number }) => (
+  <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke={C.accent} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ flexShrink: 0 }}>
     {d.split("|").map((p, i) => <path key={i} d={/^[Mm]/.test(p.trim()) ? p : "M" + p} />)}
   </svg>
 );
 
-const kicker = (t: string) => (
-  <span style={{ fontSize: 26, fontWeight: 600, letterSpacing: "0.16em", textTransform: "uppercase", color: C.accent }}>{t}</span>
-);
-const head = (t: string, size: number) => (
-  <div style={{ fontSize: size, fontWeight: 600, lineHeight: 1.05, letterSpacing: "-0.025em", color: C.fg }}>{t}</div>
-);
-const serif = (t: string, size: number) => (
-  <div className="h-editorial" style={{ fontSize: size, color: C.fg }}>{t}</div>
-);
-const sub = (t: string) => <p style={{ fontSize: 33, lineHeight: 1.4, color: C.dim, margin: 0, maxWidth: "16ch" }}>{t}</p>;
-
-function Post({ i, hero = false, children }: { i: number; hero?: boolean; children: React.ReactNode }) {
+function Post({
+  i,
+  hero = false,
+  label,
+  icon,
+  body,
+  footer,
+}: {
+  i: number;
+  hero?: boolean;
+  label: string;
+  icon?: string;
+  body: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
   return (
     <div
       data-post={i}
@@ -50,104 +53,112 @@ function Post({ i, hero = false, children }: { i: number; hero?: boolean; childr
         padding: PAD,
         display: "flex",
         flexDirection: "column",
+        justifyContent: "space-between",
         fontFamily: "var(--font-sans)",
         color: C.fg,
       }}
     >
-      {children}
-      <span style={{ position: "absolute", right: 40, bottom: 34, fontSize: 26, letterSpacing: "0.02em", color: C.muted, opacity: 0.5 }}>@escapehatch</span>
+      {/* header: icon + label · index */}
+      <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+        {icon ? <Icon d={icon} /> : null}
+        <span style={{ fontSize: 26, fontWeight: 600, letterSpacing: "0.15em", textTransform: "uppercase", color: C.accent }}>{label}</span>
+        <span className="tnum" style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 24, color: C.muted }}>{String(i).padStart(2, "0")} / 09</span>
+      </div>
+
+      {/* statement — fills the middle */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "40px 0" }}>{body}</div>
+
+      {/* footer: supporting detail + handle */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24 }}>
+        <div style={{ flex: 1 }}>{footer}</div>
+        <span style={{ fontSize: 26, color: C.muted, opacity: 0.55, whiteSpace: "nowrap" }}>{HANDLE}</span>
+      </div>
     </div>
   );
 }
+
+const serif = (t: string, size: number) => <div className="h-editorial" style={{ fontSize: size, color: C.fg }}>{t}</div>;
+const headline = (t: string, size: number) => <div style={{ fontSize: size, fontWeight: 600, lineHeight: 1.04, letterSpacing: "-0.03em", color: C.fg }}>{t}</div>;
+const detail = (t: string) => <p style={{ fontSize: 36, lineHeight: 1.4, color: C.dim, margin: 0, maxWidth: "22ch" }}>{t}</p>;
 
 export default function IGExport() {
   return (
     <div data-theme="dark" style={{ background: "#050506", display: "flex", flexDirection: "column", alignItems: "center", gap: 24, padding: 24 }}>
       {/* 1 — hook */}
-      <Post i={1}>
-        {kicker("The hidden tax")}
-        <div style={{ marginTop: "auto" }}>{serif("The in-app browser is quietly taxing every paid click.", 108)}</div>
-      </Post>
+      <Post i={1} label="The hidden tax" icon="M14 4h6v6|20 4l-8 8|M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5"
+        body={serif("The in-app browser is quietly taxing every paid click.", 116)}
+        footer={detail("A thread on the leak — and how we close it.")} />
 
       {/* 2 — cookies */}
-      <Post i={2}>
-        <Icon d="M12 3a9 9 0 109 9 4 4 0 01-5-5 4 4 0 01-4-4Z|9 12h.01|13 15h.01|15 10h.01" />
-        <div style={{ marginTop: "auto", display: "grid", gap: 18 }}>{head("Cookies get wiped.", 68)}{sub("Returning shoppers look brand-new. Every session starts cold.")}</div>
-      </Post>
+      <Post i={2} label="The problem" icon="M12 3a9 9 0 109 9 4 4 0 01-5-5 4 4 0 01-4-4Z|9 12h.01|13 15h.01|15 10h.01"
+        body={headline("Cookies get wiped.", 108)}
+        footer={detail("Returning shoppers look brand-new. Every session starts cold.")} />
 
       {/* 3 — checkout */}
-      <Post i={3}>
-        <Icon d="M5 11V8a4 4 0 018 0|3 11h12v9H3z|9 15v2" />
-        <div style={{ marginTop: "auto", display: "grid", gap: 18 }}>{head("One-tap checkout breaks.", 68)}{sub("Apple Pay & Shop Pay fall back to manual forms. Conversion drops.")}</div>
-      </Post>
+      <Post i={3} label="The problem" icon="M5 11V8a4 4 0 018 0|3 11h12v9H3z|9 15v2"
+        body={headline("One-tap checkout breaks.", 100)}
+        footer={detail("Apple Pay & Shop Pay fall back to manual forms. Conversion drops.")} />
 
       {/* 4 — invisible */}
-      <Post i={4}>
-        <Icon d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z|12 9v6|9 12h6" />
-        <div style={{ marginTop: "auto", display: "grid", gap: 18 }}>{head("Invisible in your analytics.", 68)}{sub("GA & Shopify can't see the in-app tax — so you optimize blind.")}</div>
-      </Post>
+      <Post i={4} label="The problem" icon="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z|12 9v6|9 12h6"
+        body={headline("Invisible in your analytics.", 100)}
+        footer={detail("GA & Shopify can't see the in-app tax — so you optimize blind.")} />
 
       {/* 5 — the fix (hero) */}
-      <Post i={5} hero>
-        {kicker("The fix")}
-        <div style={{ marginTop: "auto", display: "grid", gap: 40 }}>
-          {serif("One snippet. Real browser.", 104)}
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 29, lineHeight: 1.55, color: C.accent, background: C.accentSoft, border: `1px solid ${C.border}`, borderRadius: 18, padding: "26px 30px", whiteSpace: "pre-wrap" }}>
-            {'<script\n  src="escapehatch.app/e.js">'}
+      <Post i={5} hero label="The fix" icon="M14 4h6v6|20 4l-8 8|M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5"
+        body={serif("One snippet. Real browser.", 124)}
+        footer={
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 30, lineHeight: 1.55, color: C.accent, background: C.accentSoft, border: `1px solid ${C.border}`, borderRadius: 18, padding: "24px 30px", whiteSpace: "pre-wrap", display: "inline-block" }}>
+            {'<script\n  src="getescapehatch.com/e.js">'}
           </div>
-        </div>
-      </Post>
+        } />
 
       {/* 6 — setup */}
-      <Post i={6}>
-        {kicker("Live in ~15 min")}
-        <div style={{ marginTop: "auto", display: "grid", gap: 26 }}>
-          {[["1", "Paste the snippet"], ["2", "Add the pixel"], ["3", "Add the webhook"]].map(([n, t]) => (
-            <div key={n} style={{ display: "flex", alignItems: "center", gap: 24 }}>
-              <span className="tnum" style={{ width: 62, height: 62, borderRadius: "50%", background: C.accentSoft, color: C.accent, fontSize: 30, fontWeight: 700, display: "grid", placeItems: "center" }}>{n}</span>
-              <span style={{ fontSize: 44, color: C.fg }}>{t}</span>
-            </div>
-          ))}
-        </div>
-      </Post>
+      <Post i={6} label="Live in ~15 min" icon="M12 7v5l3 2|M12 3a9 9 0 100 18 9 9 0 000-18Z"
+        body={
+          <div style={{ display: "grid", gap: 34 }}>
+            {[["1", "Paste the snippet"], ["2", "Add the pixel"], ["3", "Add the webhook"]].map(([n, t]) => (
+              <div key={n} style={{ display: "flex", alignItems: "center", gap: 28 }}>
+                <span className="tnum" style={{ width: 72, height: 72, borderRadius: "50%", background: C.accentSoft, color: C.accent, fontSize: 34, fontWeight: 700, display: "grid", placeItems: "center" }}>{n}</span>
+                <span style={{ fontSize: 56, fontWeight: 500, color: C.fg }}>{t}</span>
+              </div>
+            ))}
+          </div>
+        }
+        footer={detail("Zero performance cost. Live the same afternoon.")} />
 
       {/* 7 — stat */}
-      <Post i={7}>
-        {kicker("Measured lift")}
-        <div style={{ marginTop: "auto" }}>
-          <div className="tnum" style={{ fontSize: 190, fontWeight: 700, letterSpacing: "-0.04em", color: C.accent, lineHeight: 0.9 }}>+14.2<span style={{ fontSize: "0.55em" }}>%</span></div>
-          <div style={{ fontSize: 52, fontWeight: 600, color: C.fg, marginTop: 12 }}>RPV</div>
-          {sub("Revenue per visitor, vs a live holdout.")}
-        </div>
-      </Post>
+      <Post i={7} label="Measured lift"
+        body={
+          <div>
+            <div className="tnum" style={{ fontSize: 300, fontWeight: 700, letterSpacing: "-0.05em", color: C.accent, lineHeight: 0.82 }}>+45<span style={{ fontSize: "0.42em" }}>%</span></div>
+            <div style={{ fontSize: 64, fontWeight: 600, color: C.fg, marginTop: 20 }}>RPV lift</div>
+          </div>
+        }
+        footer={detail("Average across 30 brands in the portfolio, vs a live holdout.")} />
 
       {/* 8 — A/B proof */}
-      <Post i={8}>
-        {kicker("Defensible")}
-        <div style={{ marginTop: "auto", width: "100%" }}>
-          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 90, height: 340 }}>
-            <div style={{ display: "grid", gap: 16, justifyItems: "center" }}>
-              <span className="tnum" style={{ fontSize: 28, color: C.muted }}>$1.00</span>
-              <div style={{ width: 104, height: 172, background: C.border, borderRadius: 10 }} />
-              <span style={{ fontSize: 30, color: C.muted }}>Control</span>
+      <Post i={8} label="Defensible"
+        body={
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 110, height: 470 }}>
+            <div style={{ display: "grid", gap: 18, justifyItems: "center" }}>
+              <span className="tnum" style={{ fontSize: 34, color: C.muted }}>$1.00</span>
+              <div style={{ width: 128, height: 200, background: C.border, borderRadius: 12 }} />
+              <span style={{ fontSize: 34, color: C.muted }}>Control</span>
             </div>
-            <div style={{ display: "grid", gap: 16, justifyItems: "center" }}>
-              <span className="tnum" style={{ fontSize: 28, fontWeight: 600, color: C.accent }}>$1.14</span>
-              <div style={{ width: 104, height: 300, background: C.accent, borderRadius: 10 }} />
-              <span style={{ fontSize: 30, color: C.accent }}>EscapeHatch</span>
+            <div style={{ display: "grid", gap: 18, justifyItems: "center" }}>
+              <span className="tnum" style={{ fontSize: 36, fontWeight: 700, color: C.accent }}>$1.45</span>
+              <div style={{ width: 128, height: 400, background: C.accent, borderRadius: 12 }} />
+              <span style={{ fontSize: 34, color: C.accent }}>EscapeHatch</span>
             </div>
           </div>
-          <div style={{ fontSize: 34, color: C.dim, marginTop: 40, maxWidth: "20ch" }}>A live A/B dashboard your CFO can trust.</div>
-        </div>
-      </Post>
+        }
+        footer={detail("Revenue per visitor, measured against a live A/B control.")} />
 
       {/* 9 — CTA (hero) */}
-      <Post i={9} hero>
-        <div style={{ marginTop: "auto" }}>
-          {head("Recover the revenue your ads leak.", 76)}
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 14, marginTop: 40, fontSize: 40, fontWeight: 600, color: C.accent }}>escapehatch.app <span aria-hidden>→</span></div>
-        </div>
-      </Post>
+      <Post i={9} hero label="Get started" icon="M14 4h6v6|20 4l-8 8|M18 13v5a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h5"
+        body={headline("Recover the revenue your ads leak.", 96)}
+        footer={<div style={{ display: "inline-flex", alignItems: "center", gap: 16, fontSize: 46, fontWeight: 600, color: C.accent }}>getescapehatch.com <span aria-hidden>→</span></div>} />
     </div>
   );
 }
