@@ -1450,7 +1450,7 @@ function SnippetPreview() {
       <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent" />
       <div className="mx-auto max-w-6xl px-5 py-28">
         <div className="grid md:grid-cols-2 gap-10 items-center">
-          <div>
+          <div className="min-w-0">
             <SectionLabel>Install</SectionLabel>
             <h2 className="mt-3 text-balance">
               <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">One</span>
@@ -1472,7 +1472,7 @@ function SnippetPreview() {
               <li className="flex items-start gap-2"><Check /> Edge-cached, served from 200+ POPs</li>
             </ul>
           </div>
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[#0a0a14] p-1 elevated">
+          <div className="min-w-0 rounded-2xl border border-[var(--color-border)] bg-[#0a0a14] p-1 elevated">
             <div className="flex items-center gap-1.5 px-3 py-2.5">
               <span className="size-2.5 rounded-full bg-[#ff5f57]" />
               <span className="size-2.5 rounded-full bg-[#febc2e]" />
