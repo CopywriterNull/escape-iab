@@ -60,6 +60,21 @@ Want your own number? Link in bio → getescapehatch.com
 **Single-card template** (if posting one at a time):
 > {Brand} ran EscapeHatch against a live holdout. Result: +{X}% revenue per visitor. Same traffic — just sent to the real browser instead of Instagram's in-app one. Your number's in bio ↗
 
+## Educational carousel — caption ("the in-app browser tax")
+The in-app browser is quietly costing you sales. Here's the fix → (swipe)
+
+Every click from your Instagram ads opens in an in-app browser — not Safari or Chrome. And it's a worse place to sell:
+
+→ People don't shop there, so they bounce
+→ Their session doesn't stick, so they can't find their way back
+→ It's a stripped-down shell — no autofill, no saved payment
+
+Escape them into the real browser and all three flip. That's the whole product: one line of code, +45% RPV across 30 brands, measured against live holdouts.
+
+Save this for your next paid-social planning session. Run your own test → link in bio.
+
+**Short alt:** Your Instagram ads don't open in Safari — they open in an in-app browser where people don't buy and sessions vanish. Swipe for why, and the one-line fix. +45% RPV across 30 brands → link in bio.
+
 ## Notes
 - The `/ig` page is `data-theme="dark"` and token-driven — safe to screenshot at phone width.
 - The **+45% RPV** stat is your portfolio average across 30 brands. The follower count (`1,842`) is a placeholder — swap before launch.
