@@ -6,6 +6,7 @@ type EarlyAccessPayload = {
   website?: string;
   monthlyVisitors?: string;
   platform?: string;
+  referralSource?: string;
   notes?: string;
   page?: string;
 };
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
   const website = clean(body.website, 240);
   const monthlyVisitors = clean(body.monthlyVisitors, 60);
   const platform = clean(body.platform, 80);
+  const referralSource = clean(body.referralSource, 80);
   const notes = clean(body.notes, MAX_FIELD_LENGTH);
   const page = clean(body.page, 240);
 
@@ -52,6 +54,7 @@ export async function POST(req: Request) {
         website,
         monthlyVisitors,
         platform,
+        referralSource,
         notes,
         page,
       }),

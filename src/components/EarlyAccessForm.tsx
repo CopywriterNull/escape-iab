@@ -12,6 +12,19 @@ const visitorRanges = [
 
 const platforms = ["Shopify", "Shopify Plus", "Headless Shopify", "Custom / other"];
 
+const referralSources = [
+  "Referral / word of mouth",
+  "Twitter / X",
+  "Instagram",
+  "TikTok",
+  "LinkedIn",
+  "Google search",
+  "Newsletter / blog",
+  "Podcast",
+  "Event / conference",
+  "Other",
+];
+
 export function EarlyAccessForm({ initialEmail = "" }: { initialEmail?: string } = {}) {
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -29,6 +42,7 @@ export function EarlyAccessForm({ initialEmail = "" }: { initialEmail?: string }
       website: String(formData.get("website") ?? "").trim(),
       monthlyVisitors: String(formData.get("monthlyVisitors") ?? "").trim(),
       platform: String(formData.get("platform") ?? "").trim(),
+      referralSource: String(formData.get("referralSource") ?? "").trim(),
       notes: String(formData.get("notes") ?? "").trim(),
       page: window.location.href,
     };
@@ -108,6 +122,18 @@ export function EarlyAccessForm({ initialEmail = "" }: { initialEmail?: string }
             {platforms.map((platform) => (
               <option key={platform} value={platform}>
                 {platform}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="How did you find out about us?" className="sm:col-span-2">
+          <select name="referralSource" required className={inputClass} defaultValue="">
+            <option value="" disabled>
+              Select one
+            </option>
+            {referralSources.map((source) => (
+              <option key={source} value={source}>
+                {source}
               </option>
             ))}
           </select>
