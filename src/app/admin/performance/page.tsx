@@ -6,7 +6,7 @@ import { RollupFreshnessBanner } from "@/app/dashboard/_components/rollup-freshn
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ range?: string }>;
+type SearchParams = Promise<{ range?: string; outliers?: string }>;
 type Range = { key: string; label: string; days: number };
 
 const RANGES: Range[] = [
@@ -31,6 +31,16 @@ type RpcRow = {
   revenue_cents_b: number | string | null;
 };
 
+type OutlierRpcRow = {
+  merchant_id: string;
+  bucket: string;
+  outlier_orders: number | string | null;
+  outlier_revenue_cents: number | string | null;
+};
+
+// key = `${merchant_id}:${bucket}` → removed order count + cents for that bucket
+type OutlierMap = Map<string, { orders: number; cents: number }>;
+
 type BrandPerf = {
   id: string;
   name: string;
@@ -54,6 +64,11 @@ type BrandPerf = {
   projectedDelta: number | null;
   confidence: number | null;
   pValue: number | null;
+  // Extreme orders removed from this row's revenue (0 when raw/none). Purchase
+  // counts and CVR are intentionally left intact — we trim revenue magnitude,
+  // not whether the visitor converted.
+  outlierOrders: number;
+  outlierCents: number;
 };
 
 const compactNF = new Intl.NumberFormat("en-US", {
@@ -72,6 +87,8 @@ export default async function AdminPerformancePage({
 }) {
   const sp = await searchParams;
   const range = parseRange(sp.range);
+  // Extreme outlier orders are excluded by default; `?outliers=1` shows raw.
+  const showOutliers = sp.outliers === "1";
   const admin = getSupabaseAdmin();
   if (!admin) {
     return <EmptyState title="Service role unavailable" detail="Set SUPABASE_SERVICE_ROLE_KEY to load performance." />;
@@ -79,18 +96,31 @@ export default async function AdminPerformancePage({
 
   const since = new Date(new Date().getTime() - range.days * 86400_000).toISOString();
 
-  // Defense in depth: this RPC reads from hourly_funnel_rollups only. If the
+  // Defense in depth: the main RPC reads from hourly_funnel_rollups only. If the
   // refresh cron has stalled, every row below silently under-reports. Surface
   // it via the shared freshness banner so we don't repeat the 3-day blackout.
-  const [rollupFreshness, { data, error }] = await Promise.all([
+  // The outlier RPC reads order-level rows (the rollups only keep aggregated
+  // revenue) so we can subtract whale orders that distort per-visitor revenue.
+  const [rollupFreshness, { data, error }, outlierRes] = await Promise.all([
     getRollupFreshness(),
     admin.rpc("eh_admin_brand_performance", { p_since: since }),
+    admin.rpc("eh_admin_brand_performance_outliers", { p_since: since }),
   ]);
   if (error) {
     return <EmptyState title="Could not load performance" detail={error.message} />;
   }
 
-  const rows = ((data ?? []) as RpcRow[]).map(toPerf);
+  // If the outlier RPC ever fails, degrade gracefully to the raw numbers rather
+  // than blanking the page — the map just stays empty.
+  const outlierMap: OutlierMap = new Map();
+  for (const o of (outlierRes.data ?? []) as OutlierRpcRow[]) {
+    outlierMap.set(`${o.merchant_id}:${o.bucket}`, {
+      orders: toInt(o.outlier_orders),
+      cents: toInt(o.outlier_revenue_cents),
+    });
+  }
+
+  const rows = ((data ?? []) as RpcRow[]).map((r) => toPerf(r, outlierMap, !showOutliers));
   const activeRows = rows.filter((r) => r.visitorsA + r.visitorsB > 0);
   const portfolio = summarizePortfolio(activeRows);
   const notes = buildExecNotes(activeRows, portfolio, range);
@@ -103,9 +133,15 @@ export default async function AdminPerformancePage({
           <h1 className="mt-2 h-display text-[28px] tracking-tight">Brand performance</h1>
           <p className="mt-1 text-[13px] text-[var(--color-fg-dim)] max-w-3xl">
             Revenue-per-visitor lift across brands, using unique IG in-app browser visitors as the denominator.
+            {showOutliers
+              ? " Showing raw revenue — extreme outlier orders included."
+              : " Extreme outlier orders are excluded so one whale order can't flip a small sample."}
           </p>
         </div>
-        <RangeLinks active={range.key} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <OutlierToggle rangeKey={range.key} showOutliers={showOutliers} />
+          <RangeLinks active={range.key} showOutliers={showOutliers} />
+        </div>
       </div>
 
       <RollupFreshnessBanner freshness={rollupFreshness} />
@@ -190,6 +226,13 @@ export default async function AdminPerformancePage({
                     <div className="mt-0.5 font-mono text-[10px] text-[var(--color-fg-muted)] truncate max-w-[180px]">
                       {row.domain ?? row.id.slice(0, 8)}
                     </div>
+                    {row.outlierOrders > 0 ? (
+                      <div className="mt-1 text-[9.5px] font-mono text-[var(--color-fg-muted)]" title="Statistically extreme orders (beyond Q3+3·IQR and ≥8× median)">
+                        {showOutliers
+                          ? `incl. ${money(row.outlierCents / 100)} in ${row.outlierOrders} outlier${row.outlierOrders > 1 ? "s" : ""}`
+                          : `excl. ${money(row.outlierCents / 100)} · ${row.outlierOrders} outlier${row.outlierOrders > 1 ? "s" : ""} removed`}
+                      </div>
+                    ) : null}
                   </Td>
                   <Td>
                     <span className={row.abEnabled ? "pill pill-info" : "pill pill-muted"}>
@@ -226,17 +269,24 @@ export default async function AdminPerformancePage({
       <div className="rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-card)] px-4 py-3 text-[12px] text-[var(--color-fg-dim)] leading-relaxed">
         <strong className="text-[var(--color-fg)]">Read this carefully:</strong>{" "}
         The table is operationally useful, but small order counts can swing revenue-per-visitor hard. Use the exec notes for direction,
-        not as a final winner call, until the signal column says ready/directional with enough purchases.
+        not as a final winner call, until the signal column says ready/directional with enough purchases.{" "}
+        {showOutliers
+          ? "You are viewing raw revenue with extreme outlier orders included — switch to Trimmed for the default view."
+          : "Extreme outlier orders (beyond Q3+3·IQR and ≥8× the bucket median, min 8 orders) are excluded from revenue so a single whale order can't flip a small sample; conversion counts are unchanged. Switch to Raw to include them."}
       </div>
     </div>
   );
 }
 
-function toPerf(row: RpcRow): BrandPerf {
+function toPerf(row: RpcRow, outliers: OutlierMap, excludeOutliers: boolean): BrandPerf {
   const visitorsA = toInt(row.impressions_a);
   const visitorsB = toInt(row.impressions_b);
-  const revenueA = toInt(row.revenue_cents_a);
-  const revenueB = toInt(row.revenue_cents_b);
+  const outlierA = outliers.get(`${row.merchant_id}:a`) ?? { orders: 0, cents: 0 };
+  const outlierB = outliers.get(`${row.merchant_id}:b`) ?? { orders: 0, cents: 0 };
+  // Trim revenue only — leave purchase counts (and therefore CVR) untouched, so
+  // "escape got more orders" stays honest even when a whale order is removed.
+  const revenueA = toInt(row.revenue_cents_a) - (excludeOutliers ? outlierA.cents : 0);
+  const revenueB = toInt(row.revenue_cents_b) - (excludeOutliers ? outlierB.cents : 0);
   const purchasesA = toInt(row.purchases_a);
   const purchasesB = toInt(row.purchases_b);
   const rpvA = visitorsA > 0 ? revenueA / visitorsA / 100 : null;
@@ -273,6 +323,8 @@ function toPerf(row: RpcRow): BrandPerf {
     projectedDelta,
     confidence: z ? 1 - z.pValue : null,
     pValue: z?.pValue ?? null,
+    outlierOrders: outlierA.orders + outlierB.orders,
+    outlierCents: outlierA.cents + outlierB.cents,
   };
 }
 
@@ -349,19 +401,51 @@ function buildExecNotes(rows: BrandPerf[], portfolio: ReturnType<typeof summariz
   return notes;
 }
 
-function RangeLinks({ active }: { active: string }) {
+function buildHref(rangeKey: string, showOutliers: boolean): string {
+  const params = new URLSearchParams();
+  if (rangeKey !== "7d") params.set("range", rangeKey);
+  if (showOutliers) params.set("outliers", "1");
+  const qs = params.toString();
+  return qs ? `/admin/performance?${qs}` : "/admin/performance";
+}
+
+function RangeLinks({ active, showOutliers }: { active: string; showOutliers: boolean }) {
   return (
     <div className="inline-flex rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)] p-[2px]">
       {RANGES.map((r) => (
         <Link
           key={r.key}
-          href={r.key === "7d" ? "/admin/performance" : `/admin/performance?range=${r.key}`}
+          href={buildHref(r.key, showOutliers)}
           className={`px-2.5 py-1 text-[11.5px] rounded font-mono ${
             active === r.key ? "bg-[var(--color-bg)] text-[var(--color-fg)]" : "text-[var(--color-fg-muted)]"
           }`}
           scroll={false}
         >
           {r.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function OutlierToggle({ rangeKey, showOutliers }: { rangeKey: string; showOutliers: boolean }) {
+  const options: { key: string; label: string; show: boolean }[] = [
+    { key: "trim", label: "Trimmed", show: false },
+    { key: "raw", label: "Raw", show: true },
+  ];
+  return (
+    <div className="inline-flex rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)] p-[2px]">
+      {options.map((o) => (
+        <Link
+          key={o.key}
+          href={buildHref(rangeKey, o.show)}
+          title={o.show ? "Include extreme outlier orders" : "Exclude extreme outlier orders (default)"}
+          className={`px-2.5 py-1 text-[11.5px] rounded font-mono ${
+            o.show === showOutliers ? "bg-[var(--color-bg)] text-[var(--color-fg)]" : "text-[var(--color-fg-muted)]"
+          }`}
+          scroll={false}
+        >
+          {o.label}
         </Link>
       ))}
     </div>
