@@ -181,9 +181,11 @@ export function PricingModel() {
                   label="Orders / month (escape-eligible)"
                   value={i.ordersPerMonth}
                   min={0}
-                  max={50000}
-                  step={50}
+                  max={100000}
+                  step={100}
+                  stepFor={(v) => (v >= 2000 ? 1000 : 100)}
                   onChange={(v) => set("ordersPerMonth", v)}
+                  hint="Steps by 100 up to 2,000, then by 1,000."
                 />
                 <NumberField
                   label="Average order value"
@@ -315,6 +317,8 @@ export function PricingModel() {
           </section>
         </div>
 
+        <DealSummaryCards i={i} out={out} />
+
         <p className="mt-6 text-[11px] leading-relaxed text-[var(--color-fg-muted)]">
           Model only — not a quote. Incremental revenue assumes the lift holds at the entered escape-eligible
           volume. &ldquo;vs control&rdquo; basis matches how the performance dashboard measures RPV lift.
@@ -400,6 +404,91 @@ function SensitivityChart({ inputs, sweep }: { inputs: Inputs; sweep: SweepVar }
   );
 }
 
+/* --------------------- screenshot summary ------------------------ */
+
+function DealSummaryCards({ i, out }: { i: Inputs; out: Outputs }) {
+  const terms = `${usd(i.baseFee)}/mo${i.revSharePct > 0 ? ` + ${i.revSharePct}% of incremental` : ""}`;
+  const basisLabel = i.basis === "control" ? "vs control" : "% of rev";
+  const assumptions = `${Math.round(i.ordersPerMonth).toLocaleString("en-US")} orders/mo · ${usd(i.aov)} AOV · ${i.liftPct}% lift (${basisLabel})`;
+  return (
+    <section className="mt-9">
+      <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[10.5px] uppercase tracking-[0.18em] font-mono text-[var(--color-fg-muted)]">
+          Deal summary
+        </span>
+        <span className="text-[10.5px] font-mono text-[var(--color-fg-muted)]">— screenshot-ready</span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <SummaryCard
+          accent="var(--color-accent)"
+          title="EscapeHatch earns"
+          monthly={out.ehTake}
+          annual={out.ehTake * 12}
+          terms={terms}
+          assumptions={assumptions}
+          footer={`${pct(out.takeRate)} of incremental revenue`}
+        />
+        <SummaryCard
+          accent="var(--color-success)"
+          title="Merchant keeps"
+          monthly={out.merchantNet}
+          annual={out.merchantNet * 12}
+          terms={terms}
+          assumptions={assumptions}
+          footer={`${out.roi.toFixed(1)}× ROI · ${usdCompact(out.incremental)}/mo incremental`}
+        />
+      </div>
+    </section>
+  );
+}
+
+function SummaryCard({
+  accent,
+  title,
+  monthly,
+  annual,
+  terms,
+  assumptions,
+  footer,
+}: {
+  accent: string;
+  title: string;
+  monthly: number;
+  annual: number;
+  terms: string;
+  assumptions: string;
+  footer: string;
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)] p-5">
+      <div className="absolute inset-x-0 top-0 h-1" style={{ background: accent }} />
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] uppercase tracking-[0.16em] font-mono text-[var(--color-fg-muted)]">
+          EscapeHatch
+        </span>
+        <span className="truncate text-[10.5px] font-mono text-[var(--color-fg-muted)]">{terms}</span>
+      </div>
+      <div className="mt-3 text-[12px] font-medium text-[var(--color-fg-dim)]">{title}</div>
+      <div className="mt-1 flex items-end gap-1.5">
+        <span
+          className="text-[32px] sm:text-[38px] leading-none font-semibold tracking-tight tabular-nums"
+          style={{ color: accent }}
+        >
+          {usd(monthly)}
+        </span>
+        <span className="pb-1 text-[13px] font-mono text-[var(--color-fg-muted)]">/mo</span>
+      </div>
+      <div className="mt-1 text-[13px] font-mono tabular-nums text-[var(--color-fg-dim)]">
+        {usdCompact(annual)} / year
+      </div>
+      <div className="mt-3.5 border-t border-[var(--color-border-soft)] pt-3 text-[11px] leading-relaxed text-[var(--color-fg-muted)]">
+        <div>{assumptions}</div>
+        <div className="mt-0.5 text-[var(--color-fg-dim)]">{footer}</div>
+      </div>
+    </div>
+  );
+}
+
 /* --------------------------- bits -------------------------------- */
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
@@ -420,6 +509,7 @@ function NumberField({
   min,
   max,
   step,
+  stepFor,
   prefix,
   suffix,
   hint,
@@ -430,36 +520,46 @@ function NumberField({
   min: number;
   max: number;
   step: number;
+  // Adaptive step: e.g. orders jump by 100s at low volume, 1,000s once large.
+  stepFor?: (v: number) => number;
   prefix?: string;
   suffix?: string;
   hint?: string;
 }) {
+  const safe = Number.isFinite(value) ? value : 0;
+  const curStep = stepFor ? stepFor(safe) : step;
+  const snap = (raw: number) => {
+    if (!stepFor) return raw;
+    const s = stepFor(raw);
+    return Math.round(raw / s) * s;
+  };
   return (
     <label className="block">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-fg-muted)]">{label}</span>
-        <div className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1">
+        <span className="min-w-0 text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--color-fg-muted)]">{label}</span>
+        <div className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1">
           {prefix ? <span className="text-[12px] text-[var(--color-fg-muted)]">{prefix}</span> : null}
           <input
             type="number"
+            inputMode="numeric"
             value={Number.isFinite(value) ? value : ""}
             min={min}
             max={max}
-            step={step}
-            onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
-            className="w-20 bg-transparent text-right text-[13px] font-mono tabular-nums text-[var(--color-fg)] outline-none"
+            step={curStep}
+            onChange={(e) => onChange(e.target.value === "" ? 0 : snap(Number(e.target.value)))}
+            className="w-16 sm:w-20 bg-transparent text-right text-[13px] font-mono tabular-nums text-[var(--color-fg)] outline-none"
           />
           {suffix ? <span className="text-[12px] text-[var(--color-fg-muted)]">{suffix}</span> : null}
         </div>
       </div>
       <input
         type="range"
-        value={Math.min(max, Math.max(min, Number.isFinite(value) ? value : 0))}
+        value={Math.min(max, Math.max(min, safe))}
         min={min}
         max={max}
-        step={step}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-2 w-full accent-[var(--color-accent)]"
+        step={curStep}
+        onChange={(e) => onChange(snap(Number(e.target.value)))}
+        className="mt-2 h-5 w-full accent-[var(--color-accent)] touch-manipulation"
       />
       {hint ? <p className="mt-1 text-[10.5px] leading-snug text-[var(--color-fg-muted)]">{hint}</p> : null}
     </label>
