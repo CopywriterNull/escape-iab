@@ -28,10 +28,12 @@ export function TimeRangeSelector({
   active,
   basePath,
   extraParams,
+  abTest,
 }: {
   active: string;
   basePath: string;
   extraParams?: ExtraParams;
+  abTest?: { active: boolean; label: string };
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -95,6 +97,26 @@ export function TimeRangeSelector({
             );
           })}
         </div>
+
+        {abTest ? (
+          <button
+            type="button"
+            onClick={() => go("abtest")}
+            disabled={isPending}
+            title="Only the historical dates when the A/B split was live (control present)"
+            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-[6px] font-mono tnum text-[12px] transition-[background-color,color,transform] duration-200 ease-out select-none focus-ring active:scale-[0.97] disabled:cursor-wait ${
+              abTest.active
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-fg)] font-medium"
+                : "border-[var(--color-border-soft)] bg-[var(--color-card)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`size-1.5 rounded-full ${abTest.active ? "bg-[var(--color-accent)]" : "bg-[var(--color-fg-muted)]"}`}
+            />
+            {abTest.label}
+          </button>
+        ) : null}
 
         <div className="inline-flex h-8 items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] p-[3px] text-[12px]">
           <label className="sr-only" htmlFor={`${inputId}-custom-range-amount`}>

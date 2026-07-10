@@ -350,16 +350,43 @@ function rowsToFunnel(rows: FunnelRpcRow[]): Funnel {
   return out;
 }
 
+// A fixed historical date window (e.g. the A/B-test-live period). When passed
+// to a fetcher it overrides the rolling "last N days" and bounds both ends.
+export type MetricWindow = { sinceIso: string; untilIso: string };
+
 export async function getTestFunnel(
   merchantId: string,
   days = 14,
   excludeOutliers = true,
+  window?: MetricWindow,
 ): Promise<Funnel> {
   const empty = emptyFunnel();
   // Service-role client (no cookies) so the marketing lander stays
   // static-renderable. The eh_test_funnel RPC is not granted to anon.
   const supabase = getSupabaseAdmin();
   if (!supabase) return empty;
+
+  // Fixed historical window (A/B-test view): always use the rollup RPC bounded
+  // on both ends — the exact path exists only for recent/live sub-day windows.
+  if (window) {
+    const { data, error } = await supabase.rpc("eh_test_funnel", {
+      p_merchant_id: merchantId,
+      p_since: window.sinceIso,
+      p_until: window.untilIso,
+    });
+    if (!error && Array.isArray(data)) {
+      return attachOutliers(
+        rowsToFunnel(data as FunnelRpcRow[]),
+        supabase,
+        merchantId,
+        window.sinceIso,
+        excludeOutliers,
+        window.untilIso,
+      );
+    }
+    return empty;
+  }
+
   const since = new Date(Date.now() - days * 86400_000).toISOString();
   const useExact = await shouldUseExactFunnel(merchantId, since, days);
   const rpcName = useExact ? "eh_test_funnel_exact" : "eh_test_funnel";
@@ -404,11 +431,14 @@ async function attachOutliers(
   merchantId: string,
   sinceIso: string,
   excludeOutliers: boolean,
+  untilIso?: string,
 ): Promise<Funnel> {
-  const { data, error } = await supabase.rpc("eh_merchant_outlier_revenue", {
+  const params: { p_merchant_id: string; p_since: string; p_until?: string } = {
     p_merchant_id: merchantId,
     p_since: sinceIso,
-  });
+  };
+  if (untilIso) params.p_until = untilIso;
+  const { data, error } = await supabase.rpc("eh_merchant_outlier_revenue", params);
   if (error || !Array.isArray(data)) return funnel;
 
   const toNum = (v: number | string | null): number => {
@@ -430,6 +460,34 @@ async function attachOutliers(
     funnel.revenue_cents.b = Math.max(0, funnel.revenue_cents.b - funnel.outliers.b.cents);
   }
   return funnel;
+}
+
+export type AbTestWindow = MetricWindow & { startDay: string; endDay: string };
+
+// Detects the historical window when this merchant's A/B split was actually
+// live (bucket b was a real participant) — before they flipped ab_enabled off
+// and sent 100% to escape, collapsing the control arm. Returns null when there
+// is no usable window (e.g. a merchant that never ran a real split). The window
+// is the only period with a credible randomized control, so it's the honest
+// place to read per-visitor lift.
+export async function getAbTestWindow(merchantId: string): Promise<AbTestWindow | null> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("eh_ab_test_window", { p_merchant_id: merchantId });
+  if (error || !Array.isArray(data) || data.length === 0) return null;
+  const row = data[0] as {
+    start_ts: string | null;
+    end_ts: string | null;
+    start_day: string | null;
+    end_day: string | null;
+  };
+  if (!row.start_ts || !row.end_ts) return null;
+  return {
+    sinceIso: row.start_ts,
+    untilIso: row.end_ts,
+    startDay: row.start_day ?? row.start_ts.slice(0, 10),
+    endDay: row.end_day ?? row.end_ts.slice(0, 10),
+  };
 }
 
 async function shouldUseExactFunnel(
@@ -601,9 +659,23 @@ async function hasHourlyRollupCoverage(
 export async function getRollups(
   merchantId: string,
   days = 14,
+  window?: MetricWindow,
 ): Promise<DailyRollup[]> {
   const supabase = await getTelemetryClient();
   if (!supabase) return [];
+
+  // Windowed (A/B-test) chart: read from hourly_funnel_rollups via the windowed
+  // series RPC. daily_rollups.impressions is 0 after 2026-05-20 — dead center of
+  // the A/B windows — so the daily table would draw a flat-zero impressions line.
+  if (window) {
+    const { data } = await supabase.rpc("eh_rollup_series_window", {
+      p_merchant_id: merchantId,
+      p_since: window.sinceIso,
+      p_until: window.untilIso,
+    });
+    return (data as DailyRollup[]) ?? [];
+  }
+
   const since = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
   const { data } = await supabase
     .from("daily_rollups")
@@ -680,8 +752,20 @@ function priorLabelFor(days: number): string {
 export async function getPeriodDelta(
   merchantId: string,
   days: number,
+  window?: MetricWindow,
 ): Promise<PeriodDelta> {
   const supabase = await getTelemetryClient();
+  // A fixed A/B-test window has no natural "prior period" to compare against,
+  // so period-over-period arrows are suppressed (comparable: false).
+  if (window) {
+    return {
+      current: { ...EMPTY_PERIOD },
+      previous: { ...EMPTY_PERIOD },
+      deltas: { impressions: null, escape_attempts: null, purchases: null, revenue_cents: null },
+      comparable: false,
+      priorLabel: "A/B window",
+    };
+  }
   if (!supabase || days < 1) {
     // daily_rollups is day-grain; sub-day ranges can't compare cleanly.
     return {
@@ -739,15 +823,18 @@ export async function getSourceBreakdown(
   merchantId: string,
   days = 14,
   limit = 10,
+  window?: MetricWindow,
 ): Promise<SourceRow[]> {
   const supabase = await getTelemetryClient();
   if (!supabase) return [];
-  const since = new Date(Date.now() - days * 86400_000).toISOString();
-  const { data, error } = await supabase.rpc("eh_test_sources", {
+  const since = window ? window.sinceIso : new Date(Date.now() - days * 86400_000).toISOString();
+  const params: { p_merchant_id: string; p_since: string; p_limit: number; p_until?: string } = {
     p_merchant_id: merchantId,
     p_since: since,
     p_limit: limit,
-  });
+  };
+  if (window) params.p_until = window.untilIso;
+  const { data, error } = await supabase.rpc("eh_test_sources", params);
   if (error || !Array.isArray(data)) return [];
   return (data as {
     utm_source: string;
@@ -855,10 +942,35 @@ export function totalize(rows: DailyRollup[]): Totals {
 export async function getUnattributedPurchaseStats(
   merchantId: string,
   days = 14,
+  window?: MetricWindow,
 ): Promise<{ count: number; revenue_cents: number }> {
   const supabase = await getTelemetryClient();
   if (!supabase) return { count: 0, revenue_cents: 0 };
-  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const since = window ? window.sinceIso : new Date(Date.now() - days * 86400_000).toISOString();
+
+  // The unattributed RPC has no upper bound; for a fixed window use the bounded
+  // direct query instead so downstream halo revenue is scoped to the window too.
+  if (window) {
+    const { data } = await supabase
+      .from("escape_events")
+      .select("order_id, value_cents")
+      .eq("merchant_id", merchantId)
+      .eq("event_type", "purchase")
+      .eq("in_test", false)
+      .gte("created_at", window.sinceIso)
+      .lt("created_at", window.untilIso)
+      .limit(5000);
+    const seen = new Set<string>();
+    let revenue = 0;
+    for (const r of (data ?? []) as { order_id: string | null; value_cents: number | null }[]) {
+      const k = r.order_id || `null-${revenue}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      revenue += r.value_cents ?? 0;
+    }
+    return { count: seen.size, revenue_cents: revenue };
+  }
+
   const { data: rpcData, error: rpcError } = await supabase.rpc(
     "eh_unattributed_purchase_stats",
     {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense, cache } from "react";
 import {
+  getAbTestWindow,
   getCurrentMerchant,
   getMerchantRollupFreshness,
   getPeriodDelta,
@@ -12,9 +13,11 @@ import {
   getUnattributedPurchaseStats,
   zTestTwoProp,
   sampleSizePerBucket,
+  type AbTestWindow,
   type DailyRollup,
   type Funnel,
   type Merchant,
+  type MetricWindow,
   type PeriodDelta,
   type SourceRow,
   type IabKind,
@@ -94,19 +97,20 @@ const fetchActivity = cache(async function fetchActivity(
   days: number,
   iabKinds: IabKind[],
   limit = 12,
+  window?: MetricWindow,
 ): Promise<ActivityRow[]> {
   const supabase = getSupabaseAdmin() ?? (await getSupabaseServer());
   if (!supabase) return [];
-  const since = new Date(Date.now() - days * 86400_000).toISOString();
-  const { data } = await supabase
+  const since = window ? window.sinceIso : new Date(Date.now() - days * 86400_000).toISOString();
+  let query = supabase
     .from("escape_events")
     .select("event_type,bucket,in_test,value_cents,utm_source,iab_kind,created_at")
     .eq("merchant_id", merchantId)
     .in("event_type", ["purchase", "checkout_started", "add_to_cart", "escape_attempt"])
     .in("iab_kind", iabKinds)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .gte("created_at", since);
+  if (window) query = query.lt("created_at", window.untilIso);
+  const { data } = await query.order("created_at", { ascending: false }).limit(limit);
   return (data ?? []) as ActivityRow[];
 });
 
@@ -117,6 +121,17 @@ function parseFunnelMode(v: string | undefined): FunnelMode {
   return v === "raw" ? "raw" : "corrected";
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// "2026-05-19".."2026-05-25" -> "May 19–25"; cross-month -> "May 28 – Jun 2".
+function fmtDayRange({ startDay, endDay }: { startDay: string; endDay: string }): string {
+  const [, sm, sd] = startDay.split("-").map(Number);
+  const [, em, ed] = endDay.split("-").map(Number);
+  const start = `${MONTHS[(sm ?? 1) - 1]} ${sd}`;
+  const end = sm === em ? `${ed}` : `${MONTHS[(em ?? 1) - 1]} ${ed}`;
+  return `${start}–${end}`;
+}
+
 /* -------- Page (shell; data streams via Suspense children) -------- */
 
 export default async function DashboardOverview({
@@ -125,7 +140,7 @@ export default async function DashboardOverview({
   searchParams: SearchParams;
 }) {
   const sp = await searchParams;
-  const range = parseDashboardRange(sp.range);
+  const isAbTest = sp.range === "abtest";
   const funnelMode = parseFunnelMode(sp.funnel);
   // Extreme outlier orders are excluded from revenue by default; ?outliers=1
   // shows raw. Preserve range + funnel when the toggle builds its links.
@@ -143,13 +158,26 @@ export default async function DashboardOverview({
   const merchant = await getCurrentMerchant();
   if (!merchant) {
     return (
-      <Page range={range}>
+      <Page range={parseDashboardRange(isAbTest ? undefined : sp.range)}>
         <Card><CardBody><MutedText>Provisioning merchant record…</MutedText></CardBody></Card>
       </Page>
     );
   }
 
   const m = merchant.id;
+
+  // Detect the merchant's historical A/B-live window (used both to offer the
+  // "A/B test" chip and, when that chip is active, to scope every metric).
+  const abWindow = await getAbTestWindow(m);
+  const activeWindow: MetricWindow | undefined =
+    isAbTest && abWindow ? { sinceIso: abWindow.sinceIso, untilIso: abWindow.untilIso } : undefined;
+
+  // Display range: a synthetic entry when the A/B window is active, otherwise
+  // the normal rolling preset. `days` is unused while a window is active.
+  const range: Range =
+    isAbTest && abWindow
+      ? { key: "abtest", label: `A/B test · ${fmtDayRange(abWindow)}`, days: 0 }
+      : parseDashboardRange(isAbTest ? undefined : sp.range);
   const d = range.days;
   const rollupFreshness = await getRollupFreshness();
   const merchantFreshness = await getMerchantRollupFreshness(m);
@@ -158,7 +186,12 @@ export default async function DashboardOverview({
     <Page
       range={range}
       funnelMode={funnelMode}
-      subtitle={<span>Last {range.label}</span>}
+      abTest={abWindow ? { active: isAbTest, label: "A/B test" } : undefined}
+      subtitle={
+        <span>
+          {isAbTest && abWindow ? `A/B test window · ${fmtDayRange(abWindow)}` : `Last ${range.label}`}
+        </span>
+      }
       action={
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)] p-[2px]">
@@ -199,34 +232,41 @@ export default async function DashboardOverview({
 
       <RollupFreshnessBanner freshness={rollupFreshness} />
 
+      {isAbTest && !abWindow ? (
+        <div className="rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-card)] px-4 py-3 text-[12.5px] text-[var(--color-fg-dim)]">
+          No A/B-test window detected for this brand yet — we couldn&apos;t find a stretch of days where the control
+          arm (bucket B) was live. Showing the default range instead.
+        </div>
+      ) : null}
+
       <Suspense key={`hero-${range.key}-${showOutliers}`} fallback={<HeroSkeleton />}>
-        <HeroSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} />
+        <HeroSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} window={activeWindow} />
       </Suspense>
 
       <Suspense key={`banner-${range.key}-${showOutliers}`} fallback={<BannerSkeleton />}>
-        <BannerSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} />
+        <BannerSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} window={activeWindow} />
       </Suspense>
 
       <Suspense key={`kpi-${range.key}-${showOutliers}`} fallback={<KPIGridSkeleton />}>
-        <KPISection merchantId={m} days={d} excludeOutliers={excludeOutliers} />
+        <KPISection merchantId={m} days={d} excludeOutliers={excludeOutliers} window={activeWindow} />
       </Suspense>
 
       <Suspense key={`funnel-${range.key}-${funnelMode}-${showOutliers}`} fallback={<FunnelSkeleton />}>
-        <FunnelSection merchantId={m} days={d} mode={funnelMode} rangeKey={range.key} excludeOutliers={excludeOutliers} />
+        <FunnelSection merchantId={m} days={d} mode={funnelMode} rangeKey={range.key} excludeOutliers={excludeOutliers} window={activeWindow} />
       </Suspense>
 
       <Layout>
         <LayoutCol size="primary">
           <Suspense key={`sources-${range.key}`} fallback={<SourcesSkeleton rangeLabel={range.label} />}>
-            <SourcesSection merchantId={m} days={d} rangeLabel={range.label} />
+            <SourcesSection merchantId={m} days={d} rangeLabel={range.label} window={activeWindow} />
           </Suspense>
         </LayoutCol>
         <LayoutCol size="secondary">
           <Suspense key={`chart-${range.key}`} fallback={<ChartSkeleton rangeLabel={range.label} />}>
-            <ChartSection merchantId={m} days={d} rangeLabel={range.label} />
+            <ChartSection merchantId={m} days={d} rangeLabel={range.label} window={activeWindow} />
           </Suspense>
           <Suspense key={`sample-${range.key}-${showOutliers}`} fallback={<SampleSizeSkeleton />}>
-            <SampleSizeSection merchantId={m} days={d} excludeOutliers={excludeOutliers} />
+            <SampleSizeSection merchantId={m} days={d} excludeOutliers={excludeOutliers} window={activeWindow} />
           </Suspense>
           <SampleSizeCalculator />
 
@@ -234,7 +274,7 @@ export default async function DashboardOverview({
       </Layout>
 
       <Suspense key={`activity-${range.key}`} fallback={<ActivitySkeleton />}>
-        <ActivitySection merchantId={m} days={d} iabKinds={getEnabledDashboardIabKinds(merchant)} />
+        <ActivitySection merchantId={m} days={d} iabKinds={getEnabledDashboardIabKinds(merchant)} window={activeWindow} />
       </Suspense>
     </Page>
   );
@@ -301,13 +341,15 @@ async function HeroSection({
   days,
   rangeLabel,
   excludeOutliers,
+  window,
 }: {
   merchantId: string;
   days: number;
   rangeLabel: string;
   excludeOutliers: boolean;
+  window?: MetricWindow;
 }) {
-  const funnel = await fetchFunnel(merchantId, days, excludeOutliers);
+  const funnel = await fetchFunnel(merchantId, days, excludeOutliers, window);
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
   const revA = funnel.revenue_cents.a / 100;
@@ -428,15 +470,17 @@ async function BannerSection({
   days,
   rangeLabel,
   excludeOutliers,
+  window,
 }: {
   merchantId: string;
   days: number;
   rangeLabel: string;
   excludeOutliers: boolean;
+  window?: MetricWindow;
 }) {
   const [funnel, unattributed] = await Promise.all([
-    fetchFunnel(merchantId, days, excludeOutliers),
-    fetchUnattributed(merchantId, days),
+    fetchFunnel(merchantId, days, excludeOutliers, window),
+    fetchUnattributed(merchantId, days, window),
   ]);
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
@@ -458,10 +502,10 @@ async function BannerSection({
   );
 }
 
-async function KPISection({ merchantId, days, excludeOutliers }: { merchantId: string; days: number; excludeOutliers: boolean }) {
+async function KPISection({ merchantId, days, excludeOutliers, window }: { merchantId: string; days: number; excludeOutliers: boolean; window?: MetricWindow }) {
   const [funnel, period] = await Promise.all([
-    fetchFunnel(merchantId, days, excludeOutliers),
-    fetchPeriodDelta(merchantId, days),
+    fetchFunnel(merchantId, days, excludeOutliers, window),
+    fetchPeriodDelta(merchantId, days, window),
   ]);
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
@@ -521,14 +565,16 @@ async function FunnelSection({
   mode,
   rangeKey,
   excludeOutliers,
+  window,
 }: {
   merchantId: string;
   days: number;
   mode: FunnelMode;
   rangeKey: string;
   excludeOutliers: boolean;
+  window?: MetricWindow;
 }) {
-  const funnel = await fetchFunnel(merchantId, days, excludeOutliers);
+  const funnel = await fetchFunnel(merchantId, days, excludeOutliers, window);
   return <FunnelTable funnel={funnel} mode={mode} rangeKey={rangeKey} />;
 }
 
@@ -536,12 +582,14 @@ async function SourcesSection({
   merchantId,
   days,
   rangeLabel,
+  window,
 }: {
   merchantId: string;
   days: number;
   rangeLabel: string;
+  window?: MetricWindow;
 }) {
-  const sources = await fetchSources(merchantId, days, 8);
+  const sources = await fetchSources(merchantId, days, 8, window);
   return <SourcesCard sources={sources} rangeLabel={rangeLabel} />;
 }
 
@@ -549,17 +597,19 @@ async function ChartSection({
   merchantId,
   days,
   rangeLabel,
+  window,
 }: {
   merchantId: string;
   days: number;
   rangeLabel: string;
+  window?: MetricWindow;
 }) {
-  const rollups = await fetchRollups(merchantId, days);
+  const rollups = await fetchRollups(merchantId, days, window);
   return <ChartCard rollups={rollups} rangeLabel={rangeLabel} />;
 }
 
-async function SampleSizeSection({ merchantId, days, excludeOutliers }: { merchantId: string; days: number; excludeOutliers: boolean }) {
-  const funnel = await fetchFunnel(merchantId, days, excludeOutliers);
+async function SampleSizeSection({ merchantId, days, excludeOutliers, window }: { merchantId: string; days: number; excludeOutliers: boolean; window?: MetricWindow }) {
+  const funnel = await fetchFunnel(merchantId, days, excludeOutliers, window);
   return <SampleSizeCard funnel={funnel} />;
 }
 
@@ -567,12 +617,14 @@ async function ActivitySection({
   merchantId,
   days,
   iabKinds,
+  window,
 }: {
   merchantId: string;
   days: number;
   iabKinds: IabKind[];
+  window?: MetricWindow;
 }) {
-  const rows = await fetchActivity(merchantId, days, iabKinds, 12);
+  const rows = await fetchActivity(merchantId, days, iabKinds, 12, window);
   return <ActivityCard rows={rows} days={days} />;
 }
 
@@ -583,6 +635,7 @@ function Page({
   action,
   range,
   funnelMode = "corrected",
+  abTest,
   children,
 }: {
   // Title was redundant with the top-nav breadcrumb + tab strip — dropped.
@@ -591,6 +644,7 @@ function Page({
   action?: React.ReactNode;
   range?: Range;
   funnelMode?: FunnelMode;
+  abTest?: { active: boolean; label: string };
   children: React.ReactNode;
 }) {
   return (
@@ -608,6 +662,7 @@ function Page({
                 active={range.key}
                 basePath="/dashboard"
                 extraParams={funnelMode === "raw" ? { funnel: "raw" } : undefined}
+                abTest={abTest}
               />
             ) : null}
             {action}
