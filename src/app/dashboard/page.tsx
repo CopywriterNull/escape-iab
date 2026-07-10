@@ -111,7 +111,7 @@ const fetchActivity = cache(async function fetchActivity(
 });
 
 type FunnelMode = "raw" | "corrected";
-type SearchParams = Promise<{ range?: string; funnel?: string }>;
+type SearchParams = Promise<{ range?: string; funnel?: string; outliers?: string }>;
 
 function parseFunnelMode(v: string | undefined): FunnelMode {
   return v === "raw" ? "raw" : "corrected";
@@ -127,6 +127,18 @@ export default async function DashboardOverview({
   const sp = await searchParams;
   const range = parseDashboardRange(sp.range);
   const funnelMode = parseFunnelMode(sp.funnel);
+  // Extreme outlier orders are excluded from revenue by default; ?outliers=1
+  // shows raw. Preserve range + funnel when the toggle builds its links.
+  const showOutliers = sp.outliers === "1";
+  const excludeOutliers = !showOutliers;
+  const outlierHref = (show: boolean) => {
+    const p = new URLSearchParams();
+    if (sp.range) p.set("range", sp.range);
+    if (sp.funnel) p.set("funnel", sp.funnel);
+    if (show) p.set("outliers", "1");
+    const qs = p.toString();
+    return qs ? `/dashboard?${qs}` : "/dashboard";
+  };
 
   const merchant = await getCurrentMerchant();
   if (!merchant) {
@@ -149,6 +161,24 @@ export default async function DashboardOverview({
       subtitle={<span>Last {range.label}</span>}
       action={
         <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border border-[var(--color-border-soft)] bg-[var(--color-card)] p-[2px]">
+            {[
+              { label: "Trimmed", show: false },
+              { label: "Raw", show: true },
+            ].map((o) => (
+              <Link
+                key={o.label}
+                href={outlierHref(o.show)}
+                title={o.show ? "Include extreme outlier orders" : "Exclude extreme outlier orders (default)"}
+                className={`px-2.5 py-1 text-[11.5px] rounded font-mono ${
+                  o.show === showOutliers ? "bg-[var(--color-bg)] text-[var(--color-fg)]" : "text-[var(--color-fg-muted)]"
+                }`}
+                scroll={false}
+              >
+                {o.label}
+              </Link>
+            ))}
+          </div>
           <RollupRefreshControl
             lastRefresh={merchantFreshness.lastRefresh}
             stale={merchantFreshness.stale}
@@ -169,20 +199,20 @@ export default async function DashboardOverview({
 
       <RollupFreshnessBanner freshness={rollupFreshness} />
 
-      <Suspense key={`hero-${range.key}`} fallback={<HeroSkeleton />}>
-        <HeroSection merchantId={m} days={d} rangeLabel={range.label} />
+      <Suspense key={`hero-${range.key}-${showOutliers}`} fallback={<HeroSkeleton />}>
+        <HeroSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} />
       </Suspense>
 
-      <Suspense key={`banner-${range.key}`} fallback={<BannerSkeleton />}>
-        <BannerSection merchantId={m} days={d} rangeLabel={range.label} />
+      <Suspense key={`banner-${range.key}-${showOutliers}`} fallback={<BannerSkeleton />}>
+        <BannerSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} />
       </Suspense>
 
-      <Suspense key={`kpi-${range.key}`} fallback={<KPIGridSkeleton />}>
-        <KPISection merchantId={m} days={d} />
+      <Suspense key={`kpi-${range.key}-${showOutliers}`} fallback={<KPIGridSkeleton />}>
+        <KPISection merchantId={m} days={d} excludeOutliers={excludeOutliers} />
       </Suspense>
 
-      <Suspense key={`funnel-${range.key}-${funnelMode}`} fallback={<FunnelSkeleton />}>
-        <FunnelSection merchantId={m} days={d} mode={funnelMode} rangeKey={range.key} />
+      <Suspense key={`funnel-${range.key}-${funnelMode}-${showOutliers}`} fallback={<FunnelSkeleton />}>
+        <FunnelSection merchantId={m} days={d} mode={funnelMode} rangeKey={range.key} excludeOutliers={excludeOutliers} />
       </Suspense>
 
       <Layout>
@@ -195,8 +225,8 @@ export default async function DashboardOverview({
           <Suspense key={`chart-${range.key}`} fallback={<ChartSkeleton rangeLabel={range.label} />}>
             <ChartSection merchantId={m} days={d} rangeLabel={range.label} />
           </Suspense>
-          <Suspense key={`sample-${range.key}`} fallback={<SampleSizeSkeleton />}>
-            <SampleSizeSection merchantId={m} days={d} />
+          <Suspense key={`sample-${range.key}-${showOutliers}`} fallback={<SampleSizeSkeleton />}>
+            <SampleSizeSection merchantId={m} days={d} excludeOutliers={excludeOutliers} />
           </Suspense>
           <SampleSizeCalculator />
 
@@ -270,12 +300,14 @@ async function HeroSection({
   merchantId,
   days,
   rangeLabel,
+  excludeOutliers,
 }: {
   merchantId: string;
   days: number;
   rangeLabel: string;
+  excludeOutliers: boolean;
 }) {
-  const funnel = await fetchFunnel(merchantId, days);
+  const funnel = await fetchFunnel(merchantId, days, excludeOutliers);
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
   const revA = funnel.revenue_cents.a / 100;
@@ -373,6 +405,20 @@ async function HeroSection({
       <div className="mt-1 text-[12.5px] font-mono">
         {confidenceText}
       </div>
+      {(() => {
+        const oOrders = funnel.outliers.a.orders + funnel.outliers.b.orders;
+        const oCents = funnel.outliers.a.cents + funnel.outliers.b.cents;
+        if (oOrders === 0) return null;
+        const amt = fmtUSD(oCents / 100, { compact: true });
+        const plural = oOrders > 1 ? "s" : "";
+        return (
+          <div className="mt-1.5 text-[11px] font-mono text-[var(--color-fg-muted)]">
+            {funnel.outliers.excluded
+              ? `Excludes ${amt} from ${oOrders} outlier order${plural} that are extreme vs your typical order — so one big order can't swing this. Toggle Raw to include.`
+              : `Includes ${oOrders} outlier order${plural} (${amt}) that can distort per-visitor lift. Toggle Trimmed to exclude.`}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -381,13 +427,15 @@ async function BannerSection({
   merchantId,
   days,
   rangeLabel,
+  excludeOutliers,
 }: {
   merchantId: string;
   days: number;
   rangeLabel: string;
+  excludeOutliers: boolean;
 }) {
   const [funnel, unattributed] = await Promise.all([
-    fetchFunnel(merchantId, days),
+    fetchFunnel(merchantId, days, excludeOutliers),
     fetchUnattributed(merchantId, days),
   ]);
   const baseA = funnel.impressions.a;
@@ -410,9 +458,9 @@ async function BannerSection({
   );
 }
 
-async function KPISection({ merchantId, days }: { merchantId: string; days: number }) {
+async function KPISection({ merchantId, days, excludeOutliers }: { merchantId: string; days: number; excludeOutliers: boolean }) {
   const [funnel, period] = await Promise.all([
-    fetchFunnel(merchantId, days),
+    fetchFunnel(merchantId, days, excludeOutliers),
     fetchPeriodDelta(merchantId, days),
   ]);
   const baseA = funnel.impressions.a;
@@ -472,13 +520,15 @@ async function FunnelSection({
   days,
   mode,
   rangeKey,
+  excludeOutliers,
 }: {
   merchantId: string;
   days: number;
   mode: FunnelMode;
   rangeKey: string;
+  excludeOutliers: boolean;
 }) {
-  const funnel = await fetchFunnel(merchantId, days);
+  const funnel = await fetchFunnel(merchantId, days, excludeOutliers);
   return <FunnelTable funnel={funnel} mode={mode} rangeKey={rangeKey} />;
 }
 
@@ -508,8 +558,8 @@ async function ChartSection({
   return <ChartCard rollups={rollups} rangeLabel={rangeLabel} />;
 }
 
-async function SampleSizeSection({ merchantId, days }: { merchantId: string; days: number }) {
-  const funnel = await fetchFunnel(merchantId, days);
+async function SampleSizeSection({ merchantId, days, excludeOutliers }: { merchantId: string; days: number; excludeOutliers: boolean }) {
+  const funnel = await fetchFunnel(merchantId, days, excludeOutliers);
   return <SampleSizeCard funnel={funnel} />;
 }
 

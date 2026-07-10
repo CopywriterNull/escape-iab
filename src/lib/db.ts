@@ -279,6 +279,8 @@ export type FunnelStage =
   | "checkout_started"
   | "purchase";
 
+export type OutlierBucket = { orders: number; cents: number };
+
 export type Funnel = {
   impressions: { a: number; b: number };
   escape_attempts: { a: number; b: number };
@@ -287,6 +289,11 @@ export type Funnel = {
   checkout_started: { a: number; b: number };
   purchases: { a: number; b: number };
   revenue_cents: { a: number; b: number };
+  // Extreme outlier orders detected for this window. When `excluded` is true,
+  // `revenue_cents` above has already had `outliers.{a,b}.cents` subtracted so a
+  // single whale can't distort per-visitor revenue / lift. Purchase counts are
+  // left intact. Powers the transparency label on the dashboard.
+  outliers: { a: OutlierBucket; b: OutlierBucket; excluded: boolean };
 };
 
 type FunnelRpcRow = {
@@ -305,6 +312,7 @@ function emptyFunnel(): Funnel {
     checkout_started: { a: 0, b: 0 },
     purchases: { a: 0, b: 0 },
     revenue_cents: { a: 0, b: 0 },
+    outliers: { a: { orders: 0, cents: 0 }, b: { orders: 0, cents: 0 }, excluded: false },
   };
 }
 
@@ -345,6 +353,7 @@ function rowsToFunnel(rows: FunnelRpcRow[]): Funnel {
 export async function getTestFunnel(
   merchantId: string,
   days = 14,
+  excludeOutliers = true,
 ): Promise<Funnel> {
   const empty = emptyFunnel();
   // Service-role client (no cookies) so the marketing lander stays
@@ -359,7 +368,7 @@ export async function getTestFunnel(
     p_since: since,
   });
   if (!error && Array.isArray(data)) {
-    return rowsToFunnel(data as FunnelRpcRow[]);
+    return attachOutliers(rowsToFunnel(data as FunnelRpcRow[]), supabase, merchantId, since, excludeOutliers);
   }
 
   // Exact 24h/sub-day can time out on volume merchants during DB pressure.
@@ -371,11 +380,56 @@ export async function getTestFunnel(
       p_since: since,
     });
     if (!fallback.error && Array.isArray(fallback.data)) {
-      return rowsToFunnel(fallback.data as FunnelRpcRow[]);
+      return attachOutliers(rowsToFunnel(fallback.data as FunnelRpcRow[]), supabase, merchantId, since, excludeOutliers);
     }
   }
 
   return empty;
+}
+
+type OutlierRpcRow = {
+  bucket: string;
+  outlier_orders: number | string | null;
+  outlier_revenue_cents: number | string | null;
+};
+
+// Fetches per-bucket whale revenue from the order-level RPC (the funnel RPCs
+// only return aggregated revenue), records it on the funnel, and — when
+// excludeOutliers is on — subtracts it from revenue so one large order can't
+// flip per-visitor lift. Purchase counts stay intact. Degrades to the raw
+// funnel if the outlier RPC errors.
+async function attachOutliers(
+  funnel: Funnel,
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  merchantId: string,
+  sinceIso: string,
+  excludeOutliers: boolean,
+): Promise<Funnel> {
+  const { data, error } = await supabase.rpc("eh_merchant_outlier_revenue", {
+    p_merchant_id: merchantId,
+    p_since: sinceIso,
+  });
+  if (error || !Array.isArray(data)) return funnel;
+
+  const toNum = (v: number | string | null): number => {
+    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+    if (typeof v === "string") {
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  };
+
+  for (const r of data as OutlierRpcRow[]) {
+    const bucket = r.bucket === "b" ? "b" : "a";
+    funnel.outliers[bucket] = { orders: toNum(r.outlier_orders), cents: toNum(r.outlier_revenue_cents) };
+  }
+  funnel.outliers.excluded = excludeOutliers;
+  if (excludeOutliers) {
+    funnel.revenue_cents.a = Math.max(0, funnel.revenue_cents.a - funnel.outliers.a.cents);
+    funnel.revenue_cents.b = Math.max(0, funnel.revenue_cents.b - funnel.outliers.b.cents);
+  }
+  return funnel;
 }
 
 async function shouldUseExactFunnel(
