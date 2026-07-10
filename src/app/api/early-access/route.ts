@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
   const email = clean(body.email, 160);
   const company = clean(body.company, 120);
-  const website = clean(body.website, 240);
+  const website = normalizeWebsite(clean(body.website, 240));
   const monthlyVisitors = clean(body.monthlyVisitors, 60);
   const platform = clean(body.platform, 80);
   const referralSource = clean(body.referralSource, 80);
@@ -75,4 +75,12 @@ export async function POST(req: Request) {
 
 function clean(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
+// Accept bare domains ("brand.com"); prepend https:// so the lead always has a
+// usable URL even if the client normalization was bypassed.
+function normalizeWebsite(v: string): string {
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  return `https://${v.replace(/^\/+/, "")}`;
 }

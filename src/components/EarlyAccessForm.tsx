@@ -25,6 +25,15 @@ const referralSources = [
   "Other",
 ];
 
+// Accept bare domains like "brand.com" — don't make people type the scheme.
+// Prepend https:// when missing so the payload always carries a full URL.
+function normalizeWebsite(raw: string): string {
+  const v = raw.trim();
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  return `https://${v.replace(/^\/+/, "")}`;
+}
+
 export function EarlyAccessForm({ initialEmail = "" }: { initialEmail?: string } = {}) {
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -39,7 +48,7 @@ export function EarlyAccessForm({ initialEmail = "" }: { initialEmail?: string }
     const payload = {
       email: String(formData.get("email") ?? "").trim(),
       company: String(formData.get("company") ?? "").trim(),
-      website: String(formData.get("website") ?? "").trim(),
+      website: normalizeWebsite(String(formData.get("website") ?? "")),
       monthlyVisitors: String(formData.get("monthlyVisitors") ?? "").trim(),
       platform: String(formData.get("platform") ?? "").trim(),
       referralSource: String(formData.get("referralSource") ?? "").trim(),
@@ -94,11 +103,17 @@ export function EarlyAccessForm({ initialEmail = "" }: { initialEmail?: string }
         </Field>
         <Field label="Website">
           <input
-            type="url"
+            type="text"
             name="website"
             required
+            inputMode="url"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             autoComplete="url"
-            placeholder="https://brand.com"
+            placeholder="brand.com"
+            pattern="^\s*(https?:\/\/)?[^\s.]+\.[^\s]+\s*$"
+            title="Enter your site, e.g. brand.com"
             className={inputClass}
           />
         </Field>
