@@ -469,7 +469,10 @@ try{
   // synchronous in <head>, so replaceState runs before the pixel initializes.
   // history API only — no reload. Covers IG/Threads and FB escapes (all land
   // in Safari with kind=null and reach this point).
-  if(postEscape&&ehfc){try{if(location.search.indexOf("fbclid=")===-1){var ru=new URL(location.href);ru.searchParams.set("fbclid",ehfc);history.replaceState(null,"",ru.toString());}}catch(e){}}
+  // Use has("fbclid") — NOT indexOf("fbclid=") — because the substring check
+  // false-positives on eh_fbclid=... (which contains "fbclid="), so it would
+  // skip the restore exactly when eh_fbclid is present (the post-escape case).
+  if(postEscape&&ehfc){try{if(!qsP.has("fbclid")){var ru=new URL(location.href);ru.searchParams.set("fbclid",ehfc);history.replaceState(null,"",ru.toString());}}catch(e){}}
 
   // Post-escape Safari side: no escape urgency. Wait up to 1.5s for sy cookie
   // before beaconing the impression so the funnel pixel can join back.
@@ -590,7 +593,9 @@ try{
   if(!sid){try{sid=(document.cookie.match(/(?:^|; )eh_sid=([^;]+)/)||[])[1]||null;}catch(e){}}
   if(!sid)sid=ehGen();
   try{document.cookie="eh_sid="+sid+";path=/;max-age=2592000;samesite=Lax";}catch(e){}
-  if(ehfc){try{if(location.search.indexOf("fbclid=")===-1){var ru=new URL(location.href);ru.searchParams.set("fbclid",ehfc);history.replaceState(null,"",ru.toString());}}catch(e){}}
+  // has("fbclid") not indexOf("fbclid=") — the substring check false-positives
+  // on eh_fbclid= and would skip the restore whenever eh_fbclid is present.
+  if(ehfc){try{if(!qsP.has("fbclid")){var ru=new URL(location.href);ru.searchParams.set("fbclid",ehfc);history.replaceState(null,"",ru.toString());}}catch(e){}}
   function readSy(){try{return(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){return null;}}
   var sy=readSy();
   function beacon(t,extra){
