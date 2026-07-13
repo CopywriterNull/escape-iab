@@ -19,6 +19,20 @@
 export type SnippetVersion = "v7" | "v8" | "v9" | "v10";
 export const CURRENT_VERSION: SnippetVersion = "v10";
 
+// Server-side UA classifier, mirroring the snippet's own detection. The `/s`
+// route uses it to decide what to SERVE: in-app-browser UAs get the full escape
+// payload; everyone else (desktop, bots, scanners, plain mobile Safari/Chrome —
+// including a competitor curling the script) gets the attribution-only stub with
+// no scheme and no IAB regexes. It only returns true on a real in-app-browser
+// token, so a genuine IG/Threads/FB visitor can never be downgraded to the stub
+// (the escape can't regress); worst case on a miss is "served the full payload
+// to a non-IAB", i.e. slightly less hiding — never a broken escape.
+export function isInAppBrowserUA(ua: string | null | undefined): boolean {
+  if (!ua) return false;
+  if (!/Mobile|iPhone|iPod|iPad|Android/i.test(ua)) return false;
+  return /Instagram|Barcelona|FBAN|FBAV|Messenger|TikTok|musical_ly|Snapchat|Pinterest|Discord|Line\/|MicroMessenger|;\s?wv[;)]|WebView/i.test(ua);
+}
+
 type SnippetOpts = {
   merchantId: string;
   ingestUrl: string;
@@ -521,6 +535,84 @@ try{
       },2000);
     });
   }
+}catch(e){}
+})();`;
+}
+
+// Attribution-only stub served to NON-in-app-browser UAs (desktop, bots,
+// scanners, plain mobile Safari/Chrome — i.e. anyone who copies the storefront
+// script and pastes it into an LLM). Contains NO escape scheme, NO IAB
+// detection regexes, NO bucketing — nothing worth reverse-engineering. It only
+// does the post-escape Safari-side work a genuinely-escaped visitor needs:
+// restore the fbclid iOS IG stripped, beacon the bucket-A impression, and write
+// the eh_sid cart attribute. For every other visitor it returns immediately.
+// Behavior for post-escape visitors is identical to the full snippet's
+// post-escape tail, so attribution is unaffected.
+export function buildAttributionOnlySnippet(opts: {
+  merchantId: string;
+  ingestUrl: string;
+  version?: SnippetVersion;
+  allowedDomains?: string[];
+}): string {
+  const M = JSON.stringify(opts.merchantId);
+  const I = JSON.stringify(opts.ingestUrl);
+  const V = JSON.stringify(opts.version ?? CURRENT_VERSION);
+  const AD = JSON.stringify(opts.allowedDomains ?? []);
+  return `(function(){
+try{
+  var M=${M},I=${I},V=${V},AD=${AD};
+  try{if(sessionStorage.getItem("eh_dx")==="1")return;}catch(e){}
+  function HA(h){
+    if(!AD||!AD.length)return 1;
+    if(h==="localhost"||h==="127.0.0.1"||/\\.vercel\\.app$/i.test(h))return 1;
+    for(var i=0;i<AD.length;i++){
+      var d=AD[i];
+      if(h===d||h.length>d.length+1&&h.charCodeAt(h.length-d.length-1)===46&&h.lastIndexOf(d)===h.length-d.length)return 1;
+    }
+    return 0;
+  }
+  if(!HA((location.hostname||"").toLowerCase())){
+    try{var hrBody=JSON.stringify({m:M,v:V,t:"hostname_rejected",hr:1,u:location.href,ts:Date.now()});if(navigator.sendBeacon){try{navigator.sendBeacon(I,new Blob([hrBody],{type:"text/plain;charset=UTF-8"}));}catch(e){}}}catch(e){}
+    return;
+  }
+  var qsP=new URLSearchParams(location.search);
+  // Only post-escape visitors (landed in a real browser after an escape) do
+  // anything here. Everyone else exits — nothing to see, nothing to copy.
+  if(qsP.get("opened_external_browser")!=="true")return;
+  var us=qsP.get("utm_source")||null,um=qsP.get("utm_medium")||null,uc=qsP.get("utm_campaign")||null,uct=qsP.get("utm_content")||null,ut=qsP.get("utm_term")||null,fc=qsP.get("fbclid")||null;
+  var ehfc=qsP.get("eh_fbclid")||null;if(!fc&&ehfc)fc=ehfc;
+  function ehGen(){
+    try{if(crypto&&crypto.randomUUID)return crypto.randomUUID();}catch(e){}
+    var s="";for(var i=0;i<32;i++)s+=Math.floor(Math.random()*16).toString(16);
+    return s.slice(0,8)+"-"+s.slice(8,12)+"-4"+s.slice(13,16)+"-a"+s.slice(17,20)+"-"+s.slice(20,32);
+  }
+  var sid=qsP.get("eh_sid")||null;
+  if(!sid){try{sid=(document.cookie.match(/(?:^|; )eh_sid=([^;]+)/)||[])[1]||null;}catch(e){}}
+  if(!sid)sid=ehGen();
+  try{document.cookie="eh_sid="+sid+";path=/;max-age=2592000;samesite=Lax";}catch(e){}
+  if(ehfc){try{if(location.search.indexOf("fbclid=")===-1){var ru=new URL(location.href);ru.searchParams.set("fbclid",ehfc);history.replaceState(null,"",ru.toString());}}catch(e){}}
+  function readSy(){try{return(document.cookie.match(/(?:^|; )_shopify_y=([^;]+)/)||[])[1]||null;}catch(e){return null;}}
+  var sy=readSy();
+  function beacon(t,extra){
+    try{
+      var p={m:M,v:V,t:t,b:"a",k:null,sy:sy,sid:sid,ig:0,it:1,as:0,forced:0,u:location.href,r:document.referrer||"",us:us,um:um,uc:uc,uct:uct,ut:ut,fc:fc,ts:Date.now()};
+      if(extra)for(var key in extra)p[key]=extra[key];
+      var body=JSON.stringify(p);var sent=false;
+      if(navigator.sendBeacon){try{sent=navigator.sendBeacon(I,new Blob([body],{type:"text/plain;charset=UTF-8"}));}catch(e){}}
+      if(!sent){try{fetch(I,{method:"POST",headers:{"content-type":"text/plain;charset=UTF-8"},body:body,keepalive:true,mode:"cors",credentials:"omit"}).catch(function(){});}catch(e){}}
+    }catch(e){}
+  }
+  function touchCart(){
+    try{
+      fetch("/cart/update.json",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({attributes:{eh_sid:sid}}),credentials:"same-origin"})
+        .then(function(){return fetch("/cart.json",{credentials:"same-origin"});})
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(c){if(!c)return;var ok=0;try{if(c.attributes){var a=c.attributes;if(Array.isArray(a)){for(var i=0;i<a.length;i++){if(a[i]&&a[i].name==="eh_sid"&&a[i].value===sid){ok=1;break;}}}else if(typeof a==="object"&&a.eh_sid===sid){ok=1;}}}catch(e){}var ct=c.token||null;beacon("cart_check",{ck:ok,ct:ct});})
+        .catch(function(){beacon("cart_check",{ck:0});});
+    }catch(e){}
+  }
+  function waitForSy(maxMs,cb){var start=Date.now();function tick(){var v=readSy();if(v){sy=v;cb();return;}if(Date.now()-start>=maxMs){cb();return;}setTimeout(tick,40);}tick();}
+  waitForSy(1500,function(){beacon("impression");touchCart();});
 }catch(e){}
 })();`;
 }

@@ -1,4 +1,10 @@
-import { buildSnippet, CURRENT_VERSION, parseAllowedDomains } from "@/lib/snippet";
+import {
+  buildSnippet,
+  buildAttributionOnlySnippet,
+  isInAppBrowserUA,
+  CURRENT_VERSION,
+  parseAllowedDomains,
+} from "@/lib/snippet";
 import { obfuscateSnippet } from "@/lib/obfuscate";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { type NextRequest } from "next/server";
@@ -97,23 +103,41 @@ export async function GET(
   }
 
   const ingestUrl = `${originFrom(req)}/api/track`;
-  const raw = buildSnippet({
-    merchantId,
-    ingestUrl,
-    version: CURRENT_VERSION,
-    abEnabled,
-    fallbackButton,
-    escapeEnabled,
-    fallbackText,
-    paidOnly,
-    abSplitPct,
-    escapeInstagram,
-    escapeThreads,
-    escapeFacebook,
-    escapeMessenger,
-    escapeDiscord,
-    allowedDomains,
-  });
+
+  // UA gate: serve the full escape payload (scheme, IAB detection, bucketing)
+  // ONLY to in-app-browser UAs. Everyone else — desktop, bots, scanners, and
+  // anyone who copies the storefront <script> and pastes it into an LLM — gets
+  // the attribution-only stub with nothing to reverse-engineer. A real IG/FB
+  // visitor always matches the UA and gets the full payload, so the escape can
+  // never regress. Disable with EH_UA_GATE=0 to serve full to everyone (revert).
+  const ua = req.headers.get("user-agent") ?? "";
+  const gateEnabled = process.env.EH_UA_GATE !== "0";
+  const serveFull = !gateEnabled || isInAppBrowserUA(ua);
+
+  const raw = serveFull
+    ? buildSnippet({
+        merchantId,
+        ingestUrl,
+        version: CURRENT_VERSION,
+        abEnabled,
+        fallbackButton,
+        escapeEnabled,
+        fallbackText,
+        paidOnly,
+        abSplitPct,
+        escapeInstagram,
+        escapeThreads,
+        escapeFacebook,
+        escapeMessenger,
+        escapeDiscord,
+        allowedDomains,
+      })
+    : buildAttributionOnlySnippet({
+        merchantId,
+        ingestUrl,
+        version: CURRENT_VERSION,
+        allowedDomains,
+      });
   const body = await obfuscateSnippet(raw);
 
   return new Response(body, {
@@ -124,8 +148,13 @@ export async function GET(
       // from updateMerchantSettings + admin actions, so propagation stays
       // fast despite the longer TTL. Saves ~12x function invocations on
       // /s/[id].js at steady state vs the previous 5-min cache.
+      // Vary on UA because the body now depends on it — browsers still cache
+      // their own variant (same UA every request); only the shared CDN cache
+      // splits by UA class, and the payload is tiny.
       "cache-control": "public, max-age=3600, s-maxage=3600",
+      vary: "User-Agent",
       "x-eh-version": CURRENT_VERSION,
+      "x-eh-payload": serveFull ? "full" : "stub",
       "access-control-allow-origin": "*",
     },
   });
