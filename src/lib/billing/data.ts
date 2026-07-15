@@ -58,20 +58,36 @@ export async function computePeriodMetrics(
     return t;
   };
 
+  const PURCHASE_PAGE_SIZE = 1000;
+  const PURCHASE_ROW_SAFETY_CEILING = 200_000;
+
   async function purchaseValues(bucket: "a" | "b", from: Date, to: Date): Promise<number[]> {
-    const { data, error } = await sb
-      .from("escape_events")
-      .select("value_cents")
-      .eq("merchant_id", merchantId)
-      .eq("event_type", "purchase")
-      .eq("in_test", true)
-      .eq("bucket", bucket)
-      .gte("created_at", truncHour(from).toISOString())
-      .lt("created_at", to.toISOString())
-      .not("value_cents", "is", null)
-      .limit(10000);
-    if (error) throw new Error(`purchases ${bucket}: ${error.message}`);
-    return (data ?? []).map((r) => r.value_cents as number);
+    const values: number[] = [];
+    let offset = 0;
+    for (;;) {
+      const { data, error } = await sb
+        .from("escape_events")
+        .select("value_cents")
+        .eq("merchant_id", merchantId)
+        .eq("event_type", "purchase")
+        .eq("in_test", true)
+        .eq("bucket", bucket)
+        .gte("created_at", truncHour(from).toISOString())
+        .lt("created_at", to.toISOString())
+        .not("value_cents", "is", null)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, offset + PURCHASE_PAGE_SIZE - 1);
+      if (error) throw new Error(`purchases ${bucket}: ${error.message}`);
+      const rows = data ?? [];
+      for (const r of rows) values.push(r.value_cents as number);
+      if (values.length > PURCHASE_ROW_SAFETY_CEILING) {
+        throw new Error(`purchases ${bucket}: row count exceeds safety ceiling`);
+      }
+      if (rows.length < PURCHASE_PAGE_SIZE) break;
+      offset += PURCHASE_PAGE_SIZE;
+    }
+    return values;
   }
 
   const [aVals, bVals] = await Promise.all([
