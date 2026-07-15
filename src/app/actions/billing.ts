@@ -6,7 +6,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { siteOrigin } from "@/lib/site";
 import { computeInvoice } from "@/lib/billing/math";
 import { buildSnapshot, computePeriodMetrics } from "@/lib/billing/data";
-import { chargeInvoice, ensureCustomer, getStripe } from "@/lib/billing/stripe";
+import { chargeInvoice, getStripe } from "@/lib/billing/stripe";
 
 async function requireAdmin(): Promise<{ error: string } | null> {
   const supabase = await getSupabaseServer();
@@ -103,6 +103,7 @@ export async function startPerformancePlan(merchantId: string) {
       total_cents: baseFee,
       status: baseFee > 0 ? "charging" : "voided",
       note: initialNote,
+      charge_attempts: 1,
     })
     .select("id")
     .single();
@@ -114,12 +115,22 @@ export async function startPerformancePlan(merchantId: string) {
         customerId: m.stripe_customer_id,
         merchantId,
         invoiceRowId: row.id,
+        attempt: 1,
         lines: [{ description: "EscapeHatch platform fee — month 1", amountCents: baseFee }],
       });
-      await sb
+      const { error: bookErr } = await sb
         .from("billing_invoices")
         .update({ stripe_invoice_id: stripeInvoiceId, charged_at: new Date().toISOString() })
         .eq("id", row.id);
+      if (bookErr) {
+        console.error(
+          `failed to record charged invoice locally (stripe invoice ${stripeInvoiceId}, row ${row.id}):`,
+          bookErr,
+        );
+        return {
+          error: `charged on Stripe (invoice ${stripeInvoiceId}) but failed to record locally: ${bookErr.message} — webhook will reconcile status via metadata`,
+        };
+      }
     } catch (err) {
       const message = errorMessage(err);
       await sb
@@ -146,7 +157,7 @@ export async function saveInvoiceEdits(
   if (!sb) return { error: "backend not configured" };
   if (!Number.isInteger(baseFeeCents) || baseFeeCents < 0) return { error: "bad base fee" };
   if (!Number.isInteger(revShareCents) || revShareCents < 0) return { error: "bad rev share" };
-  const { error } = await sb
+  const { data, error } = await sb
     .from("billing_invoices")
     .update({
       base_fee_cents: baseFeeCents,
@@ -156,8 +167,10 @@ export async function saveInvoiceEdits(
       note: note || null,
     })
     .eq("id", invoiceId)
-    .eq("status", "pending_review"); // never edit after charge
+    .eq("status", "pending_review") // never edit after charge
+    .select("id");
   if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: "invoice is no longer in an editable state" };
   revalidatePath("/admin/billing");
   return { ok: true as const };
 }
@@ -172,7 +185,7 @@ export async function chargeInvoiceAction(invoiceId: string) {
   const { data: inv, error } = await sb
     .from("billing_invoices")
     .select(
-      "id, merchant_id, base_fee_cents, rev_share_cents, total_cents, status, stripe_invoice_id, snapshot, period_start, period_end, note",
+      "id, merchant_id, kind, base_fee_cents, rev_share_cents, total_cents, status, stripe_invoice_id, snapshot, period_start, period_end, note, charge_attempts",
     )
     .eq("id", invoiceId)
     .single();
@@ -190,28 +203,50 @@ export async function chargeInvoiceAction(invoiceId: string) {
     .single();
   if (!m?.stripe_customer_id) return { error: "merchant has no stripe customer" };
 
-  await sb.from("billing_invoices").update({ status: "charging" }).eq("id", inv.id);
+  const attempt = (inv.charge_attempts ?? 0) + 1;
+  const { data: claimed, error: claimErr } = await sb
+    .from("billing_invoices")
+    .update({ status: "charging", charge_attempts: attempt })
+    .eq("id", inv.id)
+    .in("status", ["pending_review", "failed"])
+    .select("id");
+  if (claimErr) return { error: claimErr.message };
+  if (!claimed || claimed.length === 0) return { error: "invoice state changed — refresh and retry" };
 
   const period = `${inv.period_start.slice(0, 10)} → ${inv.period_end.slice(0, 10)}`;
   const snap = (inv.snapshot ?? {}) as { incrementalCents?: number; revSharePct?: number };
+  const baseFeeDescription =
+    inv.kind === "plan_start"
+      ? "EscapeHatch platform fee — month 1"
+      : "EscapeHatch platform fee — next period";
   const lines = [
     {
       description: `Performance fee — ${snap.revSharePct ?? 10}% of $${((snap.incrementalCents ?? 0) / 100).toFixed(2)} incremental revenue (${period})`,
       amountCents: inv.rev_share_cents,
     },
-    { description: "EscapeHatch platform fee — next period", amountCents: inv.base_fee_cents },
+    { description: baseFeeDescription, amountCents: inv.base_fee_cents },
   ];
   try {
     const { stripeInvoiceId } = await chargeInvoice(stripe, {
       customerId: m.stripe_customer_id,
       merchantId: m.id,
       invoiceRowId: inv.id,
+      attempt,
       lines,
     });
-    await sb
+    const { error: bookErr } = await sb
       .from("billing_invoices")
       .update({ stripe_invoice_id: stripeInvoiceId, charged_at: new Date().toISOString() })
       .eq("id", inv.id);
+    if (bookErr) {
+      console.error(
+        `failed to record charged invoice locally (stripe invoice ${stripeInvoiceId}, row ${inv.id}):`,
+        bookErr,
+      );
+      return {
+        error: `charged on Stripe (invoice ${stripeInvoiceId}) but failed to record locally: ${bookErr.message} — webhook will reconcile status via metadata`,
+      };
+    }
   } catch (err) {
     const message = errorMessage(err);
     await sb
@@ -230,12 +265,14 @@ export async function voidInvoiceAction(invoiceId: string) {
   if (denied) return denied;
   const sb = getSupabaseAdmin();
   if (!sb) return { error: "backend not configured" };
-  const { error } = await sb
+  const { data, error } = await sb
     .from("billing_invoices")
     .update({ status: "voided" })
     .eq("id", invoiceId)
-    .in("status", ["pending_review", "failed"]);
+    .in("status", ["pending_review", "failed"])
+    .select("id");
   if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: "invoice is no longer voidable" };
   revalidatePath("/admin/billing");
   return { ok: true as const };
 }
@@ -248,12 +285,17 @@ export async function recomputeInvoiceAction(invoiceId: string) {
   if (!sb) return { error: "backend not configured" };
   const { data: inv, error } = await sb
     .from("billing_invoices")
-    .select("id, merchant_id, kind, period_start, period_end, status")
+    .select("id, merchant_id, kind, period_start, period_end, status, edited")
     .eq("id", invoiceId)
     .single();
   if (error || !inv) return { error: error?.message ?? "invoice not found" };
   if (inv.status !== "pending_review") return { error: "only pending invoices recompute" };
   if (inv.kind !== "monthly") return { error: "plan-start invoices are fixed" };
+  if (inv.edited)
+    return {
+      error:
+        "invoice has manual edits — recompute would discard them; void and let the cron redraft, or clear edits first",
+    };
 
   const { data: m } = await sb
     .from("merchants")

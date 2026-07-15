@@ -64,6 +64,7 @@ export async function chargeInvoice(
     customerId: string;
     merchantId: string;
     invoiceRowId: string;
+    attempt: number;
     lines: { description: string; amountCents: number }[];
   },
 ): Promise<{ stripeInvoiceId: string }> {
@@ -74,7 +75,7 @@ export async function chargeInvoice(
       auto_advance: true,
       metadata: { merchant_id: opts.merchantId, billing_invoice_id: opts.invoiceRowId },
     },
-    { idempotencyKey: `eh-inv-${opts.invoiceRowId}` },
+    { idempotencyKey: `eh-inv-${opts.invoiceRowId}-a${opts.attempt}` },
   );
   try {
     for (let i = 0; i < opts.lines.length; i++) {
@@ -88,7 +89,7 @@ export async function chargeInvoice(
           currency: "usd",
           description: line.description,
         },
-        { idempotencyKey: `eh-item-${opts.invoiceRowId}-${i}` },
+        { idempotencyKey: `eh-item-${opts.invoiceRowId}-a${opts.attempt}-${i}` },
       );
     }
     const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
