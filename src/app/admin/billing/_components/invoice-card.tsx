@@ -209,12 +209,12 @@ export function InvoiceCard({
       <div className="mt-4 grid gap-x-6 gap-y-1.5 text-[12.5px] font-mono sm:grid-cols-[minmax(0,1fr)_auto]">
         {monthly ? (
           <>
-            <Row label="impressions (escape, period)" value={monthly.impA.toLocaleString()} />
+            <Row label="impressions (escape, period)" value={monthly.impA.toLocaleString("en-US")} />
             <Row label="trimmed revenue (escape)" value={money(monthly.trimmedRevACents)} />
             <Row
               label="control RPV (running, trimmed)"
-              value={`${(monthly.controlRpvMicroCents / 1e6).toFixed(4)}/visitor`}
-              hint={`from ${monthly.impB.toLocaleString()} control impressions`}
+              value={`$${(monthly.controlRpvMicroCents / 1e6).toFixed(4)}/visitor`}
+              hint={`from ${monthly.impB.toLocaleString("en-US")} control impressions`}
             />
             <Row label="counterfactual" value={money(monthly.counterfactualCents)} />
             <Row label="incremental" value={money(monthly.incrementalCents)} />
