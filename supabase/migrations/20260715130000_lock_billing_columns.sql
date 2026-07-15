@@ -9,8 +9,13 @@
 
 alter table merchants add column if not exists card_saved boolean not null default false;
 
+-- SECURITY INVOKER (the default) is load-bearing here: inside a SECURITY
+-- DEFINER function current_user resolves to the function OWNER (postgres),
+-- which would make the whitelist below always pass and the guard a no-op.
+-- With invoker semantics current_user is the role performing the UPDATE
+-- (anon/authenticated via PostgREST, service_role for admin actions + cron).
 create or replace function eh_protect_billing_columns()
-returns trigger language plpgsql security definer set search_path = public as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   if current_user in ('service_role', 'postgres', 'supabase_admin') then
     return new;
