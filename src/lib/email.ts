@@ -41,16 +41,17 @@ export async function sendInviteEmail(opts: {
     </p>
   </div>`;
 
-  return postResendEmail(opts.to, subject, html);
+  return sendViaResend({ to: [opts.to], subject, html });
 }
 
-/** Shared Resend REST transport. Best-effort by contract: every failure
- *  mode returns { sent: false } — callers decide how to degrade. */
-async function postResendEmail(
-  to: string,
-  subject: string,
-  html: string,
-): Promise<SendResult> {
+/** Shared Resend REST transport (plain fetch — no SDK dependency).
+ *  Best-effort by contract: every failure mode returns { sent: false } —
+ *  callers decide how to degrade. */
+async function sendViaResend(opts: {
+  to: string[];
+  subject: string;
+  html: string;
+}): Promise<SendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { sent: false, error: "RESEND_API_KEY not set" };
   try {
@@ -60,17 +61,17 @@ async function postResendEmail(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from: fromAddress(), to: [to], subject, html }),
+      body: JSON.stringify({ from: fromAddress(), to: opts.to, subject: opts.subject, html: opts.html }),
     });
     if (!res.ok) {
       const body = (await res.text()).slice(0, 300);
-      console.error("[postResendEmail] resend error", res.status, body);
+      console.error("[sendViaResend] resend error", res.status, body);
       return { sent: false, error: `resend ${res.status}` };
     }
     return { sent: true, error: null };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "fetch failed";
-    console.error("[postResendEmail] fetch failed", msg);
+    console.error("[sendViaResend] fetch failed", msg);
     return { sent: false, error: msg };
   }
 }
@@ -95,7 +96,32 @@ export async function sendApprovalEmail(opts: {
       Open your dashboard
     </a>
   </div>`;
-  return postResendEmail(opts.to, subject, html);
+  return sendViaResend({ to: [opts.to], subject, html });
+}
+
+/** Admin-facing email drafted whenever the billing cron produces a
+ *  `pending_review` monthly invoice. Best-effort — the invoice still shows
+ *  up in the admin billing dashboard even if this send fails. */
+export async function sendBillingReviewEmail(opts: {
+  merchantName: string;
+  totalCents: number;
+  incrementalCents: number;
+  reviewUrl: string;
+  to: readonly string[];
+}): Promise<SendResult> {
+  const dollars = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  const subject = `Invoice ready for review: ${opts.merchantName} — ${dollars(opts.totalCents)}`;
+  const html = `
+  <div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#111">
+    <div style="font-size:15px;font-weight:600;margin-bottom:24px">${brand.name}</div>
+    <h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(opts.merchantName)} — ${dollars(opts.totalCents)}</h1>
+    <p style="font-size:14px;line-height:1.6;color:#444;margin:0 0 20px">
+      Measured incremental revenue: <strong>${dollars(opts.incrementalCents)}</strong>.
+      Nothing charges until you approve it.
+    </p>
+    <a href="${opts.reviewUrl}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px">Review &amp; charge</a>
+  </div>`;
+  return sendViaResend({ to: [...opts.to], subject, html });
 }
 
 function escapeHtml(s: string): string {
