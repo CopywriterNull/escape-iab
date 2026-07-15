@@ -17,6 +17,14 @@ function authorized(req: NextRequest): boolean {
 
 export async function GET(req: NextRequest) {
   if (!authorized(req)) return new Response("unauthorized", { status: 401 });
+
+  if (process.env.NODE_ENV === "production" && !process.env.CRON_SECRET) {
+    return new Response(JSON.stringify({ error: "missing_cron_secret" }), {
+      status: 503,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
   const sb = getSupabaseAdmin();
   if (!sb) return new Response("not configured", { status: 500 });
 
@@ -74,16 +82,21 @@ export async function GET(req: NextRequest) {
         results[m.id] = insErr.code === "23505" ? "already drafted" : `error: ${insErr.message}`;
         continue;
       }
+      let emailNote = "";
       if (comp.totalCents > 0) {
-        await sendBillingReviewEmail({
+        const sent = await sendBillingReviewEmail({
           merchantName: m.name ?? m.id,
           totalCents: comp.totalCents,
           incrementalCents: comp.incrementalCents,
           reviewUrl: `${siteOrigin()}/admin/billing`,
           to: ADMIN_EMAILS,
         });
+        if (!sent.sent) {
+          console.error(`[cron/billing] review email failed for ${m.id}: ${sent.error ?? "unknown"}`);
+          emailNote = ` (email FAILED: ${sent.error ?? "unknown"} — check /admin/billing manually)`;
+        }
       }
-      results[m.id] = comp.totalCents > 0 ? "drafted" : "auto-voided ($0)";
+      results[m.id] = comp.totalCents > 0 ? `drafted${emailNote}` : "auto-voided ($0)";
     } catch (e) {
       results[m.id] = `error: ${e instanceof Error ? e.message : String(e)}`;
     }
