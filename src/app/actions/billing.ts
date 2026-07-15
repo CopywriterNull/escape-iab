@@ -265,6 +265,39 @@ export async function voidInvoiceAction(invoiceId: string) {
   if (denied) return denied;
   const sb = getSupabaseAdmin();
   if (!sb) return { error: "backend not configured" };
+
+  const { data: inv, error: readErr } = await sb
+    .from("billing_invoices")
+    .select("id, status, stripe_invoice_id")
+    .eq("id", invoiceId)
+    .single();
+  if (readErr || !inv) return { error: readErr?.message ?? "invoice not found" };
+
+  // A `failed` row can still carry a live, finalized Stripe invoice —
+  // Stripe's smart retries keep trying to collect on it for days after the
+  // charge attempt that flipped us to `failed`. If we only void locally,
+  // Stripe can successfully charge the card after the operator believed the
+  // invoice was dead (the webhook would then flip voided → paid, reflecting
+  // a charge nobody wanted). So void the Stripe-side invoice first.
+  // `pending_review` rows have no stripe_invoice_id (never charged), so this
+  // check naturally no-ops for that path.
+  if (inv.stripe_invoice_id && inv.status === "failed") {
+    const stripe = getStripe();
+    if (!stripe) return { error: "stripe not configured — cannot void the Stripe-side invoice" };
+    try {
+      await stripe.invoices.voidInvoice(inv.stripe_invoice_id);
+    } catch (err) {
+      const message = errorMessage(err);
+      const alreadyPaid = message.toLowerCase().includes("paid");
+      const alreadyVoid = message.toLowerCase().includes("void");
+      if (alreadyPaid) {
+        return { error: "Stripe reports this invoice as already paid/settled — refresh; do not void" };
+      }
+      if (!alreadyVoid) return { error: message };
+      // Already void on Stripe's side — fall through to the local void.
+    }
+  }
+
   const { data, error } = await sb
     .from("billing_invoices")
     .update({ status: "voided" })
