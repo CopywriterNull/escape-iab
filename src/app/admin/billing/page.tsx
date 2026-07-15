@@ -26,7 +26,7 @@ export default async function AdminBillingPage() {
     admin
       .from("merchants")
       .select(
-        "id, name, billing_status, billing_anchor, ab_split_pct, stripe_customer_id, billing_setup_token, base_fee_cents, base_fee_waived, rev_share_pct",
+        "id, name, billing_status, billing_anchor, ab_split_pct, stripe_customer_id, card_saved, billing_setup_token, base_fee_cents, base_fee_waived, rev_share_pct",
       )
       .order("name", { ascending: true }),
     // Actionable rows must never be truncated out of view, no matter how

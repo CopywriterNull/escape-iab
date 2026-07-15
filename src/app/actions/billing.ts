@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type Stripe from "stripe";
 import { getSupabaseAdmin, getSupabaseServer } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/admin";
 import { siteOrigin } from "@/lib/site";
@@ -25,6 +26,29 @@ function errorMessage(err: unknown): string {
  *  is still useful context once the row is back in `failed`. */
 function appendNote(existing: string | null | undefined, message: string): string {
   return existing ? `${existing} — charge failed: ${message}` : `charge failed: ${message}`;
+}
+
+/** Void a Stripe-side invoice, sniffing the error message for the two
+ *  "nothing to do" outcomes Stripe reports as thrown errors rather than
+ *  distinct states: already paid (do NOT proceed — a charge succeeded) and
+ *  already void (fine — fall through as if we'd voided it ourselves).
+ *  Shared by voidInvoiceAction (void a dead invoice) and chargeInvoiceAction
+ *  (void the prior attempt's invoice before creating a new one on retry). */
+async function voidStripeInvoice(
+  stripe: Stripe,
+  stripeInvoiceId: string,
+): Promise<{ ok: true } | { alreadyPaid: true } | { error: string }> {
+  try {
+    await stripe.invoices.voidInvoice(stripeInvoiceId);
+    return { ok: true };
+  } catch (err) {
+    const message = errorMessage(err);
+    const alreadyPaid = message.toLowerCase().includes("paid");
+    const alreadyVoid = message.toLowerCase().includes("void");
+    if (alreadyPaid) return { alreadyPaid: true };
+    if (alreadyVoid) return { ok: true };
+    return { error: message };
+  }
 }
 
 export async function generateSetupLink(merchantId: string) {
@@ -71,6 +95,8 @@ export async function startPerformancePlan(merchantId: string) {
     .eq("id", merchantId)
     .single();
   if (mErr || !m) return { error: mErr?.message ?? "merchant not found" };
+  // Fast-path only — the CAS below is the authority on whether the flip
+  // actually happens, so a stale read here can't double-start the plan.
   if (m.billing_status === "active") return { error: "plan already active" };
   if (!m.stripe_customer_id) return { error: "no card on file — send the setup link first" };
 
@@ -79,12 +105,28 @@ export async function startPerformancePlan(merchantId: string) {
     return { error: "no default payment method — merchant must complete the setup link" };
   }
 
+  // Hour-align the anchor to the NEXT hour boundary (ceil, not floor).
+  // Chained monthly periods share hour-aligned boundaries with the rollup
+  // window rule (hour >= trunc(from) AND hour < to), so a non-aligned
+  // anchor double-counts the boundary hour of every consecutive period.
+  // Ceiling means the first few minutes after the operator's click go
+  // unbilled rather than billing pre-flip revenue — conservative in the
+  // merchant's favor.
   const anchor = new Date();
-  const { error: upErr } = await sb
+  anchor.setUTCMinutes(0, 0, 0);
+  anchor.setTime(anchor.getTime() + 3600_000);
+
+  // Atomic CAS: only flip if still not active. Prevents a race where two
+  // concurrent clicks (or a stale page + a retry) both pass the read-time
+  // check above and both create a plan_start invoice.
+  const { data: casRows, error: upErr } = await sb
     .from("merchants")
     .update({ billing_status: "active", billing_anchor: anchor.toISOString(), ab_split_pct: 90 })
-    .eq("id", merchantId);
+    .eq("id", merchantId)
+    .neq("billing_status", "active")
+    .select("id");
   if (upErr) return { error: upErr.message };
+  if (!casRows || casRows.length === 0) return { error: "plan already active" };
 
   const baseFee = m.base_fee_waived ? 0 : m.base_fee_cents;
   const initialNote = m.base_fee_waived
@@ -107,7 +149,24 @@ export async function startPerformancePlan(merchantId: string) {
     })
     .select("id")
     .single();
-  if (insErr || !row) return { error: insErr?.message ?? "invoice insert failed" };
+  if (insErr || !row) {
+    const insMessage = insErr?.message ?? "invoice insert failed";
+    const { error: rbErr } = await sb
+      .from("merchants")
+      .update({ billing_status: "none", billing_anchor: null, ab_split_pct: 50 })
+      .eq("id", merchantId);
+    if (rbErr) {
+      console.error(
+        `plan-start rollback failed for merchant ${merchantId} — left active without a month-1 invoice:`,
+        insMessage,
+        rbErr.message,
+      );
+      return {
+        error: `invoice insert failed AND rollback failed — merchant left active without a month-1 invoice; fix in DB: ${insMessage} / ${rbErr.message}`,
+      };
+    }
+    return { error: `could not create the month-1 invoice — plan start rolled back: ${insMessage}` };
+  }
 
   if (baseFee > 0) {
     try {
@@ -185,7 +244,7 @@ export async function chargeInvoiceAction(invoiceId: string) {
   const { data: inv, error } = await sb
     .from("billing_invoices")
     .select(
-      "id, merchant_id, kind, base_fee_cents, rev_share_cents, total_cents, status, stripe_invoice_id, snapshot, period_start, period_end, note, charge_attempts",
+      "id, merchant_id, kind, status, stripe_invoice_id, period_start, period_end, note, charge_attempts",
     )
     .eq("id", invoiceId)
     .single();
@@ -194,7 +253,6 @@ export async function chargeInvoiceAction(invoiceId: string) {
     return { error: `cannot charge from status ${inv.status}` };
   if (inv.stripe_invoice_id && inv.status !== "failed")
     return { error: "already has a stripe invoice" };
-  if (inv.total_cents <= 0) return { error: "total is $0 — void it instead" };
 
   const { data: m } = await sb
     .from("merchants")
@@ -203,28 +261,67 @@ export async function chargeInvoiceAction(invoiceId: string) {
     .single();
   if (!m?.stripe_customer_id) return { error: "merchant has no stripe customer" };
 
+  // Per-attempt idempotency keys (see chargeInvoice) mean a retry creates a
+  // NEW Stripe invoice — the OLD one, from the attempt that flipped this row
+  // to `failed`, is still live and collectible on Stripe's side (smart
+  // retries keep trying for days). Void it before claiming so we never end
+  // up with two collectible invoices for the same period.
+  if (inv.status === "failed" && inv.stripe_invoice_id) {
+    const voidResult = await voidStripeInvoice(stripe, inv.stripe_invoice_id);
+    if ("error" in voidResult) return { error: voidResult.error };
+    if ("alreadyPaid" in voidResult) {
+      return {
+        error:
+          "Stripe reports the previous invoice as PAID — do not recharge; the webhook will reconcile. Refresh.",
+      };
+    }
+    // ok (includes already-void) — do NOT clear stripe_invoice_id here; the
+    // post-charge bookkeeping below overwrites it with the new invoice id.
+  }
+
+  const priorStatus = inv.status;
   const attempt = (inv.charge_attempts ?? 0) + 1;
-  const { data: claimed, error: claimErr } = await sb
+  const { data: claimedRows, error: claimErr } = await sb
     .from("billing_invoices")
     .update({ status: "charging", charge_attempts: attempt })
     .eq("id", inv.id)
     .in("status", ["pending_review", "failed"])
-    .select("id");
+    .select("id, base_fee_cents, rev_share_cents, total_cents, kind, snapshot");
   if (claimErr) return { error: claimErr.message };
-  if (!claimed || claimed.length === 0) return { error: "invoice state changed — refresh and retry" };
+  if (!claimedRows || claimedRows.length === 0)
+    return { error: "invoice state changed — refresh and retry" };
+  const claimed = claimedRows[0];
+
+  // Build the charge from what the CAS claim just returned, not the earlier
+  // read above — closes the read→claim window where a concurrent edit
+  // (saveInvoiceEdits) could change amounts between the initial select and
+  // this update. The $0 guard is checked here for the same reason.
+  if (claimed.total_cents <= 0) {
+    const { error: revertErr } = await sb
+      .from("billing_invoices")
+      .update({ status: priorStatus })
+      .eq("id", inv.id);
+    if (revertErr) {
+      console.error(
+        `failed to revert invoice ${inv.id} to ${priorStatus} after post-claim $0 guard:`,
+        revertErr,
+      );
+    }
+    return { error: "total is $0 — void it instead" };
+  }
 
   const period = `${inv.period_start.slice(0, 10)} → ${inv.period_end.slice(0, 10)}`;
-  const snap = (inv.snapshot ?? {}) as { incrementalCents?: number; revSharePct?: number };
+  const snap = (claimed.snapshot ?? {}) as { incrementalCents?: number; revSharePct?: number };
   const baseFeeDescription =
-    inv.kind === "plan_start"
+    claimed.kind === "plan_start"
       ? "EscapeHatch platform fee — month 1"
       : "EscapeHatch platform fee — next period";
   const lines = [
     {
       description: `Performance fee — ${snap.revSharePct ?? 10}% of $${((snap.incrementalCents ?? 0) / 100).toFixed(2)} incremental revenue (${period})`,
-      amountCents: inv.rev_share_cents,
+      amountCents: claimed.rev_share_cents,
     },
-    { description: baseFeeDescription, amountCents: inv.base_fee_cents },
+    { description: baseFeeDescription, amountCents: claimed.base_fee_cents },
   ];
   try {
     const { stripeInvoiceId } = await chargeInvoice(stripe, {
@@ -284,18 +381,12 @@ export async function voidInvoiceAction(invoiceId: string) {
   if (inv.stripe_invoice_id && inv.status === "failed") {
     const stripe = getStripe();
     if (!stripe) return { error: "stripe not configured — cannot void the Stripe-side invoice" };
-    try {
-      await stripe.invoices.voidInvoice(inv.stripe_invoice_id);
-    } catch (err) {
-      const message = errorMessage(err);
-      const alreadyPaid = message.toLowerCase().includes("paid");
-      const alreadyVoid = message.toLowerCase().includes("void");
-      if (alreadyPaid) {
-        return { error: "Stripe reports this invoice as already paid/settled — refresh; do not void" };
-      }
-      if (!alreadyVoid) return { error: message };
-      // Already void on Stripe's side — fall through to the local void.
+    const voidResult = await voidStripeInvoice(stripe, inv.stripe_invoice_id);
+    if ("error" in voidResult) return { error: voidResult.error };
+    if ("alreadyPaid" in voidResult) {
+      return { error: "Stripe reports this invoice as already paid/settled — refresh; do not void" };
     }
+    // ok (includes already-void) — fall through to the local void.
   }
 
   const { data, error } = await sb
@@ -311,7 +402,7 @@ export async function voidInvoiceAction(invoiceId: string) {
 }
 
 /** Re-pull rollups + purchases and rebuild the snapshot (e.g. after refunds). */
-export async function recomputeInvoiceAction(invoiceId: string) {
+export async function recomputeInvoiceAction(invoiceId: string, force = false) {
   const denied = await requireAdmin();
   if (denied) return denied;
   const sb = getSupabaseAdmin();
@@ -324,10 +415,13 @@ export async function recomputeInvoiceAction(invoiceId: string) {
   if (error || !inv) return { error: error?.message ?? "invoice not found" };
   if (inv.status !== "pending_review") return { error: "only pending invoices recompute" };
   if (inv.kind !== "monthly") return { error: "plan-start invoices are fixed" };
-  if (inv.edited)
+  // Voided periods are intentionally never redrafted by the cron — void is
+  // not a remediation path for an edited invoice. `force` is the only way
+  // to discard manual edits and recompute in place (the update below already
+  // resets edited: false).
+  if (inv.edited && !force)
     return {
-      error:
-        "invoice has manual edits — recompute would discard them; void and let the cron redraft, or clear edits first",
+      error: "invoice has manual edits — use Recompute (discard edits) to overwrite them",
     };
 
   const { data: m } = await sb

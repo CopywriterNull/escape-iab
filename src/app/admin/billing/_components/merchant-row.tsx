@@ -15,6 +15,7 @@ export type BillingMerchant = {
   billing_anchor: string | null;
   ab_split_pct: number;
   stripe_customer_id: string | null;
+  card_saved: boolean;
   billing_setup_token: string | null;
   base_fee_cents: number;
   base_fee_waived: boolean;
@@ -36,12 +37,12 @@ export function MerchantRow({ merchant }: { merchant: BillingMerchant }) {
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
-  const hasCard = merchant.stripe_customer_id != null;
-  const cardLabel = hasCard
-    ? "card on file"
-    : merchant.billing_setup_token
-      ? "link sent, awaiting card"
-      : "no link sent";
+  // stripe_customer_id alone is a false positive — merely opening the setup
+  // link creates a Stripe customer before any card is saved. card_saved
+  // (flipped by the webhook on checkout.session.completed) is the real signal.
+  const hasCard = merchant.stripe_customer_id != null && merchant.card_saved;
+  const awaitingCard = !hasCard && (merchant.stripe_customer_id != null || merchant.billing_setup_token != null);
+  const cardLabel = hasCard ? "card on file" : awaitingCard ? "link sent, awaiting card" : "no link sent";
   const cardClass = hasCard ? "text-[var(--color-success)]" : "text-[var(--color-fg-muted)]";
 
   function handleCopyLink() {

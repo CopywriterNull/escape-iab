@@ -102,7 +102,7 @@ export function InvoiceCard({
   const editable = invoice.status === "pending_review";
   const canCharge = invoice.status === "pending_review" || invoice.status === "failed";
   const canVoid = invoice.status === "pending_review" || invoice.status === "failed";
-  const canRecompute = invoice.kind === "monthly" && invoice.status === "pending_review" && !invoice.edited;
+  const canRecompute = invoice.kind === "monthly" && invoice.status === "pending_review";
 
   function parsedCents(v: string): number | null {
     if (v.trim() === "") return null;
@@ -171,6 +171,20 @@ export function InvoiceCard({
   }
 
   function handleRecompute() {
+    if (invoice.edited) {
+      if (!confirm(`Discard manual edits on this invoice and recompute from source data?`)) return;
+      setMessage(null);
+      startTransition(async () => {
+        const res = await recomputeInvoiceAction(invoice.id, true);
+        if ("error" in res) {
+          setMessage(res.error);
+          return;
+        }
+        setMessage("Recomputed");
+        router.refresh();
+      });
+      return;
+    }
     setMessage(null);
     startTransition(async () => {
       const res = await recomputeInvoiceAction(invoice.id);
@@ -312,7 +326,7 @@ export function InvoiceCard({
             disabled={isPending}
             className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-border-soft)] hover:bg-[var(--color-bg-elev)] press focus-ring disabled:cursor-wait disabled:opacity-60 transition-colors"
           >
-            Recompute
+            {invoice.edited ? "Recompute (discards edits)" : "Recompute"}
           </button>
         ) : null}
         {canVoid ? (

@@ -30,6 +30,23 @@ export async function POST(req: NextRequest) {
         await stripe.customers.update(String(session.customer), {
           invoice_settings: { default_payment_method: String(si.payment_method) },
         });
+        // card_saved drives the admin UI's card-on-file indicator and
+        // Start-plan enablement. stripe_customer_id alone is a false
+        // positive — merely opening the setup link creates a customer.
+        const { error: cardSavedErr } = await sb
+          .from("merchants")
+          .update({ card_saved: true })
+          .eq("stripe_customer_id", String(session.customer));
+        if (cardSavedErr) {
+          console.error(
+            "stripe webhook: db write failed",
+            event.type,
+            "card_saved",
+            session.customer,
+            cardSavedErr,
+          );
+          return new Response("db write failed", { status: 500 });
+        }
       }
     }
   } else if (event.type === "invoice.paid" || event.type === "invoice.payment_failed") {
