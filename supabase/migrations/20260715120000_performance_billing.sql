@@ -57,3 +57,10 @@ language sql stable security definer set search_path = public as $$
     and r.hour < p_to
   group by r.bucket
 $$;
+
+-- Security-definer + default PUBLIC execute would let anon-key callers pull
+-- any merchant's revenue sums. Service-role only (cron + admin pages).
+revoke execute on function eh_billing_rollup_sums(uuid, timestamptz, timestamptz)
+  from public, anon, authenticated;
+grant execute on function eh_billing_rollup_sums(uuid, timestamptz, timestamptz)
+  to service_role;
