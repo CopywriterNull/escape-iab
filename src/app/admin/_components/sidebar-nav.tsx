@@ -6,7 +6,6 @@ import { PixelIcon } from "@/components/PixelIcon";
 
 const NAV = [
   { href: "/admin", label: "Overview", icon: "home" as const },
-  { href: "/admin/momentum", label: "Momentum", icon: "bolt" as const },
   { href: "/admin/merchants", label: "Merchants", icon: "user" as const },
   { href: "/admin/performance", label: "Performance", icon: "chart" as const },
   { href: "/admin/billing", label: "Billing", icon: "dollar" as const },

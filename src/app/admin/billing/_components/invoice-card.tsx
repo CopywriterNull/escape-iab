@@ -105,6 +105,7 @@ export function InvoiceCard({
   const canRecompute = invoice.kind === "monthly" && invoice.status === "pending_review" && !invoice.edited;
 
   function parsedCents(v: string): number | null {
+    if (v.trim() === "") return null;
     const n = Number(v);
     if (!Number.isFinite(n) || n < 0) return null;
     return Math.round(n * 100);
@@ -130,15 +131,19 @@ export function InvoiceCard({
   }
 
   function handleCharge() {
-    // Charge always bills the invoice's saved total (Save persists edits
-    // first) — use the live inputs for the confirm amount only when they're
-    // still in sync with what's on the row, otherwise fall back to it.
-    const baseFeeCents = parsedCents(baseFeeInput);
-    const revShareCents = parsedCents(revShareInput);
-    const total = editable && baseFeeCents != null && revShareCents != null
-      ? baseFeeCents + revShareCents
-      : invoice.total_cents;
-    if (!confirm(`Charge ${money(total)} to ${merchantName}'s card now?`)) return;
+    // Charge always bills the invoice's persisted row values, so the confirm
+    // dialog must show exactly that — never live (possibly unsaved) input state.
+    if (editable) {
+      const baseFeeCents = parsedCents(baseFeeInput);
+      const revShareCents = parsedCents(revShareInput);
+      const dirty =
+        baseFeeCents !== invoice.base_fee_cents || revShareCents !== invoice.rev_share_cents;
+      if (dirty) {
+        setMessage("Unsaved edits — Save (or reset) before charging");
+        return;
+      }
+    }
+    if (!confirm(`Charge ${money(invoice.total_cents)} to ${merchantName}'s card now?`)) return;
     setMessage(null);
     startTransition(async () => {
       const res = await chargeInvoiceAction(invoice.id);

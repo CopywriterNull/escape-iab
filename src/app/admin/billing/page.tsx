@@ -22,16 +22,26 @@ export default async function AdminBillingPage() {
     return <EmptyState title="Service role unavailable" detail="Set SUPABASE_SERVICE_ROLE_KEY to load billing." />;
   }
 
-  const [merchantsRes, invoicesRes] = await Promise.all([
+  const [merchantsRes, actionableRes, historyRes] = await Promise.all([
     admin
       .from("merchants")
       .select(
         "id, name, billing_status, billing_anchor, ab_split_pct, stripe_customer_id, billing_setup_token, base_fee_cents, base_fee_waived, rev_share_pct",
       )
       .order("name", { ascending: true }),
+    // Actionable rows must never be truncated out of view, no matter how
+    // much settled history has piled up — hence no limit (500 is a sanity
+    // bound, not an expected ceiling).
     admin
       .from("billing_invoices")
       .select(INVOICE_COLUMNS)
+      .in("status", ["pending_review", "failed", "charging"])
+      .order("created_at", { ascending: false })
+      .limit(500),
+    admin
+      .from("billing_invoices")
+      .select(INVOICE_COLUMNS)
+      .in("status", ["paid", "voided"])
       .order("created_at", { ascending: false })
       .limit(100),
   ]);
@@ -39,26 +49,22 @@ export default async function AdminBillingPage() {
   if (merchantsRes.error) {
     return <EmptyState title="Could not load merchants" detail={merchantsRes.error.message} />;
   }
-  if (invoicesRes.error) {
-    return <EmptyState title="Could not load invoices" detail={invoicesRes.error.message} />;
+  if (actionableRes.error) {
+    return <EmptyState title="Could not load invoices" detail={actionableRes.error.message} />;
+  }
+  if (historyRes.error) {
+    return <EmptyState title="Could not load invoices" detail={historyRes.error.message} />;
   }
 
   const merchants = (merchantsRes.data ?? []) as BillingMerchant[];
   const merchantNames = new Map(merchants.map((m) => [m.id, m.name ?? "(unnamed)"]));
 
-  // `.sort` is stable in V8, so within each group rows keep the
-  // created_at-desc order the query already returned them in.
-  const invoices = ([...(invoicesRes.data ?? [])] as InvoiceRow[]).sort((a, b) => {
-    const rank = (s: InvoiceRow["status"]) => (s === "pending_review" ? 0 : 1);
-    return rank(a.status) - rank(b.status);
-  });
-
-  // "Needs attention" covers both invoices awaiting operator review and
-  // invoices whose last charge attempt failed (both need the full editable
-  // card — Retry/Void/Save). Settled/in-flight rows (charging, paid, voided)
-  // go to the plain History list below.
-  const attention = invoices.filter((i) => i.status === "pending_review" || i.status === "failed");
-  const history = invoices.filter((i) => i.status === "charging" || i.status === "paid" || i.status === "voided");
+  // "Needs attention" covers invoices awaiting operator review, invoices
+  // whose last charge attempt failed, and invoices mid-charge — fetched
+  // without a truncating limit so none of them can silently fall off the
+  // queue. Settled rows (paid, voided) go to the plain History list below.
+  const attention = (actionableRes.data ?? []) as InvoiceRow[];
+  const history = (historyRes.data ?? []) as InvoiceRow[];
 
   return (
     <div className="space-y-7">
@@ -122,8 +128,8 @@ export default async function AdminBillingPage() {
         <div className="px-5 py-3 border-b border-[var(--color-border-soft)]">
           <h2 className="text-[14px] font-semibold tracking-tight">History</h2>
           <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)]">
-            Settled and in-flight invoices. A row sitting in &quot;charging&quot; for a minute or two is normal —
-            the Stripe webhook settles it to paid/failed.
+            Settled invoices — paid or voided. In-flight charges stay in Pending review until the
+            Stripe webhook settles them to paid/failed.
           </div>
         </div>
         {history.length === 0 ? (
