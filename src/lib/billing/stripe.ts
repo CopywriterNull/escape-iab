@@ -96,14 +96,26 @@ export async function chargeInvoice(
     if (!finalized.id) throw new Error("finalized invoice has no id");
     return { stripeInvoiceId: finalized.id };
   } catch (err) {
-    // The invoice is still a draft at this point (finalization either
-    // hasn't happened or threw) — drafts are deleted, not voided. Clean it
-    // up so auto_advance can't silently finalize and charge it ~1h later
-    // with no billing_invoices record pointing at it.
+    // The invoice is usually still a draft at this point (finalization
+    // either hasn't happened or threw) — drafts are deleted, not voided.
+    // Clean it up so auto_advance can't silently finalize and charge it
+    // ~1h later with no billing_invoices record pointing at it.
     try {
       await stripe.invoices.del(invoice.id);
-    } catch (delErr) {
-      console.error(`failed to delete orphaned draft invoice ${invoice.id}`, delErr);
+    } catch {
+      // del only works on drafts. If finalizeInvoice threw AFTER Stripe
+      // actually finalized (timeout/5xx on the response leg), the invoice
+      // is open and collectible — and the caller records no
+      // stripe_invoice_id, so void-before-retry would miss it and a retry
+      // would double-charge. Void is the correct cleanup for that state.
+      try {
+        await stripe.invoices.voidInvoice(invoice.id);
+      } catch (voidErr) {
+        console.error(
+          `failed to delete AND void orphaned invoice ${invoice.id} (billing row ${opts.invoiceRowId})`,
+          voidErr,
+        );
+      }
     }
     throw err;
   }

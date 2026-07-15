@@ -221,7 +221,17 @@ export function InvoiceCard({
 
       {invoice.status === "charging" ? (
         <div className="mt-3 rounded-md border border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] px-3 py-2 text-[11.5px] text-[var(--color-fg)]">
-          In flight — Stripe is processing this charge. The webhook settles it to paid/failed within a minute or two; this is normal, not an error.
+          In flight — Stripe auto-collects after finalization, typically within the hour. The webhook settles this to paid/failed; this is normal, not an error.
+        </div>
+      ) : null}
+
+      {monthly && monthly.trimmedRevBCents === 0 && monthly.incrementalCents > 0 ? (
+        // amber matches .pill-warn — there is no --color-warning token
+        <div className="mt-3 rounded-md border border-[rgba(245,158,11,0.30)] bg-[rgba(245,158,11,0.10)] px-3 py-2 text-[11.5px] text-[var(--color-fg)]">
+          Control too thin — $0 control revenue over {monthly.impB.toLocaleString("en-US")} impressions
+          makes the counterfactual $0, so ALL escape revenue is counted as incremental. Review the split
+          runtime before charging; consider editing the performance fee down or voiding until the control
+          has purchases.
         </div>
       ) : null}
 

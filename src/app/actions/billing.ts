@@ -51,6 +51,38 @@ async function voidStripeInvoice(
   }
 }
 
+/** Sweep Stripe for invoices tagged with this billing row that we have no
+ *  local pointer to. A failed attempt can strand one: if finalizeInvoice
+ *  threw after Stripe actually finalized (timeout), the in-flight cleanup
+ *  can miss it and the row records stripe_invoice_id = null — so the
+ *  void-before-retry guard in chargeInvoiceAction never fires. Called on
+ *  retries with no recorded invoice id, before creating a new invoice. */
+async function sweepOrphanStripeInvoices(
+  stripe: Stripe,
+  customerId: string,
+  invoiceRowId: string,
+): Promise<{ ok: true } | { alreadyPaid: true } | { error: string }> {
+  try {
+    // list() by customer is strongly consistent (unlike invoices.search,
+    // which can lag a just-created invoice by up to a minute).
+    const { data: invoices } = await stripe.invoices.list({ customer: customerId, limit: 100 });
+    for (const orphan of invoices) {
+      if (orphan.metadata?.billing_invoice_id !== invoiceRowId || !orphan.id) continue;
+      if (orphan.status === "paid") return { alreadyPaid: true };
+      if (orphan.status === "draft") {
+        await stripe.invoices.del(orphan.id);
+      } else if (orphan.status === "open") {
+        const voided = await voidStripeInvoice(stripe, orphan.id);
+        if ("alreadyPaid" in voided) return { alreadyPaid: true };
+        if ("error" in voided) return voided;
+      }
+    }
+    return { ok: true };
+  } catch (err) {
+    return { error: errorMessage(err) };
+  }
+}
+
 export async function generateSetupLink(merchantId: string) {
   const denied = await requireAdmin();
   if (denied) return denied;
@@ -277,6 +309,20 @@ export async function chargeInvoiceAction(invoiceId: string) {
     }
     // ok (includes already-void) — do NOT clear stripe_invoice_id here; the
     // post-charge bookkeeping below overwrites it with the new invoice id.
+  }
+
+  // A prior attempt can strand a collectible invoice on Stripe with no local
+  // pointer (finalize succeeded but the response leg threw). Sweep by
+  // metadata before creating another one.
+  if (inv.status === "failed" && !inv.stripe_invoice_id && (inv.charge_attempts ?? 0) > 0) {
+    const sweep = await sweepOrphanStripeInvoices(stripe, m.stripe_customer_id, inv.id);
+    if ("error" in sweep) return { error: sweep.error };
+    if ("alreadyPaid" in sweep) {
+      return {
+        error:
+          "Stripe reports a previous invoice for this row as PAID — do not recharge; the webhook will reconcile. Refresh.",
+      };
+    }
   }
 
   const priorStatus = inv.status;
