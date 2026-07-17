@@ -63,6 +63,9 @@ export type Merchant = {
   escape_facebook?: boolean;
   escape_messenger?: boolean;
   escape_discord?: boolean;
+  /** When true, snippet stamps utm_term=escapehatch-<bucket> (Shopify-visible
+   *  A/B). Off by default; enabled per-merchant (G FUEL + Kaiyo). */
+  utm_tagging?: boolean;
   /** live = normal dashboard; pending = gated-signup approval experience. */
   status?: "live" | "pending";
   /** Storefront platform captured at self-serve signup. */

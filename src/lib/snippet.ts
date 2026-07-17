@@ -51,6 +51,10 @@ type SnippetOpts = {
   escapeFacebook?: boolean;
   escapeMessenger?: boolean;
   escapeDiscord?: boolean;
+  /** When true, stamp utm_term=escapehatch-<bucket> on the landing URL
+   *  (only when utm_term is absent) so the merchant's own Shopify UTM-term
+   *  report shows the A/B split. Off by default; enabled per-merchant. */
+  utmTagging?: boolean;
   /** Hostname allowlist baked at compile time. Empty array = no restriction
    *  (F&F installs, dev). When populated, the snippet bails before any
    *  escape if location.hostname doesn't match an apex or any subdomain.
@@ -122,13 +126,15 @@ export function buildSnippet(opts: SnippetOpts): string {
   const escapeFacebook = opts.escapeFacebook === true ? "true" : "false";
   const escapeMessenger = opts.escapeMessenger === true ? "true" : "false";
   const escapeDiscord = opts.escapeDiscord === true ? "true" : "false";
+  // utm_term tagging (Shopify-visible A/B). Off unless explicitly enabled.
+  const utmTagging = opts.utmTagging === true ? "true" : "false";
   // Allowed hostnames baked at compile time. Empty array = no restriction
   // (F&F installs and pre-domain merchants keep working).
   const allowedDomains = JSON.stringify(opts.allowedDomains ?? []);
 
   return `(function(){
 try{
-  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord},AD=${allowedDomains};
+  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord},UT_TAG=${utmTagging},AD=${allowedDomains};
 
   // Async kill-switch — if a prior /api/escape/status response in this
   // session marked us disabled, bail before doing anything. Lets inlined /
@@ -319,6 +325,24 @@ try{
 
   var bk=null;
 
+  // utm_term A/B tagging (Shopify-visible). When enabled, stamp
+  // utm_term=escapehatch-<bucket> on the current URL via replaceState — but
+  // ONLY when the merchant/ad didn't already set utm_term (never clobber
+  // their attribution). Runs synchronously in <head> before Shopify's Web
+  // Pixels Manager, so Shopify captures the tagged landing URL for BOTH
+  // buckets on the IAB side; the escape destination is built from
+  // location.href afterward, so bucket A carries the tag into Safari too.
+  // Skipped post-escape (utm_term already present from the IAB rewrite).
+  function tagUtm(){
+    try{
+      if(!UT_TAG||!bk||postEscape)return;
+      if(qsP.has("utm_term"))return;
+      var tu=new URL(location.href);
+      tu.searchParams.set("utm_term","escapehatch-"+bk);
+      history.replaceState(null,"",tu.toString());
+    }catch(e){}
+  }
+
   // ─── Facebook / Messenger escape ─────────────────────────────────────
   // FB has no extbrowser private scheme on iOS. We render a full-screen
   // press-and-hold splash so iOS' native long-press menu hands off to
@@ -337,6 +361,7 @@ try{
       try{bk=(document.cookie.match(/(?:^|; )eh_b=([^;]+)/)||[])[1]||null;}catch(e){}
       if(!bk){bk=(Math.random()<SPLIT)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
     }
+    tagUtm();
     beacon("impression");
     // FORCED treats "b" as silent-return regardless of AB toggle, so QA
     // can preview control behavior even with AB off.
@@ -441,6 +466,11 @@ try{
     if(postEscape){bk="a";try{document.cookie="eh_b=a;path=/;max-age=2592000;samesite=Lax";}catch(e){}}
     else if(!bk){bk=(Math.random()<SPLIT)?"a":"b";try{document.cookie="eh_b="+bk+";path=/;max-age=2592000;samesite=Lax";}catch(e){}}
   }
+
+  // Stamp utm_term=escapehatch-<bucket> before the impression beacon and
+  // before the escape-destination URL is built (below), so both the IAB
+  // impression and bucket A's Safari handoff carry the tag. No-op post-escape.
+  tagUtm();
 
   // Touch the Shopify cart: write eh_sid attribute AND capture cart_token.
   // cart_token is the ONLY identifier that survives every Shopify checkout flow

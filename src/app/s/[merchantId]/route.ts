@@ -45,6 +45,9 @@ export async function GET(
   let escapeFacebook = false;
   let escapeMessenger = false;
   let escapeDiscord = false;
+  // utm_term A/B tagging (Shopify-visible). Off unless explicitly enabled
+  // per-merchant (G FUEL + Kaiyo). Missing column reads as off.
+  let utmTagging = false;
   let allowedDomains: string[] = [];
   let valid = isValidShape;
   if (isValidShape) {
@@ -82,6 +85,9 @@ export async function GET(
         escapeFacebook = m.escape_facebook === true;
         escapeMessenger = m.escape_messenger === true;
         escapeDiscord = m.escape_discord === true;
+        // Only an explicit `true` keeps tagging on; missing column / false /
+        // null reads as off, so unenabled merchants are untouched.
+        utmTagging = m.utm_tagging === true;
         // Hostname binding allowlist. Empty when merchant.domain is null/
         // blank — preserves the existing "works anywhere" behavior for F&F
         // installs and pre-domain merchants.
@@ -130,6 +136,7 @@ export async function GET(
         escapeFacebook,
         escapeMessenger,
         escapeDiscord,
+        utmTagging,
         allowedDomains,
       })
     : buildAttributionOnlySnippet({
