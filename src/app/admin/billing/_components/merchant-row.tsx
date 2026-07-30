@@ -32,7 +32,15 @@ function statusPillClass(status: BillingMerchant["billing_status"]): string {
   return "pill pill-muted";
 }
 
-export function MerchantRow({ merchant }: { merchant: BillingMerchant }) {
+export function MerchantRow({
+  merchant,
+  estShareSinceStartCents,
+}: {
+  merchant: BillingMerchant;
+  /** Est. rev share (untrimmed) accrued since tracking started — what we
+   *  would have billed at their pct. Null = no earnings data loaded. */
+  estShareSinceStartCents?: number | null;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -125,6 +133,11 @@ export function MerchantRow({ merchant }: { merchant: BillingMerchant }) {
       </td>
       <td className="px-4 py-3 align-middle">
         <span className="font-mono tnum text-[12px]">{merchant.rev_share_pct}%</span>
+      </td>
+      <td className="px-4 py-3 align-middle">
+        <span className="font-mono tnum text-[12px]">
+          {estShareSinceStartCents == null ? "—" : money(estShareSinceStartCents)}
+        </span>
       </td>
       <td className="px-4 py-3 align-middle">
         <div className="flex flex-col items-start gap-1.5">
