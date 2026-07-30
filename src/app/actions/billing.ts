@@ -207,7 +207,7 @@ export async function startPerformancePlan(merchantId: string) {
         merchantId,
         invoiceRowId: row.id,
         attempt: 1,
-        lines: [{ description: "Escape Hatch - Platform Fee", amountCents: baseFee }],
+        lines: [{ description: "Escape Hatch - Unlimited Plan", amountCents: baseFee }],
       });
       const { error: bookErr } = await sb
         .from("billing_invoices")
@@ -358,7 +358,7 @@ export async function chargeInvoiceAction(invoiceId: string) {
 
   const period = `${inv.period_start.slice(0, 10)} → ${inv.period_end.slice(0, 10)}`;
   const snap = (claimed.snapshot ?? {}) as { incrementalCents?: number; revSharePct?: number };
-  const baseFeeDescription = "Escape Hatch - Platform Fee";
+  const baseFeeDescription = "Escape Hatch - Unlimited Plan";
   const lines = [
     {
       description: `Performance fee — ${snap.revSharePct ?? 10}% of $${((snap.incrementalCents ?? 0) / 100).toFixed(2)} incremental revenue (${period})`,
