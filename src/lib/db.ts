@@ -665,6 +665,59 @@ async function hasHourlyRollupCoverage(
   return true;
 }
 
+export type DailyBucketPoint = {
+  /** UTC day (YYYY-MM-DD) or hour ISO for sub-3-day ranges. */
+  key: string;
+  impA: number;
+  purA: number;
+  impB: number;
+  purB: number;
+};
+
+/** Per-day (or per-hour for short ranges) impressions + purchases by bucket,
+ *  from hourly_funnel_rollups. Powers the conversion-rate-over-time chart.
+ *  Aggregated in JS — rollup rows are small (2 buckets × 24h × days). */
+export async function getDailyBucketSeries(
+  merchantId: string,
+  days: number,
+  window?: MetricWindow,
+): Promise<{ granularity: "day" | "hour"; points: DailyBucketPoint[] }> {
+  const supabase = await getTelemetryClient();
+  if (!supabase) return { granularity: "day", points: [] };
+  const sinceIso = window
+    ? window.sinceIso
+    : new Date(Date.now() - days * 86400_000).toISOString();
+  const untilIso = window ? window.untilIso : new Date().toISOString();
+  const spanDays = window
+    ? (new Date(untilIso).getTime() - new Date(sinceIso).getTime()) / 86400_000
+    : days;
+  const granularity: "day" | "hour" = spanDays < 3 ? "hour" : "day";
+
+  const { data } = await supabase
+    .from("hourly_funnel_rollups")
+    .select("hour, bucket, impressions, purchases")
+    .eq("merchant_id", merchantId)
+    .gte("hour", sinceIso)
+    .lt("hour", untilIso)
+    .order("hour", { ascending: true })
+    .limit(20000);
+
+  const byKey = new Map<string, DailyBucketPoint>();
+  for (const r of (data ?? []) as { hour: string; bucket: string; impressions: number; purchases: number }[]) {
+    const key = granularity === "day" ? r.hour.slice(0, 10) : r.hour;
+    const p = byKey.get(key) ?? { key, impA: 0, purA: 0, impB: 0, purB: 0 };
+    if (r.bucket === "a") {
+      p.impA += r.impressions ?? 0;
+      p.purA += r.purchases ?? 0;
+    } else if (r.bucket === "b") {
+      p.impB += r.impressions ?? 0;
+      p.purB += r.purchases ?? 0;
+    }
+    byKey.set(key, p);
+  }
+  return { granularity, points: Array.from(byKey.values()).sort((a, b) => (a.key < b.key ? -1 : 1)) };
+}
+
 /** Last hour with tracked impressions — powers the dashboard's live-status
  *  pill. Null = no impressions ever (snippet never seen traffic). */
 export async function getLastImpressionHour(merchantId: string): Promise<string | null> {

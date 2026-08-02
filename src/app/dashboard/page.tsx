@@ -3,6 +3,7 @@ import { Suspense, cache } from "react";
 import {
   getAbTestWindow,
   getCurrentMerchant,
+  getDailyBucketSeries,
   getLastImpressionHour,
   getMerchantRollupFreshness,
   getPeriodDelta,
@@ -280,7 +281,7 @@ export async function DashboardView({
       ) : null}
 
       <Suspense key={`hero-${range.key}-${showOutliers}`} fallback={<HeroSkeleton />}>
-        <HeroSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} window={activeWindow} />
+        <HeroSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} window={activeWindow} readonly={readonlyView} />
       </Suspense>
 
       <Suspense key={`banner-${range.key}-${showOutliers}`} fallback={<BannerSkeleton />}>
@@ -289,6 +290,10 @@ export async function DashboardView({
 
       <Suspense key={`kpi-${range.key}-${showOutliers}`} fallback={<KPIGridSkeleton />}>
         <KPISection merchantId={m} days={d} excludeOutliers={excludeOutliers} window={activeWindow} />
+      </Suspense>
+
+      <Suspense key={`cvr-${range.key}`} fallback={<ChartSkeleton rangeLabel={range.label} />}>
+        <ConversionChartSection merchantId={m} days={d} window={activeWindow} />
       </Suspense>
 
       <Suspense key={`funnel-${range.key}-${funnelMode}-${showOutliers}`} fallback={<FunnelSkeleton />}>
@@ -550,12 +555,14 @@ async function HeroSection({
   rangeLabel,
   excludeOutliers,
   window,
+  readonly: readonlyView = false,
 }: {
   merchantId: string;
   days: number;
   rangeLabel: string;
   excludeOutliers: boolean;
   window?: MetricWindow;
+  readonly?: boolean;
 }) {
   const funnel = await fetchFunnel(merchantId, days, excludeOutliers, window);
   const baseA = funnel.impressions.a;
@@ -590,86 +597,264 @@ async function HeroSection({
     );
   }
 
-  const liftStr = liftRel == null ? "—" : `${liftRel > 0 ? "+" : ""}${(liftRel * 100).toFixed(1)}%`;
+  // Headline = conversion lift (order-rate A vs B); "converts X% vs Y%" line.
+  const cvrA = baseA > 0 ? funnel.purchases.a / baseA : null;
+  const cvrB = baseB > 0 ? funnel.purchases.b / baseB : null;
+  const cvrLift = cvrA != null && cvrB != null && cvrB > 0 ? cvrA / cvrB - 1 : null;
+  const headline = cvrLift ?? liftRel;
+  const liftStr = headline == null ? "—" : `${headline > 0 ? "+" : ""}${(headline * 100).toFixed(1)}%`;
   const liftColor =
-    liftRel == null
+    headline == null
       ? "text-[var(--color-fg-dim)]"
-      : liftRel > 0
+      : headline > 0
         ? "text-[var(--color-success)]"
         : "text-[var(--color-danger)]";
 
-  // Plain-English confidence sentence.
-  const confidence =
-    z?.pValue != null ? Math.round((1 - z.pValue) * 100) : null;
+  const confidence = z?.pValue != null ? Math.round((1 - z.pValue) * 100) : null;
   const sig = z?.significant === true;
-  const winner = liftRel != null && liftRel > 0 ? "A (escape)" : "B (control)";
+  const verdict: { label: string; cls: string } =
+    headline == null || confidence == null
+      ? { label: "GATHERING", cls: "pill pill-muted" }
+      : sig && headline > 0
+        ? { label: "WINNING", cls: "pill pill-success" }
+        : sig && headline < 0
+          ? { label: "LOSING", cls: "pill pill-danger" }
+          : { label: "TESTING", cls: "pill pill-warn" };
 
-  let confidenceText: React.ReactNode;
-  if (confidence == null) {
-    confidenceText = (
-      <>Gathering data · not enough impressions for a verdict.</>
-    );
-  } else if (sig) {
-    confidenceText = (
-      <>
-        <span className="text-[var(--color-fg)] font-medium">{confidence}% confident</span>
-        <span className="text-[var(--color-fg-muted)]"> · winner: {winner}</span>
-      </>
-    );
-  } else {
-    confidenceText = (
-      <>
-        <span className="text-[var(--color-fg-dim)]">{confidence}% confident</span>
-        <span className="text-[var(--color-fg-muted)]"> · need 95% to call it. Keep the test running.</span>
-      </>
-    );
-  }
+  const oOrders = funnel.outliers.a.orders + funnel.outliers.b.orders;
+  const oCents = funnel.outliers.a.cents + funnel.outliers.b.cents;
 
   return (
-    <div className="px-1 py-1">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-accent)]">
-          Test performance · last {rangeLabel}
+    <div className="rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-card)] grid lg:grid-cols-2 lg:divide-x divide-y lg:divide-y-0 divide-[var(--color-border-soft)]">
+      {/* Left: the verdict */}
+      <div className="px-5 py-5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className="text-[10.5px] uppercase tracking-[0.18em] font-semibold font-mono text-[var(--color-fg-muted)]">
+            Result · {window ? rangeLabel : `last ${rangeLabel}`}
+          </span>
+          <span className={verdict.cls}>{verdict.label}</span>
+        </div>
+        <div className={`mt-2 h-display tracking-tight text-[40px] md:text-[52px] leading-[1.02] tnum ${liftColor}`}>
+          {liftStr}
+        </div>
+        <div className="mt-1 text-[15px] text-[var(--color-fg-dim)]">conversion lift</div>
+        <div className="mt-3 text-[13px] text-[var(--color-fg-dim)]">
+          {cvrA != null && cvrB != null ? (
+            <>
+              Escape converts{" "}
+              <span className="text-[var(--color-success)] font-medium tnum">{(cvrA * 100).toFixed(2)}%</span> vs{" "}
+              <span className="tnum">{(cvrB * 100).toFixed(2)}%</span> control
+            </>
+          ) : (
+            <>Need traffic in both buckets to compare conversion.</>
+          )}
         </div>
       </div>
-      <div className={`mt-2 h-display tracking-tight text-[36px] md:text-[56px] leading-[1.05] tnum ${liftColor}`}>
-        {liftStr}
+
+      {/* Right: the money + action */}
+      <div className="px-5 py-5 flex flex-col">
+        <div className={`h-display tracking-tight text-[32px] md:text-[40px] leading-[1.05] tnum ${revenueDelta >= 0 ? "text-[var(--color-success)]" : "text-[var(--color-danger)]"}`}>
+          {fmtUSD(revenueDelta, { compact: true, signed: true })}
+        </div>
+        <div className="mt-1 text-[14px] text-[var(--color-fg-dim)]">
+          projected revenue at full rollout
+        </div>
+        <div className="mt-2 text-[12.5px] font-mono">
+          {confidence == null ? (
+            <span className="text-[var(--color-fg-muted)]">gathering data</span>
+          ) : (
+            <span className={sig ? "text-[var(--color-fg)] font-medium" : "text-[var(--color-fg-dim)]"}>
+              {confidence}% confidence{sig ? "" : " · need 95% to call it"}
+            </span>
+          )}
+        </div>
+        <div className="mt-4 flex items-end justify-between gap-3 flex-wrap grow">
+          {!readonlyView && revenueDelta > 0 && sig ? (
+            <Link
+              href="/dashboard/settings"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-[var(--color-success)] text-white text-[13px] font-medium press lift focus-ring"
+            >
+              Roll out to 100%
+              <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+          ) : (
+            <span />
+          )}
+          {oOrders > 0 ? (
+            <span
+              className="text-[11px] font-mono text-[var(--color-fg-muted)]"
+              title={
+                funnel.outliers.excluded
+                  ? `Excludes ${fmtUSD(oCents / 100, { compact: true })} from ${oOrders} order${oOrders > 1 ? "s" : ""} that are extreme vs your typical order — so one big order can't swing the result. Toggle Raw to include.`
+                  : `Includes ${oOrders} outlier order${oOrders > 1 ? "s" : ""} (${fmtUSD(oCents / 100, { compact: true })}) that can distort per-visitor lift. Toggle Trimmed to exclude.`
+              }
+            >
+              {oOrders} outlier order{oOrders > 1 ? "s" : ""} {funnel.outliers.excluded ? "excluded" : "included"}
+            </span>
+          ) : null}
+        </div>
       </div>
-      <div className="mt-2 text-[14px] text-[var(--color-fg-dim)]">
-        {liftRel == null ? (
-          <>Need both buckets to have revenue to compute lift.</>
-        ) : revenueDelta >= 0 ? (
-          <>
-            Projected{" "}
-            <span className="text-[var(--color-fg)] font-medium tnum">{fmtUSD(revenueDelta, { compact: true, signed: true })}</span>{" "}
-            more revenue if 100% of traffic got the escape.
-          </>
-        ) : (
-          <>
-            Escape currently{" "}
-            <span className="text-[var(--color-danger)] font-medium tnum">underperforming</span>{" "}
-            control by {fmtUSD(Math.abs(revenueDelta), { compact: true })}.
-          </>
-        )}
-      </div>
-      <div className="mt-1 text-[12.5px] font-mono">
-        {confidenceText}
-      </div>
-      {(() => {
-        const oOrders = funnel.outliers.a.orders + funnel.outliers.b.orders;
-        const oCents = funnel.outliers.a.cents + funnel.outliers.b.cents;
-        if (oOrders === 0) return null;
-        const amt = fmtUSD(oCents / 100, { compact: true });
-        const plural = oOrders > 1 ? "s" : "";
-        return (
-          <div className="mt-1.5 text-[11px] font-mono text-[var(--color-fg-muted)]">
-            {funnel.outliers.excluded
-              ? `Excludes ${amt} from ${oOrders} outlier order${plural} that are extreme vs your typical order — so one big order can't swing this. Toggle Raw to include.`
-              : `Includes ${oOrders} outlier order${plural} (${amt}) that can distort per-visitor lift. Toggle Trimmed to exclude.`}
-          </div>
-        );
-      })()}
     </div>
+  );
+}
+
+/** Conversion rate over time — per-day (per-hour on short ranges) purchase
+ *  CVR for each bucket. Day-level care:
+ *  - a bucket with 0 impressions that day = a GAP (line breaks), not a 0% dot
+ *  - < 50 impressions = hollow low-sample dot (plotted, visibly tentative)
+ *  - every dot carries an exact n/N tooltip so no point is just vibes
+ *  - after a 90/10 flip the control line thins out honestly rather than
+ *    pretending noise is signal. */
+async function ConversionChartSection({
+  merchantId,
+  days,
+  window,
+}: {
+  merchantId: string;
+  days: number;
+  window?: MetricWindow;
+}) {
+  const { granularity, points } = await getDailyBucketSeries(merchantId, days, window);
+  if (points.length < 2) return null;
+
+  const LOW_SAMPLE = 50;
+  type Dot = { x: number; y: number; cvr: number; imp: number; pur: number; low: boolean; label: string };
+  const fmtKey = (key: string): string => {
+    if (granularity === "hour") return `${key.slice(11, 16) || key.slice(11, 13)}:00`.slice(0, 5);
+    const [, mo, da] = key.slice(0, 10).split("-");
+    return `${MONTHS[Number(mo) - 1]} ${Number(da)}`;
+  };
+
+  const W = 900;
+  const H = 200;
+  const PAD_L = 34;
+  const PAD_R = 10;
+  const PAD_T = 10;
+  const PAD_B = 24;
+  const n = points.length;
+  const x = (i: number) => PAD_L + (i * (W - PAD_L - PAD_R)) / Math.max(1, n - 1);
+
+  const series = (bucket: "a" | "b"): Dot[][] => {
+    // Segments split on zero-impression gaps.
+    const segs: Dot[][] = [];
+    let cur: Dot[] = [];
+    points.forEach((p, i) => {
+      const imp = bucket === "a" ? p.impA : p.impB;
+      const pur = bucket === "a" ? p.purA : p.purB;
+      if (imp <= 0) {
+        if (cur.length) segs.push(cur);
+        cur = [];
+        return;
+      }
+      const cvr = pur / imp;
+      cur.push({
+        x: x(i),
+        y: 0, // filled after yScale known
+        cvr,
+        imp,
+        pur,
+        low: imp < LOW_SAMPLE,
+        label: `${fmtKey(p.key)} — ${bucket === "a" ? "Escape" : "Control"} ${(cvr * 100).toFixed(2)}% (${pur.toLocaleString()} / ${imp.toLocaleString()})${imp < LOW_SAMPLE ? " · low sample" : ""}`,
+      });
+    });
+    if (cur.length) segs.push(cur);
+    return segs;
+  };
+
+  const segsA = series("a");
+  const segsB = series("b");
+  const allDots = [...segsA.flat(), ...segsB.flat()];
+  if (allDots.length === 0) return null;
+  const maxCvr = Math.max(...allDots.map((d) => d.cvr), 0.01);
+  // Nice ceiling: whole percents; step 1% up to 6%, else 2%.
+  const maxPct = Math.max(2, Math.ceil(maxCvr * 100));
+  const step = maxPct > 6 ? 2 : 1;
+  const topPct = Math.ceil(maxPct / step) * step;
+  const y = (cvr: number) => PAD_T + (1 - (cvr * 100) / topPct) * (H - PAD_T - PAD_B);
+  for (const d0 of allDots) d0.y = y(d0.cvr);
+
+  const path = (seg: Dot[]) => seg.map((d1, i) => `${i === 0 ? "M" : "L"} ${d1.x.toFixed(1)},${d1.y.toFixed(1)}`).join(" ");
+  const gridPcts: number[] = [];
+  for (let p = step; p <= topPct; p += step) gridPcts.push(p);
+  // ≤16 x-labels: every nth point, always including the last.
+  const labelEvery = Math.max(1, Math.ceil(n / 16));
+  const totalImpA = points.reduce((s, p) => s + p.impA, 0);
+  const totalPurA = points.reduce((s, p) => s + p.purA, 0);
+  const totalImpB = points.reduce((s, p) => s + p.impB, 0);
+  const totalPurB = points.reduce((s, p) => s + p.purB, 0);
+  const aggA = totalImpA > 0 ? (totalPurA / totalImpA) * 100 : null;
+  const aggB = totalImpB > 0 ? (totalPurB / totalImpB) * 100 : null;
+
+  return (
+    <Card
+      title={
+        <span className="flex items-center gap-3 flex-wrap">
+          <span className="h-section text-[14px]">Conversion rate over time</span>
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono tnum">
+            <span className="inline-block w-4 h-[2.5px] rounded bg-[var(--color-success)]" />
+            Escape{aggA != null ? ` ${aggA.toFixed(2)}%` : ""}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono tnum text-[var(--color-fg-muted)]">
+            <span className="inline-block w-4 h-[2.5px] rounded bg-[var(--color-fg-muted)]/60" />
+            Control{aggB != null ? ` ${aggB.toFixed(2)}%` : ""}
+          </span>
+        </span>
+      }
+      action={<MonoLabel>{granularity === "hour" ? "hourly" : "daily"}</MonoLabel>}
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Daily conversion rate, escape vs control">
+        {gridPcts.map((p) => (
+          <g key={p}>
+            <line
+              x1={PAD_L}
+              x2={W - PAD_R}
+              y1={y(p / 100)}
+              y2={y(p / 100)}
+              stroke="var(--color-border-soft)"
+              strokeDasharray="3 4"
+            />
+            <text x={PAD_L - 6} y={y(p / 100) + 3} textAnchor="end" fontSize="9" fill="var(--color-fg-muted)" fontFamily="monospace">
+              {p}%
+            </text>
+          </g>
+        ))}
+        <line x1={PAD_L} x2={W - PAD_R} y1={y(0)} y2={y(0)} stroke="var(--color-border)" />
+        {segsB.map((seg, i) => (
+          <path key={`b${i}`} d={path(seg)} fill="none" stroke="var(--color-fg-muted)" strokeOpacity="0.55" strokeWidth="1.75" />
+        ))}
+        {segsA.map((seg, i) => (
+          <path key={`a${i}`} d={path(seg)} fill="none" stroke="var(--color-success)" strokeWidth="2" />
+        ))}
+        {segsB.flat().map((d1, i) => (
+          <g key={`db${i}`}>
+            <title>{d1.label}</title>
+            <circle cx={d1.x} cy={d1.y} r={d1.low ? 3 : 3.5} fill={d1.low ? "var(--color-card)" : "var(--color-fg-muted)"} stroke="var(--color-fg-muted)" strokeWidth="1.5" opacity={d1.low ? 0.6 : 0.8} />
+            <circle cx={d1.x} cy={d1.y} r={9} fill="transparent" />
+          </g>
+        ))}
+        {segsA.flat().map((d1, i) => (
+          <g key={`da${i}`}>
+            <title>{d1.label}</title>
+            <circle cx={d1.x} cy={d1.y} r={d1.low ? 3 : 3.5} fill={d1.low ? "var(--color-card)" : "var(--color-success)"} stroke="var(--color-success)" strokeWidth="1.5" opacity={d1.low ? 0.7 : 1} />
+            <circle cx={d1.x} cy={d1.y} r={9} fill="transparent" />
+          </g>
+        ))}
+        {points.map((p, i) =>
+          i % labelEvery === 0 || i === n - 1 ? (
+            <text key={p.key} x={x(i)} y={H - 8} textAnchor="middle" fontSize="9" fill="var(--color-fg-muted)" fontFamily="monospace">
+              {fmtKey(p.key)}
+            </text>
+          ) : null,
+        )}
+      </svg>
+      {allDots.some((d1) => d1.low) ? (
+        <div className="mt-1 text-[10.5px] font-mono text-[var(--color-fg-muted)]">
+          ○ hollow dots = under {LOW_SAMPLE} impressions that {granularity} — directional, not significant. Gaps = no traffic in that bucket.
+        </div>
+      ) : null}
+    </Card>
   );
 }
 
@@ -1145,15 +1330,15 @@ function KPIGrid({
         deltaLabel={period.priorLabel}
       />
       <KPI
-        label="Impressions"
-        icon="eye"
-        value={fmtCompact(impressions)}
-        sub={`${escapeAttempts.toLocaleString()} escapes (A)`}
-        delta={period.deltas.impressions}
+        label="Purchases"
+        icon="cart"
+        value={purchases.toLocaleString()}
+        sub={fmtUSD(revenue, { compact: true }) + " tracked revenue"}
+        delta={period.deltas.revenue_cents}
         deltaLabel={period.priorLabel}
       />
       <KPI
-        label="Incremental"
+        label="Observed incremental revenue"
         icon="dollar"
         value={incrementalRevenue != null ? fmtUSD(incrementalRevenue, { compact: true, signed: true }) : "—"}
         valueClass={
@@ -1172,19 +1357,12 @@ function KPIGrid({
         }
       />
       <KPI
-        label="Lift · A vs B"
-        icon="chart"
-        value={liftStr}
-        valueClass={liftColor}
-        sub={
-          cvrA != null && cvrB != null
-            ? `A ${(cvrA * 100).toFixed(2)}% · B ${(cvrB * 100).toFixed(2)}%${
-                pValue != null ? ` · ${Math.round((1 - pValue) * 100)}%` : ""
-              }`
-            : pValue != null
-              ? `${Math.round((1 - pValue) * 100)}% confident`
-              : "need more data"
-        }
+        label="Impressions"
+        icon="eye"
+        value={fmtCompact(impressions)}
+        sub={`${escapeAttempts.toLocaleString()} escapes (A)`}
+        delta={period.deltas.impressions}
+        deltaLabel={period.priorLabel}
       />
     </div>
   );
