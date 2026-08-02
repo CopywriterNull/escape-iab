@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   generateSetupLink,
+  generateBillingViewLink,
   startPerformancePlan,
   setBaseFeeWaived,
 } from "@/app/actions/billing";
@@ -67,6 +68,25 @@ export function MerchantRow({
       } catch {
         setMessage(res.url);
       }
+      router.refresh();
+    });
+  }
+
+  function handleCopyViewLink() {
+    setMessage(null);
+    startTransition(async () => {
+      const res = await generateBillingViewLink(merchant.id);
+      if ("error" in res) {
+        setMessage(res.error);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(res.url);
+        setMessage("Billing view link copied");
+      } catch {
+        setMessage(res.url);
+      }
+      window.open(res.url, "_blank", "noopener");
       router.refresh();
     });
   }
@@ -149,6 +169,15 @@ export function MerchantRow({
               className="text-[11.5px] px-2.5 py-1 rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg-elev)] press focus-ring disabled:cursor-wait disabled:opacity-60 transition-colors"
             >
               Copy setup link
+            </button>
+            <button
+              type="button"
+              onClick={handleCopyViewLink}
+              disabled={isPending}
+              title="Merchant-facing billing view — copies the link and opens it"
+              className="text-[11.5px] px-2.5 py-1 rounded-md border border-[var(--color-border)] hover:bg-[var(--color-bg-elev)] press focus-ring disabled:cursor-wait disabled:opacity-60 transition-colors"
+            >
+              Billing view ↗
             </button>
             {merchant.billing_status !== "active" ? (
               <button

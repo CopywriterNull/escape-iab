@@ -98,6 +98,40 @@ export async function generateSetupLink(merchantId: string) {
   return { url: `${siteOrigin()}/billing/setup/${token}` };
 }
 
+/** Merchant-facing billing view link. Stable: mints the token once and
+ *  returns the same URL forever after (the merchant may bookmark it). */
+export async function generateBillingViewLink(merchantId: string) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+  const sb = getSupabaseAdmin();
+  if (!sb) return { error: "backend not configured" };
+  const { data: m, error: readErr } = await sb
+    .from("merchants")
+    .select("billing_view_token")
+    .eq("id", merchantId)
+    .single();
+  if (readErr || !m) return { error: readErr?.message ?? "merchant not found" };
+  let token = m.billing_view_token as string | null;
+  if (!token) {
+    token = crypto.randomUUID().replace(/-/g, "");
+    const { error } = await sb
+      .from("merchants")
+      .update({ billing_view_token: token })
+      .eq("id", merchantId)
+      .is("billing_view_token", null);
+    if (error) return { error: error.message };
+    // Concurrent mint: re-read in case another request won the null-guard.
+    const { data: after } = await sb
+      .from("merchants")
+      .select("billing_view_token")
+      .eq("id", merchantId)
+      .single();
+    token = (after?.billing_view_token as string | null) ?? token;
+    revalidatePath("/admin/billing");
+  }
+  return { url: `${siteOrigin()}/billing/view/${token}` };
+}
+
 export async function setBaseFeeWaived(merchantId: string, waived: boolean) {
   const denied = await requireAdmin();
   if (denied) return denied;

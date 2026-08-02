@@ -24,6 +24,8 @@ export type DailyShare = {
 
 export type MerchantEarnings = {
   firstTrackedAt: string | null;
+  /** All-time per-bucket sums — for RPV/lift display on merchant-facing views. */
+  allTime: { impA: number; revACents: number; impB: number; revBCents: number };
   sinceStartIncrementalCents: number;
   sinceStartShareCents: number;
   last30dIncrementalCents: number;
@@ -145,6 +147,7 @@ export async function fetchEarnings(
 
     out.set(m.id, {
       firstTrackedAt: firstHour.get(m.id) ?? null,
+      allTime: { impA: at.impA, revACents: at.revA, impB: at.impB, revBCents: at.revB },
       sinceStartIncrementalCents: sinceStartInc,
       sinceStartShareCents: shareOf(sinceStartInc, m.rev_share_pct),
       last30dIncrementalCents: last30dInc,
