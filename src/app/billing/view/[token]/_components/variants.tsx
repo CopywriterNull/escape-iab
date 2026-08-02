@@ -315,10 +315,10 @@ export function DashView({ data }: { data: ViewData }) {
         <DashKPI
           label="Accruing this period"
           icon="cart"
-          value={data.accruing ? money(data.accruing.totalCents) : "—"}
+          value={data.accruing ? money(data.accruing.revShareCents) : "—"}
           sub={
             data.accruing
-              ? `bills ${fmtDate(data.accruing.periodEnd)} · ${money(data.accruing.revShareCents)} performance + ${money(data.accruing.baseFeeCents)} base`
+              ? `performance fee · bills ${fmtDate(data.accruing.periodEnd)}`
               : "plan not active"
           }
         />
@@ -393,10 +393,7 @@ export function StatementView({ data }: { data: ViewData }) {
         <RowKV k="Your plan" v={planLine(data)} />
         {data.accruing ? (
           <>
-            <RowKV
-              k="Accruing this period"
-              v={`${money(data.accruing.revShareCents)} performance + ${money(data.accruing.baseFeeCents)} base`}
-            />
+            <RowKV k="Accruing this period" v={`${money(data.accruing.revShareCents)} performance fee`} />
             <RowKV k="Next bill date" v={fmtLongDate(data.accruing.periodEnd)} />
           </>
         ) : null}
@@ -450,8 +447,8 @@ export function ConsoleView({ data }: { data: ViewData }) {
         />
         <Tile
           label="Accruing this period"
-          value={data.accruing ? money(data.accruing.totalCents) : "—"}
-          hint={data.accruing ? `bills ${fmtDate(data.accruing.periodEnd)}` : undefined}
+          value={data.accruing ? money(data.accruing.revShareCents) : "—"}
+          hint={data.accruing ? `performance fee · bills ${fmtDate(data.accruing.periodEnd)}` : undefined}
         />
       </div>
 
@@ -556,7 +553,7 @@ export function ChartLedView({ data }: { data: ViewData }) {
           </div>
           <div className="mt-1 text-[13px] tnum">
             {data.accruing
-              ? `${money(data.accruing.totalCents)} · bills ${fmtLongDate(data.accruing.periodEnd)}`
+              ? `${money(data.accruing.revShareCents)} performance fee · bills ${fmtLongDate(data.accruing.periodEnd)}`
               : "—"}
           </div>
         </div>
