@@ -160,6 +160,111 @@ export async function fetchEarnings(
   return out;
 }
 
+export type TrimmedViewEarnings = MerchantEarnings & {
+  /** All-time RPV lift, outlier-trimmed both sides. Null without control. */
+  liftPct: number | null;
+};
+
+/** Merchant-facing earnings: same outlier-trimmed running-control math the
+ *  invoices use, so a single whale order can't flip the page negative the
+ *  way the untrimmed admin estimates can. Heavier (reads raw purchase rows)
+ *  — fine for a single-merchant page, not for the all-merchants admin list. */
+export async function fetchTrimmedViewEarnings(
+  sb: SupabaseClient,
+  merchant: { id: string; rev_share_pct: number },
+): Promise<TrimmedViewEarnings> {
+  const zeroOut = (daily: DailyShare[]): TrimmedViewEarnings => ({
+    firstTrackedAt: null,
+    allTime: { impA: 0, revACents: 0, impB: 0, revBCents: 0 },
+    sinceStartIncrementalCents: 0,
+    sinceStartShareCents: 0,
+    last30dIncrementalCents: 0,
+    last30dShareCents: 0,
+    todayIncrementalCents: 0,
+    todayShareCents: 0,
+    daily,
+    liftPct: null,
+  });
+
+  const now = new Date();
+  const dayKeys: string[] = [];
+  for (let i = WINDOW_DAYS - 1; i >= 0; i--) {
+    dayKeys.push(utcDayString(new Date(now.getTime() - i * 86_400_000)));
+  }
+  const emptyDaily = dayKeys.map((day) => ({ day, incrementalCents: 0, shareCents: 0 }));
+
+  const { data: firstRow, error: firstErr } = await sb
+    .from("hourly_funnel_rollups")
+    .select("hour")
+    .eq("merchant_id", merchant.id)
+    .order("hour", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (firstErr) throw new Error(`first hour: ${firstErr.message}`);
+  if (!firstRow) return zeroOut(emptyDaily);
+  const first = new Date(firstRow.hour as string);
+
+  const windowStart = new Date(now.getTime() - WINDOW_DAYS * 86_400_000);
+  const [allMetrics, winMetrics, dailyRes] = await Promise.all([
+    // All-time: period == control window == [first, now).
+    computePeriodMetrics(sb, merchant.id, first, first, now),
+    // 30d escape window against the same running control [first, now).
+    computePeriodMetrics(sb, merchant.id, first, windowStart < first ? first : windowStart, now),
+    sb.rpc("eh_admin_billing_earnings", { p_days: WINDOW_DAYS }),
+  ]);
+  if (dailyRes.error) throw new Error(`earnings rollup: ${dailyRes.error.message}`);
+
+  // Trimmed running-control RPV (micro-cents/impression) shared by every
+  // estimate below — mirrors computeInvoice's no-control conservatism.
+  const hasControl = allMetrics.impB > 0;
+  const rpvMicro = hasControl
+    ? Math.round((allMetrics.trimmedRevBCents * 1_000_000) / allMetrics.impB)
+    : 0;
+  const incAgainstControl = (impA: number, revACents: number): number => {
+    if (!hasControl) return 0;
+    return Math.max(0, revACents - Math.round((impA * rpvMicro) / 1_000_000));
+  };
+
+  type Row = { merchant_id: string; day: string | null; bucket: string; impressions: number; revenue_cents: number };
+  const dayA = new Map<string, { imp: number; rev: number }>();
+  for (const r of (dailyRes.data ?? []) as Row[]) {
+    if (r.merchant_id !== merchant.id || r.day === null || r.bucket !== "a") continue;
+    const s = dayA.get(r.day) ?? { imp: 0, rev: 0 };
+    s.imp += Number(r.impressions);
+    s.rev += Number(r.revenue_cents);
+    dayA.set(r.day, s);
+  }
+  const daily: DailyShare[] = dayKeys.map((day) => {
+    const s = dayA.get(day) ?? { imp: 0, rev: 0 };
+    const inc = incAgainstControl(s.imp, s.rev);
+    return { day, incrementalCents: inc, shareCents: shareOf(inc, merchant.rev_share_pct) };
+  });
+
+  const sinceStartInc = incAgainstControl(allMetrics.impA, allMetrics.trimmedRevACents);
+  const last30dInc = incAgainstControl(winMetrics.impA, winMetrics.trimmedRevACents);
+  const todayPoint = daily[daily.length - 1];
+  const rpvA = allMetrics.impA > 0 ? allMetrics.trimmedRevACents / allMetrics.impA : 0;
+  const rpvB = hasControl ? allMetrics.trimmedRevBCents / allMetrics.impB : 0;
+
+  return {
+    firstTrackedAt: first.toISOString(),
+    allTime: {
+      impA: allMetrics.impA,
+      revACents: allMetrics.trimmedRevACents,
+      impB: allMetrics.impB,
+      revBCents: allMetrics.trimmedRevBCents,
+    },
+    sinceStartIncrementalCents: sinceStartInc,
+    sinceStartShareCents: shareOf(sinceStartInc, merchant.rev_share_pct),
+    last30dIncrementalCents: last30dInc,
+    last30dShareCents: shareOf(last30dInc, merchant.rev_share_pct),
+    todayIncrementalCents: todayPoint?.incrementalCents ?? 0,
+    todayShareCents: todayPoint?.shareCents ?? 0,
+    daily,
+    liftPct: hasControl && rpvB > 0 ? ((rpvA - rpvB) / rpvB) * 100 : null,
+  };
+}
+
 /** What the NEXT monthly invoice is accruing toward for an active merchant —
  *  the real billable number: same trimmed math the cron will run, over the
  *  currently open period. */

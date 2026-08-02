@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import { computeAccruing, fetchEarnings, type AccruingPeriod } from "@/lib/billing/earnings";
+import {
+  computeAccruing,
+  fetchTrimmedViewEarnings,
+  type AccruingPeriod,
+} from "@/lib/billing/earnings";
 import {
   ChartLedView,
   ConsoleView,
@@ -35,8 +39,10 @@ export default async function BillingViewPage({
     .single();
   if (!m) notFound();
 
-  const [earningsMap, invoicesRes] = await Promise.all([
-    fetchEarnings(sb, [{ id: m.id, rev_share_pct: Number(m.rev_share_pct) }]),
+  const [earnings, invoicesRes] = await Promise.all([
+    // Trimmed running-control math (same as invoices) — the untrimmed admin
+    // estimates can be flipped negative by a single whale control order.
+    fetchTrimmedViewEarnings(sb, { id: m.id, rev_share_pct: Number(m.rev_share_pct) }),
     // Merchant sees settled + in-flight charges only — never internal
     // pending_review drafts (not yet operator-approved) or voided rows.
     sb
@@ -47,9 +53,6 @@ export default async function BillingViewPage({
       .order("created_at", { ascending: false })
       .limit(50),
   ]);
-  const earnings = earningsMap.get(m.id);
-  if (!earnings) notFound();
-
   let accruing: AccruingPeriod | null = null;
   if (m.billing_status === "active" && m.billing_anchor) {
     try {
@@ -65,12 +68,6 @@ export default async function BillingViewPage({
     }
   }
 
-  const { impA, revACents, impB, revBCents } = earnings.allTime;
-  const liftPct =
-    impA > 0 && impB > 0 && revBCents > 0
-      ? ((revACents / impA - revBCents / impB) / (revBCents / impB)) * 100
-      : null;
-
   const data: ViewData = {
     merchantName: m.name ?? "Your store",
     planActive: m.billing_status === "active",
@@ -80,7 +77,7 @@ export default async function BillingViewPage({
     earnings,
     accruing,
     invoices: (invoicesRes.data ?? []) as ViewInvoice[],
-    liftPct,
+    liftPct: earnings.liftPct,
   };
 
   if (v === "3") return <ChartLedView data={data} />;
