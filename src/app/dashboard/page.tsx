@@ -342,9 +342,6 @@ async function BillingSection({ merchant }: { merchant: Merchant }) {
       created_at: string;
     };
     const invoices = (invoicesRes.data ?? []) as BillingInvoiceRow[];
-    const billedCents = invoices
-      .filter((i) => i.status === "paid")
-      .reduce((s, i) => s + i.total_cents, 0);
     const revSharePct = Number(merchant.rev_share_pct ?? 10);
     const baseFee = merchant.base_fee_waived ? 0 : (merchant.base_fee_cents ?? 30000);
     return (
@@ -356,7 +353,7 @@ async function BillingSection({ merchant }: { merchant: Merchant }) {
           </MonoLabel>
         }
       >
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
           <div>
             <MonoLabel>Accruing · performance fee</MonoLabel>
             <div className="mt-1.5 h-section text-[20px] tnum text-[var(--color-accent)]">
@@ -371,14 +368,6 @@ async function BillingSection({ merchant }: { merchant: Merchant }) {
             <div className="mt-1.5 h-section text-[20px] tnum">{accruing.periodEnd.slice(0, 10)}</div>
             <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] tnum">
               {merchant.base_fee_waived ? "base fee waived" : `+ ${fmtUSD(baseFee / 100)} platform fee`}
-            </div>
-          </div>
-          <div>
-            <MonoLabel>Billed to date</MonoLabel>
-            <div className="mt-1.5 h-section text-[20px] tnum">{fmtUSD(billedCents / 100)}</div>
-            <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] tnum">
-              {invoices.filter((i) => i.status === "paid").length} paid invoice
-              {invoices.filter((i) => i.status === "paid").length === 1 ? "" : "s"}
             </div>
           </div>
           <div>
