@@ -1020,7 +1020,7 @@ function KPIGrid({
         : "text-[var(--color-danger)]";
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       <KPI
         label="Rev / visitor"
         icon="dollar"
@@ -1066,14 +1066,6 @@ function KPIGrid({
             ? `${fmtUSD(rolloutIncrementalRevenue, { compact: true, signed: true })} at full rollout`
             : "A vs B revenue per visitor"
         }
-      />
-      <KPI
-        label="Revenue (test)"
-        icon="cart"
-        value={fmtUSD(revenue, { compact: true })}
-        sub={`${purchases.toLocaleString()} purchases`}
-        delta={period.deltas.revenue_cents}
-        deltaLabel={period.priorLabel}
       />
       <KPI
         label="Lift · A vs B"
