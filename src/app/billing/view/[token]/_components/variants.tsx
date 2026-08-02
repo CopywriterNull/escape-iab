@@ -2,6 +2,7 @@
 // same ViewData. ?v=1|2|3 picks one (default: statement). Server components —
 // no client JS; hover detail rides on native SVG <title>.
 
+import { PixelIcon } from "@/components/PixelIcon";
 import type { MerchantEarnings, AccruingPeriod } from "@/lib/billing/earnings";
 
 export type ViewInvoice = {
@@ -203,6 +204,162 @@ function FooterNote() {
 function planLine(d: ViewData): string {
   const base = d.baseFeeWaived ? "base fee waived" : `${money0(d.baseFeeCents)}/mo`;
   return `Unlimited Plan — ${base} + ${d.revSharePct}% of incremental revenue`;
+}
+
+/* ---------- V0 · Dash (default) — mirrors the product dashboard's visual
+   language: KPI cards with pixel icons + mono labels, Card sections. ---------- */
+
+function MonoLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
+      {children}
+    </div>
+  );
+}
+
+function DashCard({
+  title,
+  action,
+  children,
+  padded = true,
+}: {
+  title?: React.ReactNode;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  padded?: boolean;
+}) {
+  return (
+    <section className="bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg">
+      {title || action ? (
+        <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-soft)]">
+          {title ? <h2 className="h-section text-[14px]">{title}</h2> : null}
+          {action}
+        </header>
+      ) : null}
+      {padded ? <div className="px-4 py-3">{children}</div> : children}
+    </section>
+  );
+}
+
+function DashKPI({
+  label,
+  icon,
+  value,
+  sub,
+  valueClass = "",
+}: {
+  label: string;
+  icon: "dollar" | "eye" | "bolt" | "cart" | "chart";
+  value: string;
+  sub?: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="bg-[var(--color-card)] border border-[var(--color-border-soft)] rounded-lg px-4 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <MonoLabel>{label}</MonoLabel>
+        <PixelIcon name={icon} size={12} className="text-[var(--color-fg-muted)]" />
+      </div>
+      <div className="mt-2 h-section text-[22px] md:text-[24px] tnum">
+        <span className={valueClass}>{value}</span>
+      </div>
+      {sub ? <div className="mt-1 text-[11px] text-[var(--color-fg-muted)] tnum">{sub}</div> : null}
+    </div>
+  );
+}
+
+export function DashView({ data }: { data: ViewData }) {
+  const e = data.earnings;
+  const { impA, revACents, impB, revBCents } = e.allTime;
+  const rpvA = impA > 0 ? revACents / impA / 100 : null;
+  const rpvB = impB > 0 ? revBCents / impB / 100 : null;
+  const liftStr =
+    data.liftPct != null ? `${data.liftPct > 0 ? "+" : ""}${data.liftPct.toFixed(1)}%` : "—";
+  return (
+    <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6 space-y-4 md:space-y-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap pb-1">
+        <Wordmark />
+        <div className="text-[11.5px] font-mono text-[var(--color-fg-muted)] tnum">
+          {data.merchantName} · Billing
+          {e.firstTrackedAt ? ` · tracking since ${fmtDate(e.firstTrackedAt)}` : ""}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <DashKPI
+          label="Incremental revenue"
+          icon="dollar"
+          value={money0(e.sinceStartIncrementalCents)}
+          valueClass="text-[var(--color-success)]"
+          sub={e.firstTrackedAt ? `all time · since ${fmtDate(e.firstTrackedAt)}` : "all time"}
+        />
+        <DashKPI
+          label="Incremental · 30d"
+          icon="chart"
+          value={money0(e.last30dIncrementalCents)}
+          sub={`today ${money(e.todayIncrementalCents)}`}
+        />
+        <DashKPI
+          label="Rev / visitor lift"
+          icon="bolt"
+          value={liftStr}
+          valueClass={
+            data.liftPct == null
+              ? ""
+              : data.liftPct > 0
+                ? "text-[var(--color-success)]"
+                : "text-[var(--color-danger)]"
+          }
+          sub={rpvA != null && rpvB != null ? `A $${rpvA.toFixed(2)} · B $${rpvB.toFixed(2)}` : "vs in-app baseline"}
+        />
+        <DashKPI
+          label="Accruing this period"
+          icon="cart"
+          value={data.accruing ? money(data.accruing.totalCents) : "—"}
+          sub={
+            data.accruing
+              ? `bills ${fmtDate(data.accruing.periodEnd)} · ${money(data.accruing.revShareCents)} performance + ${money(data.accruing.baseFeeCents)} base`
+              : "plan not active"
+          }
+        />
+      </div>
+
+      <DashCard title="Daily incremental revenue" action={<MonoLabel>30d</MonoLabel>}>
+        <DailyBars daily={e.daily} height={110} />
+        <div className="mt-1 flex items-center justify-between text-[10.5px] text-[var(--color-fg-muted)] font-mono">
+          <span>{fmtDayLabel(e.daily[0]?.day ?? "")}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-1.5 rounded-full bg-[var(--color-accent)]" /> incremental $
+          </span>
+          <span>{fmtDayLabel(e.daily[e.daily.length - 1]?.day ?? "")}</span>
+        </div>
+      </DashCard>
+
+      <div className="grid lg:grid-cols-12 gap-4">
+        <div className="lg:col-span-7">
+          <DashCard title="Invoices" padded={false}>
+            <div className="px-4 py-3">
+              <InvoiceTable invoices={data.invoices} />
+            </div>
+          </DashCard>
+        </div>
+        <div className="lg:col-span-5 space-y-4">
+          <DashCard title="Your plan">
+            <div className="text-[13px]">{planLine(data)}</div>
+            {data.accruing ? (
+              <div className="mt-2 text-[11.5px] text-[var(--color-fg-muted)] tnum">
+                Current period {fmtDate(data.accruing.periodStart)} → {fmtDate(data.accruing.periodEnd)} ·{" "}
+                {money(data.accruing.incrementalCents)} incremental so far
+              </div>
+            ) : null}
+          </DashCard>
+          <DashCard>
+            <FooterNote />
+          </DashCard>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ---------- V1 · Statement ---------- */

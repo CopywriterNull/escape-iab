@@ -8,6 +8,7 @@ import {
 import {
   ChartLedView,
   ConsoleView,
+  DashView,
   StatementView,
   type ViewData,
   type ViewInvoice,
@@ -16,8 +17,8 @@ import {
 export const dynamic = "force-dynamic";
 
 // Merchant-facing, token-addressed, read-only. Value-first: leads with the
-// incremental revenue story, then fees. ?v=1|2|3 switches design variations
-// (1 = statement default) — kept as a quiet override after a winner is picked.
+// incremental revenue story, then fees. Default = dashboard-style view;
+// ?v=1|2|3 (statement / console / chart-led) kept as quiet overrides.
 export default async function BillingViewPage({
   params,
   searchParams,
@@ -80,7 +81,8 @@ export default async function BillingViewPage({
     liftPct: earnings.liftPct,
   };
 
-  if (v === "3") return <ChartLedView data={data} />;
+  if (v === "1") return <StatementView data={data} />;
   if (v === "2") return <ConsoleView data={data} />;
-  return <StatementView data={data} />;
+  if (v === "3") return <ChartLedView data={data} />;
+  return <DashView data={data} />;
 }
