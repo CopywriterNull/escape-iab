@@ -142,6 +142,32 @@ export default async function DashboardOverview({
   searchParams: SearchParams;
 }) {
   const sp = await searchParams;
+  const merchant = await getCurrentMerchant();
+  if (!merchant) {
+    return (
+      <Page range={parseDashboardRange(sp.range === "abtest" ? undefined : sp.range)}>
+        <Card><CardBody><MutedText>Provisioning merchant record…</MutedText></CardBody></Card>
+      </Page>
+    );
+  }
+  return <DashboardView merchant={merchant} sp={sp} />;
+}
+
+/** The full dashboard body for a known merchant. Reused by the tokened
+ *  read-only share route (/share/[token]) — `readonly` hides operator
+ *  actions (install CTA/status, rollup refresh, settings links) and
+ *  `basePath` keeps range/funnel/outlier toggles on the share URL. */
+export async function DashboardView({
+  merchant,
+  sp,
+  basePath = "/dashboard",
+  readonly: readonlyView = false,
+}: {
+  merchant: Merchant;
+  sp: Record<string, string | undefined>;
+  basePath?: string;
+  readonly?: boolean;
+}) {
   const isAbTest = sp.range === "abtest";
   const isPlanPeriod = sp.range === "plan";
   const funnelMode = parseFunnelMode(sp.funnel);
@@ -155,17 +181,8 @@ export default async function DashboardOverview({
     if (sp.funnel) p.set("funnel", sp.funnel);
     if (show) p.set("outliers", "1");
     const qs = p.toString();
-    return qs ? `/dashboard?${qs}` : "/dashboard";
+    return qs ? `${basePath}?${qs}` : basePath;
   };
-
-  const merchant = await getCurrentMerchant();
-  if (!merchant) {
-    return (
-      <Page range={parseDashboardRange(isAbTest ? undefined : sp.range)}>
-        <Card><CardBody><MutedText>Provisioning merchant record…</MutedText></CardBody></Card>
-      </Page>
-    );
-  }
 
   const m = merchant.id;
 
@@ -201,6 +218,7 @@ export default async function DashboardOverview({
     <Page
       range={range}
       funnelMode={funnelMode}
+      basePath={basePath}
       abTest={abWindow ? { active: isAbTest, label: "A/B test" } : undefined}
       planPeriod={planWindow ? { active: isPlanPeriod, label: "Plan period" } : undefined}
       subtitle={
@@ -232,17 +250,25 @@ export default async function DashboardOverview({
               </Link>
             ))}
           </div>
-          <RollupRefreshControl
-            lastRefresh={merchantFreshness.lastRefresh}
-            stale={merchantFreshness.stale}
-          />
-          <Suspense fallback={<InstallCta />}>
-            <InstallStatusAction merchant={merchant} />
-          </Suspense>
+          {!readonlyView ? (
+            <RollupRefreshControl
+              lastRefresh={merchantFreshness.lastRefresh}
+              stale={merchantFreshness.stale}
+            />
+          ) : null}
+          {!readonlyView ? (
+            <Suspense fallback={<InstallCta />}>
+              <InstallStatusAction merchant={merchant} />
+            </Suspense>
+          ) : (
+            <Suspense fallback={null}>
+              <InstallStatusPill merchant={merchant} />
+            </Suspense>
+          )}
         </div>
       }
     >
-      <ScopeBanner merchant={merchant} />
+      <ScopeBanner merchant={merchant} readonly={readonlyView} />
 
       <RollupFreshnessBanner freshness={rollupFreshness} />
 
@@ -266,7 +292,7 @@ export default async function DashboardOverview({
       </Suspense>
 
       <Suspense key={`funnel-${range.key}-${funnelMode}-${showOutliers}`} fallback={<FunnelSkeleton />}>
-        <FunnelSection merchantId={m} days={d} mode={funnelMode} rangeKey={range.key} excludeOutliers={excludeOutliers} window={activeWindow} />
+        <FunnelSection merchantId={m} days={d} mode={funnelMode} rangeKey={range.key} excludeOutliers={excludeOutliers} window={activeWindow} basePath={basePath} />
       </Suspense>
 
       <Suspense fallback={null}>
@@ -314,38 +340,58 @@ function InstallCta() {
   );
 }
 
+async function snippetStatus(merchant: Merchant) {
+  const lastHour = await getLastImpressionHour(merchant.id);
+  if (!lastHour) return null;
+  const fresh = Date.now() - new Date(lastHour).getTime() < 48 * 3600_000;
+  const escapesOn = merchant.escape_enabled !== false;
+  return {
+    lastHour,
+    label: !fresh
+      ? "Snippet quiet · no recent traffic"
+      : escapesOn
+        ? "Snippet installed · escapes live"
+        : "Snippet installed · escapes paused",
+    dotClass: !fresh
+      ? "bg-[var(--color-fg-muted)]"
+      : escapesOn
+        ? "bg-[var(--color-success)] pulse-ring"
+        : "bg-[#c98a18]",
+    textClass: !fresh
+      ? "text-[var(--color-fg-muted)]"
+      : escapesOn
+        ? "text-[var(--color-success)]"
+        : "text-[#c98a18]",
+  };
+}
+
 /** Live-status pill replacing the Install CTA once the snippet has traffic.
  *  Green pulsing = impressions in the last 48h; escapes on/off from settings.
  *  Falls back to the Install CTA for merchants with no impressions ever. */
 async function InstallStatusAction({ merchant }: { merchant: Merchant }) {
-  const lastHour = await getLastImpressionHour(merchant.id);
-  if (!lastHour) return <InstallCta />;
-  const fresh = Date.now() - new Date(lastHour).getTime() < 48 * 3600_000;
-  const escapesOn = merchant.escape_enabled !== false;
-  const label = !fresh
-    ? "Snippet quiet · no recent traffic"
-    : escapesOn
-      ? "Snippet installed · escapes live"
-      : "Snippet installed · escapes paused";
-  const dotClass = !fresh
-    ? "bg-[var(--color-fg-muted)]"
-    : escapesOn
-      ? "bg-[var(--color-success)] pulse-ring"
-      : "bg-[#c98a18]";
-  const textClass = !fresh
-    ? "text-[var(--color-fg-muted)]"
-    : escapesOn
-      ? "text-[var(--color-success)]"
-      : "text-[#c98a18]";
+  const s = await snippetStatus(merchant);
+  if (!s) return <InstallCta />;
   return (
     <Link
       href="/dashboard/install"
-      title={`Last tracked traffic: ${lastHour.slice(0, 16).replace("T", " ")} UTC — click for install details`}
+      title={`Last tracked traffic: ${s.lastHour.slice(0, 16).replace("T", " ")} UTC — click for install details`}
       className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] text-[12px] font-medium press focus-ring transition-colors hover:bg-[var(--color-bg-elev)]"
     >
-      <span className={`size-2 rounded-full shrink-0 ${dotClass}`} />
-      <span className={textClass}>{label}</span>
+      <span className={`size-2 rounded-full shrink-0 ${s.dotClass}`} />
+      <span className={s.textClass}>{s.label}</span>
     </Link>
+  );
+}
+
+/** Non-interactive status pill for the read-only share view. */
+async function InstallStatusPill({ merchant }: { merchant: Merchant }) {
+  const s = await snippetStatus(merchant);
+  if (!s) return null;
+  return (
+    <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] text-[12px] font-medium">
+      <span className={`size-2 rounded-full shrink-0 ${s.dotClass}`} />
+      <span className={s.textClass}>{s.label}</span>
+    </span>
   );
 }
 
@@ -442,7 +488,7 @@ async function BillingSection({ merchant }: { merchant: Merchant }) {
   }
 }
 
-function ScopeBanner({ merchant }: { merchant: Merchant }) {
+function ScopeBanner({ merchant, readonly: readonlyView = false }: { merchant: Merchant; readonly?: boolean }) {
   const platformLabels = getEnabledDashboardIabKinds(merchant).map(platformLabel);
   const abPct =
     typeof merchant.ab_split_pct === "number" && Number.isFinite(merchant.ab_split_pct)
@@ -468,12 +514,14 @@ function ScopeBanner({ merchant }: { merchant: Merchant }) {
             <span className="pill pill-muted">{sourceMode}</span>
           </div>
         </div>
-        <Link
-          href="/dashboard/settings"
-          className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] px-3 text-[12px] font-medium transition-colors hover:bg-[var(--color-bg-elev)] focus-ring"
-        >
-          Adjust scope
-        </Link>
+        {!readonlyView ? (
+          <Link
+            href="/dashboard/settings"
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] px-3 text-[12px] font-medium transition-colors hover:bg-[var(--color-bg-elev)] focus-ring"
+          >
+            Adjust scope
+          </Link>
+        ) : null}
       </div>
     </div>
   );
@@ -726,6 +774,7 @@ async function FunnelSection({
   rangeKey,
   excludeOutliers,
   window,
+  basePath = "/dashboard",
 }: {
   merchantId: string;
   days: number;
@@ -733,9 +782,10 @@ async function FunnelSection({
   rangeKey: string;
   excludeOutliers: boolean;
   window?: MetricWindow;
+  basePath?: string;
 }) {
   const funnel = await fetchFunnel(merchantId, days, excludeOutliers, window);
-  return <FunnelTable funnel={funnel} mode={mode} rangeKey={rangeKey} />;
+  return <FunnelTable funnel={funnel} mode={mode} rangeKey={rangeKey} basePath={basePath} />;
 }
 
 async function SourcesSection({
@@ -795,6 +845,7 @@ function Page({
   action,
   range,
   funnelMode = "corrected",
+  basePath = "/dashboard",
   abTest,
   planPeriod,
   children,
@@ -805,6 +856,7 @@ function Page({
   action?: React.ReactNode;
   range?: Range;
   funnelMode?: FunnelMode;
+  basePath?: string;
   abTest?: { active: boolean; label: string };
   planPeriod?: { active: boolean; label: string };
   children: React.ReactNode;
@@ -822,7 +874,7 @@ function Page({
               <TimeRangeSelector
                 key={range.key}
                 active={range.key}
-                basePath="/dashboard"
+                basePath={basePath}
                 extraParams={funnelMode === "raw" ? { funnel: "raw" } : undefined}
                 abTest={abTest}
                 planPeriod={planPeriod}
@@ -895,7 +947,15 @@ function MonoLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FunnelModeToggle({ active, rangeKey }: { active: FunnelMode; rangeKey: string }) {
+function FunnelModeToggle({
+  active,
+  rangeKey,
+  basePath = "/dashboard",
+}: {
+  active: FunnelMode;
+  rangeKey: string;
+  basePath?: string;
+}) {
   const opts: { key: FunnelMode; label: string; title: string }[] = [
     { key: "corrected", label: "Corrected", title: "Each stage clamped to ≥ every later stage. Purchase counts (from webhook) are authoritative." },
     { key: "raw", label: "Raw", title: "Unaltered pixel-side counts. Useful for spotting Shopify pixel firing anomalies." },
@@ -910,8 +970,8 @@ function FunnelModeToggle({ active, rangeKey }: { active: FunnelMode; rangeKey: 
         const isActive = o.key === active;
         const href =
           o.key === "corrected"
-            ? `/dashboard?range=${rangeKey}`
-            : `/dashboard?range=${rangeKey}&funnel=raw`;
+            ? `${basePath}?range=${rangeKey}`
+            : `${basePath}?range=${rangeKey}&funnel=raw`;
         return (
           <Link
             key={o.key}
@@ -1186,10 +1246,12 @@ function FunnelTable({
   funnel,
   mode,
   rangeKey,
+  basePath = "/dashboard",
 }: {
   funnel: Funnel;
   mode: FunnelMode;
   rangeKey: string;
+  basePath?: string;
 }) {
   type Stage = { label: string; a: number; b: number; sub: string };
   const hasProductViewedSignal = funnel.product_viewed.a + funnel.product_viewed.b > 0;
@@ -1219,7 +1281,7 @@ function FunnelTable({
   return (
     <Card
       title="Funnel · A vs B"
-      action={<FunnelModeToggle active={mode} rangeKey={rangeKey} />}
+      action={<FunnelModeToggle active={mode} rangeKey={rangeKey} basePath={basePath} />}
     >
       {empty ? (
         <div className="px-4 py-12 text-center">
