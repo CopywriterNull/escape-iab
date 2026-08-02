@@ -665,6 +665,22 @@ async function hasHourlyRollupCoverage(
   return true;
 }
 
+/** Last hour with tracked impressions — powers the dashboard's live-status
+ *  pill. Null = no impressions ever (snippet never seen traffic). */
+export async function getLastImpressionHour(merchantId: string): Promise<string | null> {
+  const supabase = await getTelemetryClient();
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from("hourly_funnel_rollups")
+    .select("hour")
+    .eq("merchant_id", merchantId)
+    .gt("impressions", 0)
+    .order("hour", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data?.hour as string | undefined) ?? null;
+}
+
 export async function getRollups(
   merchantId: string,
   days = 14,

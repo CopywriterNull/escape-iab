@@ -42,6 +42,14 @@ const VARIANTS = [
     text: "#37352f",
   },
   {
+    slug: "v7-condensed",
+    name: "V7 — Condensed",
+    desc: "One-screen density: slim topbar + pulsing live-status pill, inline hero verdict, hairline KPI strip, paired-bar funnel, activity ticker.",
+    accent: "#4f7cff",
+    bg: "#fafafa",
+    text: "#09090b",
+  },
+  {
     slug: "v6-blend",
     name: "V6 — Current theme + V5 banner + V3 ASCII funnel",
     desc: "Your existing cool-neutral + cobalt theme, with the V5 \"Test is winning\" hero banner and V3-style ASCII-block A/B comparison bars.",

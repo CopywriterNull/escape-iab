@@ -3,6 +3,7 @@ import { Suspense, cache } from "react";
 import {
   getAbTestWindow,
   getCurrentMerchant,
+  getLastImpressionHour,
   getMerchantRollupFreshness,
   getPeriodDelta,
   getRollupFreshness,
@@ -235,15 +236,9 @@ export default async function DashboardOverview({
             lastRefresh={merchantFreshness.lastRefresh}
             stale={merchantFreshness.stale}
           />
-          <Link
-            href="/dashboard/install"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-[12.5px] font-medium press lift focus-ring"
-          >
-            Install snippet
-            <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </Link>
+          <Suspense fallback={<InstallCta />}>
+            <InstallStatusAction merchant={merchant} />
+          </Suspense>
         </div>
       }
     >
@@ -304,6 +299,55 @@ export default async function DashboardOverview({
 }
 
 /* -------- Section components — each owns its own fetch -------- */
+
+function InstallCta() {
+  return (
+    <Link
+      href="/dashboard/install"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-cta-bg)] text-[var(--color-cta-fg)] text-[12.5px] font-medium press lift focus-ring"
+    >
+      Install snippet
+      <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </Link>
+  );
+}
+
+/** Live-status pill replacing the Install CTA once the snippet has traffic.
+ *  Green pulsing = impressions in the last 48h; escapes on/off from settings.
+ *  Falls back to the Install CTA for merchants with no impressions ever. */
+async function InstallStatusAction({ merchant }: { merchant: Merchant }) {
+  const lastHour = await getLastImpressionHour(merchant.id);
+  if (!lastHour) return <InstallCta />;
+  const fresh = Date.now() - new Date(lastHour).getTime() < 48 * 3600_000;
+  const escapesOn = merchant.escape_enabled !== false;
+  const label = !fresh
+    ? "Snippet quiet · no recent traffic"
+    : escapesOn
+      ? "Snippet installed · escapes live"
+      : "Snippet installed · escapes paused";
+  const dotClass = !fresh
+    ? "bg-[var(--color-fg-muted)]"
+    : escapesOn
+      ? "bg-[var(--color-success)] pulse-ring"
+      : "bg-[#c98a18]";
+  const textClass = !fresh
+    ? "text-[var(--color-fg-muted)]"
+    : escapesOn
+      ? "text-[var(--color-success)]"
+      : "text-[#c98a18]";
+  return (
+    <Link
+      href="/dashboard/install"
+      title={`Last tracked traffic: ${lastHour.slice(0, 16).replace("T", " ")} UTC — click for install details`}
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-card)] text-[12px] font-medium press focus-ring transition-colors hover:bg-[var(--color-bg-elev)]"
+    >
+      <span className={`size-2 rounded-full shrink-0 ${dotClass}`} />
+      <span className={textClass}>{label}</span>
+    </Link>
+  );
+}
 
 /** Billing card — only renders for merchants on an active performance plan.
  *  Service-role reads: billing_invoices has zero RLS policies and the
