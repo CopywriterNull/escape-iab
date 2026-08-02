@@ -40,6 +40,7 @@ import { LiveActivity } from "./_components/live-activity";
 import { SampleSizeCalculator } from "./_components/sample-size-calc";
 import { PixelIcon } from "@/components/PixelIcon";
 import { parseDashboardRange, type DashboardRange } from "@/lib/dashboard-ranges";
+import { computeAccruing } from "@/lib/billing/earnings";
 
 /* -------- Number formatters -------- */
 
@@ -141,6 +142,7 @@ export default async function DashboardOverview({
 }) {
   const sp = await searchParams;
   const isAbTest = sp.range === "abtest";
+  const isPlanPeriod = sp.range === "plan";
   const funnelMode = parseFunnelMode(sp.funnel);
   // Extreme outlier orders are excluded from revenue by default; ?outliers=1
   // shows raw. Preserve range + funnel when the toggle builds its links.
@@ -169,15 +171,27 @@ export default async function DashboardOverview({
   // Detect the merchant's historical A/B-live window (used both to offer the
   // "A/B test" chip and, when that chip is active, to scope every metric).
   const abWindow = await getAbTestWindow(m);
+  // "Since plan start" window: performance plan flip (billing_anchor) → now.
+  const planAnchor =
+    merchant.billing_status === "active" && merchant.billing_anchor ? merchant.billing_anchor : null;
+  const planWindow: MetricWindow | null = planAnchor
+    ? { sinceIso: new Date(planAnchor).toISOString(), untilIso: new Date().toISOString() }
+    : null;
   const activeWindow: MetricWindow | undefined =
-    isAbTest && abWindow ? { sinceIso: abWindow.sinceIso, untilIso: abWindow.untilIso } : undefined;
+    isAbTest && abWindow
+      ? { sinceIso: abWindow.sinceIso, untilIso: abWindow.untilIso }
+      : isPlanPeriod && planWindow
+        ? planWindow
+        : undefined;
 
-  // Display range: a synthetic entry when the A/B window is active, otherwise
+  // Display range: a synthetic entry when a scoped window is active, otherwise
   // the normal rolling preset. `days` is unused while a window is active.
   const range: Range =
     isAbTest && abWindow
       ? { key: "abtest", label: `A/B test · ${fmtDayRange(abWindow)}`, days: 0 }
-      : parseDashboardRange(isAbTest ? undefined : sp.range);
+      : isPlanPeriod && planWindow
+        ? { key: "plan", label: `Plan · since ${planWindow.sinceIso.slice(0, 10)}`, days: 0 }
+        : parseDashboardRange(isAbTest || isPlanPeriod ? undefined : sp.range);
   const d = range.days;
   const rollupFreshness = await getRollupFreshness();
   const merchantFreshness = await getMerchantRollupFreshness(m);
@@ -187,9 +201,14 @@ export default async function DashboardOverview({
       range={range}
       funnelMode={funnelMode}
       abTest={abWindow ? { active: isAbTest, label: "A/B test" } : undefined}
+      planPeriod={planWindow ? { active: isPlanPeriod, label: "Plan period" } : undefined}
       subtitle={
         <span>
-          {isAbTest && abWindow ? `A/B test window · ${fmtDayRange(abWindow)}` : `Last ${range.label}`}
+          {isAbTest && abWindow
+            ? `A/B test window · ${fmtDayRange(abWindow)}`
+            : isPlanPeriod && planWindow
+              ? `Performance plan · since ${planWindow.sinceIso.slice(0, 10)}`
+              : `Last ${range.label}`}
         </span>
       }
       action={
@@ -255,6 +274,10 @@ export default async function DashboardOverview({
         <FunnelSection merchantId={m} days={d} mode={funnelMode} rangeKey={range.key} excludeOutliers={excludeOutliers} window={activeWindow} />
       </Suspense>
 
+      <Suspense fallback={null}>
+        <BillingSection merchant={merchant} />
+      </Suspense>
+
       <Layout>
         <LayoutCol size="primary">
           <Suspense key={`sources-${range.key}`} fallback={<SourcesSkeleton rangeLabel={range.label} />}>
@@ -281,6 +304,110 @@ export default async function DashboardOverview({
 }
 
 /* -------- Section components — each owns its own fetch -------- */
+
+/** Billing card — only renders for merchants on an active performance plan.
+ *  Service-role reads: billing_invoices has zero RLS policies and the
+ *  accruing math needs the service-role-only rollup RPC. Scope is safe —
+ *  everything is keyed to the session merchant's own id. Failures render
+ *  nothing rather than breaking the dashboard. */
+async function BillingSection({ merchant }: { merchant: Merchant }) {
+  if (merchant.billing_status !== "active" || !merchant.billing_anchor) return null;
+  const admin = getSupabaseAdmin();
+  if (!admin) return null;
+  try {
+    const [accruing, invoicesRes] = await Promise.all([
+      computeAccruing(admin, {
+        id: merchant.id,
+        billing_anchor: merchant.billing_anchor,
+        rev_share_pct: Number(merchant.rev_share_pct ?? 10),
+        base_fee_cents: merchant.base_fee_cents ?? 30000,
+        base_fee_waived: merchant.base_fee_waived ?? false,
+      }),
+      admin
+        .from("billing_invoices")
+        .select("id, kind, period_start, period_end, total_cents, status, charged_at, created_at")
+        .eq("merchant_id", merchant.id)
+        .in("status", ["paid", "charging"])
+        .order("created_at", { ascending: false })
+        .limit(6),
+    ]);
+    type BillingInvoiceRow = {
+      id: string;
+      kind: string;
+      period_start: string;
+      period_end: string;
+      total_cents: number;
+      status: string;
+      charged_at: string | null;
+      created_at: string;
+    };
+    const invoices = (invoicesRes.data ?? []) as BillingInvoiceRow[];
+    const billedCents = invoices
+      .filter((i) => i.status === "paid")
+      .reduce((s, i) => s + i.total_cents, 0);
+    const revSharePct = Number(merchant.rev_share_pct ?? 10);
+    const baseFee = merchant.base_fee_waived ? 0 : (merchant.base_fee_cents ?? 30000);
+    return (
+      <Card
+        title="Billing · Unlimited Plan"
+        action={
+          <MonoLabel>
+            {accruing.periodStart.slice(0, 10)} → {accruing.periodEnd.slice(0, 10)}
+          </MonoLabel>
+        }
+      >
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3">
+          <div>
+            <MonoLabel>Accruing · performance fee</MonoLabel>
+            <div className="mt-1.5 h-section text-[20px] tnum text-[var(--color-accent)]">
+              {fmtUSD(accruing.revShareCents / 100)}
+            </div>
+            <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] tnum">
+              {revSharePct}% of {fmtUSD(accruing.incrementalCents / 100, { compact: true })} incremental
+            </div>
+          </div>
+          <div>
+            <MonoLabel>Next bill date</MonoLabel>
+            <div className="mt-1.5 h-section text-[20px] tnum">{accruing.periodEnd.slice(0, 10)}</div>
+            <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] tnum">
+              {merchant.base_fee_waived ? "base fee waived" : `+ ${fmtUSD(baseFee / 100)} platform fee`}
+            </div>
+          </div>
+          <div>
+            <MonoLabel>Billed to date</MonoLabel>
+            <div className="mt-1.5 h-section text-[20px] tnum">{fmtUSD(billedCents / 100)}</div>
+            <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] tnum">
+              {invoices.filter((i) => i.status === "paid").length} paid invoice
+              {invoices.filter((i) => i.status === "paid").length === 1 ? "" : "s"}
+            </div>
+          </div>
+          <div>
+            <MonoLabel>Recent invoices</MonoLabel>
+            <div className="mt-1.5 space-y-1">
+              {invoices.length === 0 ? (
+                <div className="text-[11.5px] text-[var(--color-fg-muted)]">None yet.</div>
+              ) : (
+                invoices.slice(0, 3).map((inv) => (
+                  <div key={inv.id} className="flex items-center justify-between gap-2 text-[11.5px] tnum">
+                    <span className="font-mono text-[var(--color-fg-muted)]">
+                      {(inv.charged_at ?? inv.created_at).slice(0, 10)}
+                    </span>
+                    <span>{fmtUSD(inv.total_cents / 100)}</span>
+                    <span className={inv.status === "paid" ? "pill pill-success" : "pill pill-info"}>
+                      {inv.status === "paid" ? "paid" : "processing"}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  } catch {
+    return null;
+  }
+}
 
 function ScopeBanner({ merchant }: { merchant: Merchant }) {
   const platformLabels = getEnabledDashboardIabKinds(merchant).map(platformLabel);
@@ -636,6 +763,7 @@ function Page({
   range,
   funnelMode = "corrected",
   abTest,
+  planPeriod,
   children,
 }: {
   // Title was redundant with the top-nav breadcrumb + tab strip — dropped.
@@ -645,6 +773,7 @@ function Page({
   range?: Range;
   funnelMode?: FunnelMode;
   abTest?: { active: boolean; label: string };
+  planPeriod?: { active: boolean; label: string };
   children: React.ReactNode;
 }) {
   return (
@@ -663,6 +792,7 @@ function Page({
                 basePath="/dashboard"
                 extraParams={funnelMode === "raw" ? { funnel: "raw" } : undefined}
                 abTest={abTest}
+                planPeriod={planPeriod}
               />
             ) : null}
             {action}

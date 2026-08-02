@@ -68,6 +68,12 @@ export type Merchant = {
   utm_tagging?: boolean;
   /** live = normal dashboard; pending = gated-signup approval experience. */
   status?: "live" | "pending";
+  /** Performance-plan billing state (set via /admin/billing). */
+  billing_status?: "none" | "active" | "paused";
+  billing_anchor?: string | null;
+  base_fee_cents?: number;
+  base_fee_waived?: boolean;
+  rev_share_pct?: number | string;
   /** Storefront platform captured at self-serve signup. */
   platform?: string | null;
   created_at: string;

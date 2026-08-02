@@ -29,11 +29,13 @@ export function TimeRangeSelector({
   basePath,
   extraParams,
   abTest,
+  planPeriod,
 }: {
   active: string;
   basePath: string;
   extraParams?: ExtraParams;
   abTest?: { active: boolean; label: string };
+  planPeriod?: { active: boolean; label: string };
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -115,6 +117,26 @@ export function TimeRangeSelector({
               className={`size-1.5 rounded-full ${abTest.active ? "bg-[var(--color-accent)]" : "bg-[var(--color-fg-muted)]"}`}
             />
             {abTest.label}
+          </button>
+        ) : null}
+
+        {planPeriod ? (
+          <button
+            type="button"
+            onClick={() => go("plan")}
+            disabled={isPending}
+            title="Everything since the performance plan started (90/10 split flip)"
+            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-[6px] font-mono tnum text-[12px] transition-[background-color,color,transform] duration-200 ease-out select-none focus-ring active:scale-[0.97] disabled:cursor-wait ${
+              planPeriod.active
+                ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-fg)] font-medium"
+                : "border-[var(--color-border-soft)] bg-[var(--color-card)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`size-1.5 rounded-full ${planPeriod.active ? "bg-[var(--color-accent)]" : "bg-[var(--color-fg-muted)]"}`}
+            />
+            {planPeriod.label}
           </button>
         ) : null}
 
