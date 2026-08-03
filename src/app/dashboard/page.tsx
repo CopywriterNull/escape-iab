@@ -11,10 +11,12 @@ import {
   getEnabledDashboardIabKinds,
   getSourceBreakdown,
   getTestFunnel,
+  getLockedBaseline,
   getUnattributedPurchaseStats,
   zTestTwoProp,
   sampleSizePerBucket,
   type AbTestWindow,
+  type LockedBaseline,
   type DailyRollup,
   type Funnel,
   type Merchant,
@@ -89,6 +91,7 @@ type ActivityRow = {
 /* -------- Cached fetchers (React.cache dedupes within a single render) -------- */
 
 const fetchFunnel = cache(getTestFunnel);
+const fetchBaseline = cache(getLockedBaseline);
 const fetchUnattributed = cache(getUnattributedPurchaseStats);
 const fetchRollups = cache(getRollups);
 const fetchSources = cache(getSourceBreakdown);
@@ -189,6 +192,17 @@ export async function DashboardView({
   // Detect the merchant's historical A/B-live window (used both to offer the
   // "A/B test" chip and, when that chip is active, to scope every metric).
   const abWindow = await getAbTestWindow(m);
+
+  // Locked-baseline mode: once the split is ramped off 50/50, the live control
+  // arm is starved and any window that includes the ramp shows junk lift
+  // (mixed or noise-dominated control). Hero/banner/KPI then read against the
+  // locked baseline from the 50/50 window. The explicit "A/B test" view keeps
+  // the raw windowed numbers — there both arms are real.
+  const splitPct = merchant.ab_split_pct ?? 50;
+  const baseline =
+    !isAbTest && merchant.ab_enabled && splitPct !== 50 && abWindow
+      ? await fetchBaseline(m, abWindow)
+      : null;
   // "Since plan start" window: performance plan flip (billing_anchor) → now.
   const planAnchor =
     merchant.billing_status === "active" && merchant.billing_anchor ? merchant.billing_anchor : null;
@@ -280,19 +294,19 @@ export async function DashboardView({
       ) : null}
 
       <Suspense key={`hero-${range.key}-${showOutliers}`} fallback={<HeroSkeleton />}>
-        <HeroSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} window={activeWindow} />
+        <HeroSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} window={activeWindow} baseline={baseline} />
       </Suspense>
 
       <Suspense key={`banner-${range.key}-${showOutliers}`} fallback={<BannerSkeleton />}>
-        <BannerSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} window={activeWindow} />
+        <BannerSection merchantId={m} days={d} rangeLabel={range.label} excludeOutliers={excludeOutliers} window={activeWindow} baseline={baseline} splitPct={splitPct} />
       </Suspense>
 
       <Suspense key={`kpi-${range.key}-${showOutliers}`} fallback={<KPIGridSkeleton />}>
-        <KPISection merchantId={m} days={d} excludeOutliers={excludeOutliers} window={activeWindow} />
+        <KPISection merchantId={m} days={d} excludeOutliers={excludeOutliers} window={activeWindow} baseline={baseline} />
       </Suspense>
 
       <Suspense key={`funnel-${range.key}-${funnelMode}-${showOutliers}`} fallback={<FunnelSkeleton />}>
-        <FunnelSection merchantId={m} days={d} mode={funnelMode} rangeKey={range.key} excludeOutliers={excludeOutliers} window={activeWindow} basePath={basePath} />
+        <FunnelSection merchantId={m} days={d} mode={funnelMode} rangeKey={range.key} excludeOutliers={excludeOutliers} window={activeWindow} basePath={basePath} baseline={baseline} splitPct={splitPct} />
       </Suspense>
 
       <Suspense fallback={null}>
@@ -550,12 +564,14 @@ async function HeroSection({
   rangeLabel,
   excludeOutliers,
   window,
+  baseline,
 }: {
   merchantId: string;
   days: number;
   rangeLabel: string;
   excludeOutliers: boolean;
   window?: MetricWindow;
+  baseline?: LockedBaseline | null;
 }) {
   const funnel = await fetchFunnel(merchantId, days, excludeOutliers, window);
   const baseA = funnel.impressions.a;
@@ -566,6 +582,55 @@ async function HeroSection({
   const rpsB = baseB > 0 ? revB / baseB : 0;
   const liftRel = rpsB > 0 ? (rpsA - rpsB) / rpsB : null;
   const z = zTestTwoProp(funnel.purchases.a, baseA, funnel.purchases.b, baseB);
+
+  // Locked-baseline hero: the headline lift comes from the 50/50 test window
+  // (both arms real), the incremental sentence from this window's escaped
+  // traffic against the locked control RPV. The live starved control never
+  // drives the headline.
+  if (baseline && baseA > 0) {
+    const liftStr =
+      baseline.liftRpv == null ? "—" : `${baseline.liftRpv > 0 ? "+" : ""}${(baseline.liftRpv * 100).toFixed(1)}%`;
+    const liftColor =
+      baseline.liftRpv == null
+        ? "text-[var(--color-fg-dim)]"
+        : baseline.liftRpv > 0
+          ? "text-[var(--color-success)]"
+          : "text-[var(--color-danger)]";
+    const incremental = revA - baseA * baseline.rpvB;
+    const confidence = baseline.pValue != null ? Math.round((1 - baseline.pValue) * 100) : null;
+    return (
+      <div className="px-1 py-1">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-accent)]">
+            Test performance · locked baseline · 50/50 test {fmtDayRange(baseline.window)}
+          </div>
+        </div>
+        <div className={`mt-2 h-display tracking-tight text-[36px] md:text-[56px] leading-[1.05] tnum ${liftColor}`}>
+          {liftStr}
+        </div>
+        <div className="mt-2 text-[14px] text-[var(--color-fg-dim)]">
+          <span className="text-[var(--color-fg)] font-medium tnum">
+            {fmtUSD(incremental, { compact: true, signed: true })}
+          </span>{" "}
+          incremental revenue this window vs your locked control baseline (${baseline.rpvB.toFixed(2)}/visitor).
+        </div>
+        <div className="mt-1 text-[12.5px] font-mono">
+          {confidence != null ? (
+            <>
+              <span className="text-[var(--color-fg)] font-medium">{confidence}% confident</span>
+              <span className="text-[var(--color-fg-muted)]">
+                {" "}· locked from {fmtCompact(baseline.impA + baseline.impB)} visitors at 50/50, outliers trimmed
+              </span>
+            </>
+          ) : (
+            <span className="text-[var(--color-fg-muted)]">
+              Locked from {fmtCompact(baseline.impA + baseline.impB)} visitors at 50/50, outliers trimmed
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const totalImpressions = baseA + baseB;
   const currentRev = revA + revB;
@@ -679,12 +744,16 @@ async function BannerSection({
   rangeLabel,
   excludeOutliers,
   window,
+  baseline,
+  splitPct = 50,
 }: {
   merchantId: string;
   days: number;
   rangeLabel: string;
   excludeOutliers: boolean;
   window?: MetricWindow;
+  baseline?: LockedBaseline | null;
+  splitPct?: number;
 }) {
   const [funnel, unattributed] = await Promise.all([
     fetchFunnel(merchantId, days, excludeOutliers, window),
@@ -692,6 +761,18 @@ async function BannerSection({
   ]);
   const baseA = funnel.impressions.a;
   const baseB = funnel.impressions.b;
+
+  if (baseline && baseA > 0) {
+    return (
+      <BaselineBanner
+        baseline={baseline}
+        splitPct={splitPct}
+        liveControlImpressions={baseB}
+        liveControlPurchases={funnel.purchases.b}
+      />
+    );
+  }
+
   const revA = funnel.revenue_cents.a / 100;
   const revB = funnel.revenue_cents.b / 100;
   const rpsA = baseA > 0 ? revA / baseA : 0;
@@ -710,7 +791,59 @@ async function BannerSection({
   );
 }
 
-async function KPISection({ merchantId, days, excludeOutliers, window }: { merchantId: string; days: number; excludeOutliers: boolean; window?: MetricWindow }) {
+/* -------- Locked-baseline banner — why the dashboard reads against the 50/50 test -------- */
+
+function BaselineBanner({
+  baseline,
+  splitPct,
+  liveControlImpressions,
+  liveControlPurchases,
+}: {
+  baseline: LockedBaseline;
+  splitPct: number;
+  liveControlImpressions: number;
+  liveControlPurchases: number;
+}) {
+  const liftCvrStr =
+    baseline.liftCvr == null ? "—" : `+${(baseline.liftCvr * 100).toFixed(1)}%`;
+  return (
+    <div
+      className="rounded-2xl p-4 md:p-5 border flex items-start gap-3 md:gap-4"
+      style={{
+        background: "var(--color-success-soft)",
+        borderColor: "color-mix(in srgb, var(--color-success) 18%, transparent)",
+      }}
+    >
+      <div
+        aria-hidden
+        className="size-10 md:size-11 rounded-xl grid place-items-center shrink-0"
+        style={{ background: "var(--color-card)", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
+      >
+        <PixelIcon name="check" size={18} className="text-[var(--color-success)]" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10.5px] uppercase tracking-[0.14em] font-semibold text-[var(--color-success)]">
+          Baseline locked · 50/50 test {fmtDayRange(baseline.window)}
+        </div>
+        <div className="mt-1 text-[16px] md:text-[20px] font-semibold tracking-tight leading-tight">
+          Escaped visitors convert{" "}
+          <span className="tnum text-[var(--color-success)]">{liftCvrStr}</span>{" "}
+          better than control
+        </div>
+        <div className="mt-1.5 text-[12.5px] text-[var(--color-fg-dim)] leading-relaxed">
+          You&apos;re ramped to {splitPct}/{100 - splitPct}, so only ~{100 - splitPct}% of visitors see the
+          control — {fmtCompact(liveControlImpressions)} visitors and {liveControlPurchases}{" "}
+          {liveControlPurchases === 1 ? "purchase" : "purchases"} this window is too small to measure live.
+          Lift and incremental below use your locked baseline: {fmtCompact(baseline.impB)} control visitors
+          from the 50/50 test, extreme outlier orders excluded. Conservative by design — your bill is
+          computed against the same control baseline.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+async function KPISection({ merchantId, days, excludeOutliers, window, baseline }: { merchantId: string; days: number; excludeOutliers: boolean; window?: MetricWindow; baseline?: LockedBaseline | null }) {
   const [funnel, period] = await Promise.all([
     fetchFunnel(merchantId, days, excludeOutliers, window),
     fetchPeriodDelta(merchantId, days, window),
@@ -731,21 +864,39 @@ async function KPISection({ merchantId, days, excludeOutliers, window }: { merch
   const revPerVisitor = totalImpressions > 0 ? totalRevenue / totalImpressions : 0;
   const rpvDelta = prevRpv > 0 ? (revPerVisitor - prevRpv) / prevRpv : null;
 
-  // Per-bucket RPV for the A vs B comparison on the RPV tile.
+  // Per-bucket RPV for the A vs B comparison on the RPV tile. In locked-
+  // baseline mode the control side of every comparison is the baseline RPV,
+  // not the starved live arm, and incremental is floored at 0 to match the
+  // billing math.
   const rpvA = baseA > 0 ? revA / baseA : null;
-  const rpvB = baseB > 0 ? revB / baseB : null;
-  const rpvLift = rpvA != null && rpvB != null && rpvB > 0 ? (rpvA - rpvB) / rpvB : null;
-  const incrementalRevenue =
-    rpvA != null && rpvB != null ? (rpvA - rpvB) * baseA : null;
-  const rolloutIncrementalRevenue =
-    rpvA != null && rpvB != null ? (rpvA - rpvB) * totalImpressions : null;
+  const rpvB = baseline ? baseline.rpvB : baseB > 0 ? revB / baseB : null;
+  const rpvLift = baseline
+    ? baseline.liftRpv
+    : rpvA != null && rpvB != null && rpvB > 0
+      ? (rpvA - rpvB) / rpvB
+      : null;
+  const incrementalRevenue = baseline
+    ? rpvA != null
+      ? Math.max(0, (rpvA - baseline.rpvB) * baseA)
+      : null
+    : rpvA != null && rpvB != null
+      ? (rpvA - rpvB) * baseA
+      : null;
+  const rolloutIncrementalRevenue = baseline
+    ? rpvA != null
+      ? Math.max(0, (rpvA - baseline.rpvB) * totalImpressions)
+      : null
+    : rpvA != null && rpvB != null
+      ? (rpvA - rpvB) * totalImpressions
+      : null;
 
   // Purchase CVR per bucket — for the lift tile's comparison sub-line.
-  const cvrA = baseA > 0 ? funnel.purchases.a / baseA : null;
-  const cvrB = baseB > 0 ? funnel.purchases.b / baseB : null;
+  const cvrA = baseline ? baseline.cvrA : baseA > 0 ? funnel.purchases.a / baseA : null;
+  const cvrB = baseline ? baseline.cvrB : baseB > 0 ? funnel.purchases.b / baseB : null;
 
   return (
     <KPIGrid
+      baselineLocked={!!baseline}
       impressions={totalImpressions}
       escapeAttempts={funnel.escape_attempts.a}
       revenue={totalRevenue}
@@ -760,8 +911,8 @@ async function KPISection({ merchantId, days, excludeOutliers, window }: { merch
       rpvLift={rpvLift}
       cvrA={cvrA}
       cvrB={cvrB}
-      liftRel={liftRel}
-      pValue={z?.pValue ?? null}
+      liftRel={baseline ? baseline.liftRpv : liftRel}
+      pValue={baseline ? baseline.pValue : z?.pValue ?? null}
       period={period}
     />
   );
@@ -775,6 +926,8 @@ async function FunnelSection({
   excludeOutliers,
   window,
   basePath = "/dashboard",
+  baseline,
+  splitPct = 50,
 }: {
   merchantId: string;
   days: number;
@@ -783,9 +936,25 @@ async function FunnelSection({
   excludeOutliers: boolean;
   window?: MetricWindow;
   basePath?: string;
+  baseline?: LockedBaseline | null;
+  splitPct?: number;
 }) {
   const funnel = await fetchFunnel(merchantId, days, excludeOutliers, window);
-  return <FunnelTable funnel={funnel} mode={mode} rangeKey={rangeKey} basePath={basePath} />;
+  return (
+    <>
+      <FunnelTable funnel={funnel} mode={mode} rangeKey={rangeKey} basePath={basePath} />
+      {baseline ? (
+        <div className="px-1 -mt-2 text-[11px] font-mono text-[var(--color-fg-muted)]">
+          The B column gets only ~{100 - splitPct}% of traffic since your ramp — read direction, not size.
+          For the clean side-by-side, see the{" "}
+          <Link href={`${basePath}?range=abtest`} className="underline underline-offset-2" scroll={false}>
+            50/50 test window
+          </Link>
+          .
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 async function SourcesSection({
@@ -1093,7 +1262,9 @@ function KPIGrid({
   liftRel,
   pValue,
   period,
+  baselineLocked = false,
 }: {
+  baselineLocked?: boolean;
   impressions: number;
   escapeAttempts: number;
   revenue: number;
@@ -1132,7 +1303,7 @@ function KPIGrid({
         valueClass="text-[var(--color-success)]"
         sub={
           rpvA != null && rpvB != null
-            ? `A $${rpvA.toFixed(2)} · B $${rpvB.toFixed(2)}${
+            ? `A $${rpvA.toFixed(2)} · B $${rpvB.toFixed(2)}${baselineLocked ? " locked" : ""}${
                 rpvLift != null
                   ? ` · ${rpvLift > 0 ? "+" : ""}${(rpvLift * 100).toFixed(1)}%`
                   : ""
@@ -1167,12 +1338,14 @@ function KPIGrid({
         }
         sub={
           rolloutIncrementalRevenue != null
-            ? `${fmtUSD(rolloutIncrementalRevenue, { compact: true, signed: true })} at full rollout`
+            ? `${fmtUSD(rolloutIncrementalRevenue, { compact: true, signed: true })} at full rollout${
+                baselineLocked ? " · vs locked baseline" : ""
+              }`
             : "A vs B revenue per visitor"
         }
       />
       <KPI
-        label="Lift · A vs B"
+        label={baselineLocked ? "Lift · locked baseline" : "Lift · A vs B"}
         icon="chart"
         value={liftStr}
         valueClass={liftColor}

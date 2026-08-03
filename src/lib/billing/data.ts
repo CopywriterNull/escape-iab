@@ -15,16 +15,28 @@ export type PeriodMetrics = {
   trimmedRevBCents: number;
   outliersA: number[];
   outliersB: number[];
+  /** Which window produced the control arm (kept in invoice snapshots). */
+  controlSource: "ab_test" | "running";
+  controlFromIso: string;
+  controlToIso: string;
 };
+
+// Below this, an A/B-window control arm isn't a credible baseline and we fall
+// back to the running control.
+const MIN_LOCKED_CONTROL_IMPRESSIONS = 300;
 
 export function nextMonthlyPeriod(anchor: Date, lastMonthlyEnd: Date | null) {
   const start = lastMonthlyEnd ?? anchor;
   return { start, end: addOneMonthClamped(start) };
 }
 
-/** Rev-share window = [periodStart, periodEnd). Control RPV window =
- *  [controlFrom (= billing_anchor, the split flip), periodEnd) — the
- *  running control. Both trimmed. Purchases read must use the same
+/** Rev-share window = [periodStart, periodEnd). Control RPV window: the
+ *  LOCKED BASELINE — the historical 50/50 A/B window (eh_ab_test_window) —
+ *  whenever it has a real control sample. After a merchant is ramped (e.g.
+ *  90/10) the running control is starved; its noisy RPV understates the
+ *  counterfactual and inflates the bill. Falls back to the running window
+ *  [controlFrom (= billing_anchor, the split flip), periodEnd) when no usable
+ *  A/B window exists. Both trimmed. Purchases read must use the same
  *  date_trunc-hour lower bound as the rollup RPC (boundary rule). */
 export async function computePeriodMetrics(
   sb: SupabaseClient,
@@ -33,24 +45,51 @@ export async function computePeriodMetrics(
   periodStart: Date,
   periodEnd: Date,
 ): Promise<PeriodMetrics> {
-  const [aSums, bSums] = await Promise.all([
+  // Resolve the control window: locked A/B baseline when detected.
+  let controlWindow = { from: controlFrom, to: periodEnd, source: "running" as PeriodMetrics["controlSource"] };
+  const abRes = await sb.rpc("eh_ab_test_window", { p_merchant_id: merchantId });
+  if (!abRes.error && Array.isArray(abRes.data) && abRes.data.length > 0) {
+    const row = abRes.data[0] as { start_ts?: string | null; end_ts?: string | null };
+    if (typeof row?.start_ts === "string" && typeof row?.end_ts === "string") {
+      controlWindow = { from: new Date(row.start_ts), to: new Date(row.end_ts), source: "ab_test" };
+    }
+  }
+
+  const controlSums = async () =>
+    sb.rpc("eh_billing_rollup_sums", {
+      p_merchant: merchantId,
+      p_from: controlWindow.from.toISOString(),
+      p_to: controlWindow.to.toISOString(),
+    });
+
+  const [aSums, bSumsFirst] = await Promise.all([
     sb.rpc("eh_billing_rollup_sums", {
       p_merchant: merchantId,
       p_from: periodStart.toISOString(),
       p_to: periodEnd.toISOString(),
     }),
-    sb.rpc("eh_billing_rollup_sums", {
-      p_merchant: merchantId,
-      p_from: controlFrom.toISOString(),
-      p_to: periodEnd.toISOString(),
-    }),
+    controlSums(),
   ]);
   if (aSums.error) throw new Error(`rollup sums (period): ${aSums.error.message}`);
-  if (bSums.error) throw new Error(`rollup sums (control): ${bSums.error.message}`);
+  if (bSumsFirst.error) throw new Error(`rollup sums (control): ${bSumsFirst.error.message}`);
+
+  // If the locked window's control arm is too thin to be a baseline, fall
+  // back to the running control (conservative: never bill from a tiny arm).
+  let bData = bSumsFirst.data;
+  if (controlWindow.source === "ab_test") {
+    type ImpRow = { bucket: string; impressions: number };
+    const b = (bData as ImpRow[] | null)?.find((r) => r.bucket === "b");
+    if (Number(b?.impressions ?? 0) < MIN_LOCKED_CONTROL_IMPRESSIONS) {
+      controlWindow = { from: controlFrom, to: periodEnd, source: "running" };
+      const retry = await controlSums();
+      if (retry.error) throw new Error(`rollup sums (control fallback): ${retry.error.message}`);
+      bData = retry.data;
+    }
+  }
 
   type SumRow = { bucket: string; impressions: number; revenue_cents: number };
   const period = Object.fromEntries((aSums.data as SumRow[]).map((r) => [r.bucket, r]));
-  const control = Object.fromEntries((bSums.data as SumRow[]).map((r) => [r.bucket, r]));
+  const control = Object.fromEntries(((bData ?? []) as SumRow[]).map((r) => [r.bucket, r]));
 
   const truncHour = (d: Date) => {
     const t = new Date(d);
@@ -92,7 +131,7 @@ export async function computePeriodMetrics(
 
   const [aVals, bVals] = await Promise.all([
     purchaseValues("a", periodStart, periodEnd),
-    purchaseValues("b", controlFrom, periodEnd),
+    purchaseValues("b", controlWindow.from, controlWindow.to),
   ]);
   const aTrim = trimOutliers(aVals);
   const bTrim = trimOutliers(bVals);
@@ -110,6 +149,9 @@ export async function computePeriodMetrics(
     trimmedRevBCents: Math.max(0, rawB - bTrim.trimmedTotalCents),
     outliersA: aTrim.outliers,
     outliersB: bTrim.outliers,
+    controlSource: controlWindow.source,
+    controlFromIso: controlWindow.from.toISOString(),
+    controlToIso: controlWindow.to.toISOString(),
   };
 }
 

@@ -228,7 +228,9 @@ export default async function DashboardLayout({
                 merchant?.ab_enabled ? "bg-[var(--color-success)] pulse-ring" : "bg-[var(--color-fg-muted)]"
               }`}
             />
-            {merchant?.ab_enabled ? "A/B 50/50" : "A/B off"}
+            {merchant?.ab_enabled
+              ? `A/B ${merchant.ab_split_pct ?? 50}/${100 - (merchant.ab_split_pct ?? 50)}`
+              : "A/B off"}
           </div>
           {merchant?.domain ? (
             <div className="mt-1 text-[10.5px] font-mono text-[var(--color-fg-muted)] truncate">

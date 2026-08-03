@@ -499,6 +499,60 @@ export async function getAbTestWindow(merchantId: string): Promise<AbTestWindow 
   };
 }
 
+export type LockedBaseline = {
+  window: AbTestWindow;
+  impA: number;
+  impB: number;
+  purchasesA: number;
+  purchasesB: number;
+  /** Dollars per visitor, outlier-trimmed. */
+  rpvA: number;
+  rpvB: number;
+  cvrA: number;
+  cvrB: number;
+  liftRpv: number | null;
+  liftCvr: number | null;
+  pValue: number | null;
+};
+
+// The locked control baseline: trimmed per-visitor economics from the
+// historical 50/50 A/B window. Once a merchant is ramped off 50/50 the live
+// control arm is starved (~10% of traffic, single-digit purchases) and any
+// live-window lift is noise — merchant-facing lift and incremental numbers
+// should be read against this baseline instead. Always outlier-trimmed: a
+// single whale order in either arm would otherwise define the baseline.
+// Null when there is no A/B window or the control sample is too small to lock.
+export async function getLockedBaseline(
+  merchantId: string,
+  window?: AbTestWindow | null,
+): Promise<LockedBaseline | null> {
+  const w = window ?? (await getAbTestWindow(merchantId));
+  if (!w) return null;
+  const funnel = await getTestFunnel(merchantId, 0, /* excludeOutliers */ true, w);
+  const impA = funnel.impressions.a;
+  const impB = funnel.impressions.b;
+  if (impA < 300 || impB < 300 || funnel.purchases.b < 8) return null;
+  const rpvA = funnel.revenue_cents.a / 100 / impA;
+  const rpvB = funnel.revenue_cents.b / 100 / impB;
+  const cvrA = funnel.purchases.a / impA;
+  const cvrB = funnel.purchases.b / impB;
+  const z = zTestTwoProp(funnel.purchases.a, impA, funnel.purchases.b, impB);
+  return {
+    window: w,
+    impA,
+    impB,
+    purchasesA: funnel.purchases.a,
+    purchasesB: funnel.purchases.b,
+    rpvA,
+    rpvB,
+    cvrA,
+    cvrB,
+    liftRpv: rpvB > 0 ? (rpvA - rpvB) / rpvB : null,
+    liftCvr: cvrB > 0 ? (cvrA - cvrB) / cvrB : null,
+    pValue: z?.pValue ?? null,
+  };
+}
+
 async function shouldUseExactFunnel(
   merchantId: string,
   sinceIso: string,
