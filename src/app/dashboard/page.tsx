@@ -608,23 +608,27 @@ async function HeroSection({
         <div className={`mt-2 h-display tracking-tight text-[36px] md:text-[56px] leading-[1.05] tnum ${liftColor}`}>
           {liftStr}
         </div>
+        <div className="mt-1.5 text-[13.5px] text-[var(--color-fg)]">
+          more <span className="font-medium">revenue per visitor</span> — escaped $
+          {baseline.rpvA.toFixed(2)} vs control ${baseline.rpvB.toFixed(2)}, outliers trimmed.
+        </div>
         <div className="mt-2 text-[14px] text-[var(--color-fg-dim)]">
           <span className="text-[var(--color-fg)] font-medium tnum">
             {fmtUSD(incremental, { compact: true, signed: true })}
           </span>{" "}
-          incremental revenue this window vs your locked control baseline (${baseline.rpvB.toFixed(2)}/visitor).
+          incremental revenue this window vs the ${baseline.rpvB.toFixed(2)}/visitor control baseline.
         </div>
         <div className="mt-1 text-[12.5px] font-mono">
           {confidence != null ? (
             <>
               <span className="text-[var(--color-fg)] font-medium">{confidence}% confident</span>
               <span className="text-[var(--color-fg-muted)]">
-                {" "}· locked from {fmtCompact(baseline.impA + baseline.impB)} visitors at 50/50, outliers trimmed
+                {" "}· {fmtCompact(baseline.impA + baseline.impB)} visitors at 50/50
               </span>
             </>
           ) : (
             <span className="text-[var(--color-fg-muted)]">
-              Locked from {fmtCompact(baseline.impA + baseline.impB)} visitors at 50/50, outliers trimmed
+              {fmtCompact(baseline.impA + baseline.impB)} visitors at 50/50
             </span>
           )}
         </div>
@@ -804,8 +808,7 @@ function BaselineBanner({
   liveControlImpressions: number;
   liveControlPurchases: number;
 }) {
-  const liftCvrStr =
-    baseline.liftCvr == null ? "—" : `+${(baseline.liftCvr * 100).toFixed(1)}%`;
+  const cvrMultiple = baseline.cvrB > 0 ? baseline.cvrA / baseline.cvrB : null;
   return (
     <div
       className="rounded-2xl p-4 md:p-5 border flex items-start gap-3 md:gap-4"
@@ -826,9 +829,12 @@ function BaselineBanner({
           Baseline locked · 50/50 test {fmtDayRange(baseline.window)}
         </div>
         <div className="mt-1 text-[16px] md:text-[20px] font-semibold tracking-tight leading-tight">
-          Escaped visitors convert{" "}
-          <span className="tnum text-[var(--color-success)]">{liftCvrStr}</span>{" "}
-          better than control
+          Escaped visitors buy{" "}
+          <span className="tnum text-[var(--color-success)]">
+            {cvrMultiple != null ? `${cvrMultiple.toFixed(1)}×` : "—"}
+          </span>{" "}
+          as often — {(baseline.cvrA * 100).toFixed(1)}% vs {(baseline.cvrB * 100).toFixed(1)}% of
+          visitors convert
         </div>
         <div className="mt-1.5 text-[12.5px] text-[var(--color-fg-dim)] leading-relaxed">
           You&apos;re ramped to {splitPct}/{100 - splitPct}, so only ~{100 - splitPct}% of visitors see the
@@ -1350,13 +1356,15 @@ function KPIGrid({
         value={liftStr}
         valueClass={liftColor}
         sub={
-          cvrA != null && cvrB != null
-            ? `A ${(cvrA * 100).toFixed(2)}% · B ${(cvrB * 100).toFixed(2)}%${
-                pValue != null ? ` · ${Math.round((1 - pValue) * 100)}%` : ""
-              }`
-            : pValue != null
-              ? `${Math.round((1 - pValue) * 100)}% confident`
-              : "need more data"
+          baselineLocked && cvrA != null && cvrB != null
+            ? `rev/visitor · conv A ${(cvrA * 100).toFixed(2)}% · B ${(cvrB * 100).toFixed(2)}%`
+            : cvrA != null && cvrB != null
+              ? `A ${(cvrA * 100).toFixed(2)}% · B ${(cvrB * 100).toFixed(2)}%${
+                  pValue != null ? ` · ${Math.round((1 - pValue) * 100)}%` : ""
+                }`
+              : pValue != null
+                ? `${Math.round((1 - pValue) * 100)}% confident`
+                : "need more data"
         }
       />
     </div>
