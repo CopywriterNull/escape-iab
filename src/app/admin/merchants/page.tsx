@@ -12,6 +12,7 @@ import {
   approveMerchantAsAdmin,
   rejectMerchantAsAdmin,
 } from "@/app/actions/admin";
+import { ShareDashboardLink } from "./_components/share-dashboard-link";
 
 export const dynamic = "force-dynamic";
 
@@ -445,6 +446,7 @@ function MerchantRow({
               View as
             </button>
           </form>
+          <ShareDashboardLink merchantId={row.id} />
           {unowned ? (
             <form action={assignMerchantToCurrentUser}>
               <input type="hidden" name="id" value={row.id} />

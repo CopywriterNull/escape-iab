@@ -98,11 +98,11 @@ export async function generateSetupLink(merchantId: string) {
   return { url: `${siteOrigin()}/billing/setup/${token}` };
 }
 
-/** Merchant-facing billing view link. Stable: mints the token once and
- *  returns the same URL forever after (the merchant may bookmark it). */
-export async function generateBillingViewLink(merchantId: string) {
-  const denied = await requireAdmin();
-  if (denied) return denied;
+/** Mint (or fetch) the merchant's stable billing_view_token. One token per
+ *  merchant covers both the billing view and the read-only dashboard share. */
+async function mintBillingViewToken(
+  merchantId: string,
+): Promise<{ token: string } | { error: string }> {
   const sb = getSupabaseAdmin();
   if (!sb) return { error: "backend not configured" };
   const { data: m, error: readErr } = await sb
@@ -129,7 +129,28 @@ export async function generateBillingViewLink(merchantId: string) {
     token = (after?.billing_view_token as string | null) ?? token;
     revalidatePath("/admin/billing");
   }
-  return { url: `${siteOrigin()}/billing/view/${token}` };
+  return { token };
+}
+
+/** Merchant-facing billing view link. Stable: mints the token once and
+ *  returns the same URL forever after (the merchant may bookmark it). */
+export async function generateBillingViewLink(merchantId: string) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+  const res = await mintBillingViewToken(merchantId);
+  if ("error" in res) return res;
+  return { url: `${siteOrigin()}/billing/view/${res.token}` };
+}
+
+/** Read-only, no-login share link for the merchant's full dashboard
+ *  (/share/<token> — all range/funnel toggles work, operator actions hidden).
+ *  Same stable token as the billing view, so the URL never changes. */
+export async function generateDashboardShareLink(merchantId: string) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+  const res = await mintBillingViewToken(merchantId);
+  if ("error" in res) return res;
+  return { url: `${siteOrigin()}/share/${res.token}` };
 }
 
 export async function setBaseFeeWaived(merchantId: string, waived: boolean) {

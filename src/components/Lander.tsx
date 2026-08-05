@@ -109,6 +109,7 @@ function Nav({ escapesToday }: { escapesToday: number }) {
         <nav className="hidden md:flex items-center gap-1 text-sm">
           <NavLink href="#how">How it works</NavLink>
           <NavLink href="#dashboard">Dashboard</NavLink>
+          <NavLink href="/case-studies">Case studies</NavLink>
           <NavLink href="#pricing">Pricing</NavLink>
           <NavLink href="#faq">FAQ</NavLink>
         </nav>
@@ -1586,6 +1587,13 @@ function CaseStudy({ data }: { data: CaseStudyData | null }) {
             <div className="text-[11.5px] font-mono text-[var(--color-fg-muted)] tracking-tight pt-2 border-t border-[var(--color-border-soft)] max-w-md">
               Population: paid Meta clicks landing on Shopify product pages · NDA-anonymized
             </div>
+            <Link
+              href="/case-studies"
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-accent)] hover:gap-2.5 transition-all"
+            >
+              See all published case studies
+              <ArrowRight />
+            </Link>
           </div>
 
           {/* Right: lift tiles */}
@@ -1901,6 +1909,7 @@ function Footer() {
       links: [
         { label: "How it works", href: "#how" },
         { label: "Dashboard", href: "#dashboard" },
+        { label: "Case studies", href: "/case-studies" },
         { label: "Pricing", href: "#pricing" },
         { label: "FAQ", href: "#faq" },
       ],
