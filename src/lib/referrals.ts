@@ -143,10 +143,15 @@ export async function fetchReferrerEarnings(
   };
   let invRows: InvRow[] = [];
   if (ids.length > 0) {
+    // Policy: partners are NOT cut in on plan_start invoices (the one-off
+    // $300 kickoff charge) — only recurring monthly invoices count toward
+    // their share, so a partner page shows $0 earned until the first monthly
+    // invoice collects.
     const { data, error } = await sb
       .from("billing_invoices")
       .select("id, merchant_id, period_start, period_end, total_cents, status, charged_at, created_at")
       .in("merchant_id", ids)
+      .neq("kind", "plan_start")
       .in("status", ["paid", ...PENDING_STATUSES])
       .order("created_at", { ascending: false })
       .limit(1000);
