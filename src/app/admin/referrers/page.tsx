@@ -14,6 +14,7 @@ import {
   type ReferrerEarnings,
 } from "@/lib/referrals";
 import { PartnerLinkButton } from "./_components/partner-link-button";
+import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -348,15 +349,25 @@ function ReferrerCard({
                     <td className="py-2.5 pr-3 align-middle text-right font-mono tnum text-[var(--color-fg-dim)]">
                       {pendingShareCents > 0 ? money(pendingShareCents) : "—"}
                     </td>
-                    <td className="py-2.5 align-middle text-right">
+                    <td className="py-2.5 align-middle text-right whitespace-nowrap">
+                      {m.billing_view_token ? (
+                        <a
+                          href={`/share/${m.billing_view_token}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mr-2 text-[11px] font-medium text-[var(--color-accent)] hover:underline underline-offset-2"
+                        >
+                          Dashboard ↗
+                        </a>
+                      ) : null}
                       <form action={unassignMerchantReferrer} className="inline">
                         <input type="hidden" name="merchant_id" value={m.id} />
-                        <button
-                          type="submit"
+                        <ConfirmSubmitButton
+                          message={`Unassign "${m.name ?? m.id}" from ${referrer.name}? Their cut stops accruing for this brand.`}
                           className="text-[11px] px-2 py-1 rounded-md border border-[var(--color-danger)]/30 text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] press transition-colors"
                         >
                           Unassign
-                        </button>
+                        </ConfirmSubmitButton>
                       </form>
                     </td>
                   </tr>
@@ -370,12 +381,12 @@ function ReferrerCard({
 
         <form action={deleteReferrer}>
           <input type="hidden" name="id" value={referrer.id} />
-          <button
-            type="submit"
+          <ConfirmSubmitButton
+            message={`Delete partner "${referrer.name}"? Their brands detach and their earnings attribution history is lost. This cannot be undone.`}
             className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-danger)]/30 text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] press transition-colors"
           >
             Delete partner
-          </button>
+          </ConfirmSubmitButton>
         </form>
       </div>
     </details>

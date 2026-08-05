@@ -13,6 +13,7 @@ import {
   rejectMerchantAsAdmin,
 } from "@/app/actions/admin";
 import { ShareDashboardLink } from "./_components/share-dashboard-link";
+import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -113,9 +114,12 @@ export default async function AdminMerchants() {
                   </form>
                   <form action={rejectMerchantAsAdmin}>
                     <input type="hidden" name="id" value={r.id} />
-                    <button type="submit" className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-danger)]/30 text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] press transition-colors">
+                    <ConfirmSubmitButton
+                      message={`Reject and DELETE the pending merchant "${r.name ?? r.domain ?? r.id}"? This cannot be undone.`}
+                      className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-danger)]/30 text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] press transition-colors"
+                    >
                       Reject
-                    </button>
+                    </ConfirmSubmitButton>
                   </form>
                 </div>
               </div>
@@ -460,12 +464,12 @@ function MerchantRow({
           ) : null}
           <form action={deleteMerchantAsAdmin}>
             <input type="hidden" name="id" value={row.id} />
-            <button
-              type="submit"
+            <ConfirmSubmitButton
+              message={`DELETE merchant "${row.name ?? row.id}" and all its data (events, memberships, invoices cascade)? This cannot be undone.`}
               className="text-[12px] px-3 py-1.5 rounded-md border border-[var(--color-danger)]/30 text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] press transition-colors"
             >
               Delete merchant
-            </button>
+            </ConfirmSubmitButton>
           </form>
         </div>
       </div>

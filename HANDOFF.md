@@ -1,3 +1,6 @@
+> [!WARNING]
+> **FROZEN — historical snapshot (May 2026). Superseded by [`docs/OPERATIONS.md`](./docs/OPERATIONS.md).** Routes, env, cache TTLs, migrations, and TODOs below contradict current code — do not act on them.
+
 # EscapeHatch — session handoff (2026-05-17)
 
 Where we left off after a multi-day push to make andar.com escape correctly, harden the install surface, and add operator/QA tooling.

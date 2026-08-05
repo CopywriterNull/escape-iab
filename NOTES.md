@@ -1,3 +1,6 @@
+> [!WARNING]
+> **FROZEN — historical snapshot (May 2026). Superseded by [`docs/OPERATIONS.md`](./docs/OPERATIONS.md).** Routes, env, cache TTLs, migrations, and TODOs below contradict current code — do not act on them.
+
 # EscapeHatch — project notes
 
 A SaaS that escapes Instagram's in-app browser, redirecting paid-Meta-ad visitors to their real browser (Safari / Chrome) before checkout breaks. Live on G FUEL (gfuel.com) as the first real merchant.

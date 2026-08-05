@@ -1,3 +1,6 @@
+> [!WARNING]
+> **FROZEN — historical snapshot (May 2026). Superseded by [`docs/OPERATIONS.md`](./docs/OPERATIONS.md).** Routes, env, cache TTLs, migrations, and TODOs below contradict current code — do not act on them.
+
 # EscapeHatch — master review doc
 
 **Last updated:** 2026-05-20 · **Branch:** `main` · **Prod:** [getescapehatch.com](https://getescapehatch.com)

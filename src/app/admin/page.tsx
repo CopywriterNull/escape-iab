@@ -53,6 +53,9 @@ export default async function AdminOverview() {
       <div className="grid sm:grid-cols-2 gap-3">
         <Card href="/admin/merchants" title="Merchants" desc="Create, rename, configure shopify domain, view-as, claim, delete." cta="Manage merchants →" />
         <Card href="/admin/performance" title="Performance" desc="Revenue-per-visitor lift, projected delta, and exec notes across all brands." cta="Review performance →" />
+        <Card href="/admin/billing" title="Billing" desc="Invoice queue, earnings, setup + billing-view links, start performance plans." cta="Open billing →" />
+        <Card href="/admin/referrers" title="Referrals" desc="Affiliate partners: assign brands, share %, partner dashboard links, what you owe." cta="Manage partners →" />
+        <Card href="/admin/links" title="Links" desc="Every shareable URL in one place — dashboards, billing views, install guides, partner links, case studies." cta="Open link hub →" />
         <Card href="/admin/health" title="Health center" desc="Install, pixel, webhook, and recent IG activity status for every merchant." cta="Check installs →" />
         <Card href="/admin/guides" title="Guides" desc="Install gotchas, cache busting, kill switch, paid-only mode, pixel + webhook setup." cta="Open guides →" />
         <Card href="/admin/diagnostics" title="Diagnostics" desc="Live config snapshot per merchant — kill switch state, paid-only, last event, webhook routing." cta="Run diagnostics →" />

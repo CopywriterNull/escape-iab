@@ -1,3 +1,6 @@
+> [!WARNING]
+> **HISTORICAL (May 2026).** The live install guide is `getescapehatch.com/install/<merchantId>` + `/admin/guides`. Known errors below: pixel example posts to the wrong domain (`escapehatch.app`), and the edge cache is now **1 hour**, not 5 minutes.
+
 # Installing EscapeHatch on G FUEL — barebones, ~10 minutes
 
 This is the minimum-viable rollout that gets us **real CVR + revenue lift data** on G FUEL's IG-sourced traffic. Two pieces, both copy-paste, no Shopify app required.

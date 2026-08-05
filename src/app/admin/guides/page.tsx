@@ -36,10 +36,10 @@ export default function AdminGuides() {
           tag="cache"
           title="Bust the edge cache after config changes"
           severity="warn"
-          summary="max-age=300 — bump ?v= or wait 5 min."
+          summary="max-age=3600 — bump ?v= or wait up to 1 h."
         >
           <p>
-            The snippet endpoint sets <code className="font-mono">cache-control: public, max-age=300, s-maxage=300</code>. Vercel&apos;s edge holds the response for 5 min, so flipping kill switch / paid-only / fallback text doesn&apos;t propagate instantly.
+            The snippet endpoint sets <code className="font-mono">cache-control: public, max-age=3600, s-maxage=3600</code>. Vercel&apos;s edge (and the browser) can hold the response for up to an hour, so flipping kill switch / paid-only / fallback text doesn&apos;t propagate instantly.
           </p>
           <p>
             <strong>Fix:</strong> bump the <code className="font-mono">?v=</code> query in the merchant&apos;s <code className="font-mono">&lt;script src&gt;</code>. Each unique query is a new cache key — fresh fetch on the next pageview.
@@ -97,7 +97,7 @@ where id = 'MERCHANT_ID';
           <ol className="list-decimal pl-5 space-y-1 text-[12.5px]">
             <li>In each merchant&apos;s row on <a className="underline-offset-2 underline hover:text-[var(--color-fg)]" href="/admin/merchants">/admin/merchants</a>, set <strong>Shopify admin domain</strong> to <code className="font-mono">theirshop.myshopify.com</code> (NOT their public domain).</li>
             <li>In their Shopify admin: Settings → Notifications → Webhooks → Create. Event: <em>Order paid</em>. Format: JSON. URL: <code className="font-mono">https://getescapehatch.com/api/webhooks/shopify/orders</code>.</li>
-            <li>Copy the webhook secret. It must match <code className="font-mono">SHOPIFY_WEBHOOK_SECRET</code> in Vercel env (currently shared across merchants — per-merchant secrets is a follow-up).</li>
+            <li>Copy the webhook secret (&quot;Your webhooks will be signed with…&quot;) and save it to <code className="font-mono">merchants.shopify_webhook_secret</code> for that store — Shopify signs Notifications-created webhooks with a per-STORE secret, not the app secret. The global <code className="font-mono">SHOPIFY_WEBHOOK_SECRET</code> env var is only a fallback; a store with the wrong secret 401s (<code className="font-mono">bad_hmac</code>) and its purchases never record.</li>
           </ol>
           <p className="text-[12px] text-[var(--color-fg-muted)]">
             If the handler returns 404 <code className="font-mono">unknown_shop_domain</code>, the Shopify admin domain field is wrong or missing.
@@ -150,7 +150,7 @@ https://merchant.com/?eh_force=b`}</Code>
             <li>
               <strong>Serve check:</strong>
               <Code>{`curl -sI "https://getescapehatch.com/s/MERCHANT_ID.js?v=999"
-# expect: 200 + content-type: application/javascript + x-eh-version: v9`}</Code>
+# expect: 200 + content-type: application/javascript + x-eh-version: v10`}</Code>
             </li>
             <li>
               <strong>Redirect path present (kill switch off):</strong>
