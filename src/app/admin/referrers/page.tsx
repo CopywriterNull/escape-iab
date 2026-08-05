@@ -37,7 +37,7 @@ export default async function AdminReferrersPage() {
     admin
       .from("merchants")
       .select(
-        "id, name, domain, escape_enabled, billing_status, billing_view_token, referral_share_pct, referrer_id, created_at",
+        "id, name, domain, escape_enabled, billing_status, billing_view_token, referral_share_pct, referrer_id, created_at, billing_anchor, rev_share_pct, base_fee_cents, base_fee_waived",
       )
       .order("name", { ascending: true }),
   ]);
@@ -60,7 +60,9 @@ export default async function AdminReferrersPage() {
       try {
         earningsByReferrer.set(
           r.id,
-          await fetchReferrerEarnings(admin, r, merchants.filter((m) => m.referrer_id === r.id)),
+          await fetchReferrerEarnings(admin, r, merchants.filter((m) => m.referrer_id === r.id), {
+            includeAccruing: true,
+          }),
         );
       } catch {
         earningsByReferrer.set(r.id, null);
@@ -177,8 +179,10 @@ function ReferrerCard({
             {earnings ? (
               <>
                 <span className="pill pill-success">earned {money(earnings.paidShareCents)}</span>
-                {earnings.pendingShareCents > 0 ? (
-                  <span className="pill pill-warn">pending {money(earnings.pendingShareCents)}</span>
+                {earnings.pendingShareCents + earnings.accruingShareCents > 0 ? (
+                  <span className="pill pill-warn">
+                    pending {money(earnings.pendingShareCents + earnings.accruingShareCents)}
+                  </span>
                 ) : null}
               </>
             ) : (
@@ -308,7 +312,7 @@ function ReferrerCard({
                 </tr>
               </thead>
               <tbody>
-                {earnings.merchants.map(({ merchant: m, effectivePct, paidTotalCents, paidShareCents, pendingShareCents }) => (
+                {earnings.merchants.map(({ merchant: m, effectivePct, paidTotalCents, paidShareCents, pendingShareCents, accruingShareCents }) => (
                   <tr key={m.id} className="border-b border-[var(--color-border-soft)]/60 last:border-b-0">
                     <td className="py-2.5 pr-3 align-middle">
                       <div className="font-medium tracking-tight">{m.name ?? "(unnamed)"}</div>
@@ -347,7 +351,9 @@ function ReferrerCard({
                       {money(paidShareCents)}
                     </td>
                     <td className="py-2.5 pr-3 align-middle text-right font-mono tnum text-[var(--color-fg-dim)]">
-                      {pendingShareCents > 0 ? money(pendingShareCents) : "—"}
+                      {pendingShareCents + accruingShareCents > 0
+                        ? money(pendingShareCents + accruingShareCents)
+                        : "—"}
                     </td>
                     <td className="py-2.5 align-middle text-right whitespace-nowrap">
                       {m.billing_view_token ? (

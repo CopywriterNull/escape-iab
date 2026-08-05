@@ -47,14 +47,17 @@ export default async function PartnerDashboardPage({
   const { data: ms } = await admin
     .from("merchants")
     .select(
-      "id, name, domain, escape_enabled, billing_status, billing_view_token, referral_share_pct, referrer_id, created_at",
+      "id, name, domain, escape_enabled, billing_status, billing_view_token, referral_share_pct, referrer_id, created_at, billing_anchor, rev_share_pct, base_fee_cents, base_fee_waived",
     )
     .eq("referrer_id", referrer.id)
     .order("created_at", { ascending: true });
   const merchants = (ms ?? []) as ReferredMerchantRow[];
 
-  const earnings = await fetchReferrerEarnings(admin, referrer, merchants);
+  const earnings = await fetchReferrerEarnings(admin, referrer, merchants, {
+    includeAccruing: true,
+  });
   const merchantNames = new Map(merchants.map((m) => [m.id, m.name ?? "(unnamed)"]));
+  const pendingPlusAccruing = earnings.pendingShareCents + earnings.accruingShareCents;
 
   return (
     <div className="min-h-dvh bg-[var(--color-bg)] text-[var(--color-fg)] grain">
@@ -105,10 +108,12 @@ export default async function PartnerDashboardPage({
               Pending
             </div>
             <div className="mt-2 tnum font-semibold text-[34px] leading-[1]">
-              {money(earnings.pendingShareCents)}
+              {money(pendingPlusAccruing)}
             </div>
             <div className="mt-2 text-[12px] text-[var(--color-fg-dim)]">
-              on invoices not yet collected
+              {earnings.accruingShareCents > 0
+                ? `${money(earnings.accruingShareCents)} accruing this period · ${money(earnings.pendingShareCents)} invoiced, not yet collected`
+                : "on invoices not yet collected"}
             </div>
           </div>
           <div className="rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-card)] px-5 py-5">
@@ -140,11 +145,12 @@ export default async function PartnerDashboardPage({
                     <th className="text-right px-3 py-2.5 font-medium">Your %</th>
                     <th className="text-right px-3 py-2.5 font-medium">Collected</th>
                     <th className="text-right px-3 py-2.5 font-medium">Your cut</th>
+                    <th className="text-right px-3 py-2.5 font-medium">Pending cut</th>
                     <th className="text-right px-5 py-2.5 font-medium">Live data</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {earnings.merchants.map(({ merchant: m, effectivePct, paidTotalCents, paidShareCents }) => (
+                  {earnings.merchants.map(({ merchant: m, effectivePct, paidTotalCents, paidShareCents, pendingShareCents, accruingShareCents }) => (
                     <tr key={m.id} className="border-b border-[var(--color-border-soft)]/60 last:border-b-0">
                       <td className="px-5 py-3 align-middle">
                         <div className="font-medium tracking-tight">{m.name ?? "(unnamed)"}</div>
@@ -176,6 +182,11 @@ export default async function PartnerDashboardPage({
                       <td className="px-3 py-3 align-middle text-right font-mono tnum font-semibold text-[var(--color-success)]">
                         {money(paidShareCents)}
                       </td>
+                      <td className="px-3 py-3 align-middle text-right font-mono tnum text-[var(--color-fg-dim)]">
+                        {pendingShareCents + accruingShareCents > 0
+                          ? money(pendingShareCents + accruingShareCents)
+                          : "—"}
+                      </td>
                       <td className="px-5 py-3 align-middle text-right">
                         {m.billing_view_token ? (
                           <a
@@ -205,7 +216,7 @@ export default async function PartnerDashboardPage({
           <div className="px-5 py-3 border-b border-[var(--color-border-soft)] text-[10.5px] uppercase tracking-[0.18em] font-semibold text-[var(--color-fg-muted)]">
             Invoice ledger
           </div>
-          {earnings.invoices.length === 0 ? (
+          {earnings.invoices.length === 0 && earnings.accruing.length === 0 ? (
             <div className="px-5 py-8 text-[13px] text-[var(--color-fg-dim)]">
               No invoices yet — your brands are still in their test or pre-billing phase. Your cut
               starts accruing the moment their first invoice is collected.
@@ -223,6 +234,29 @@ export default async function PartnerDashboardPage({
                   </tr>
                 </thead>
                 <tbody>
+                  {earnings.accruing.map((a) => (
+                    <tr key={`accruing-${a.merchant_id}`} className="border-b border-[var(--color-border-soft)]/60 last:border-b-0">
+                      <td className="px-5 py-3 align-middle font-medium tracking-tight">
+                        {merchantNames.get(a.merchant_id) ?? a.merchant_id.slice(0, 8)}
+                      </td>
+                      <td className="px-3 py-3 align-middle font-mono text-[11px] text-[var(--color-fg-dim)] whitespace-nowrap">
+                        {fmtDate(a.periodStart)} → {fmtDate(a.periodEnd)}
+                      </td>
+                      <td className="px-3 py-3 align-middle">
+                        <span className="pill pill-info">ACCRUING</span>
+                      </td>
+                      <td className="px-3 py-3 align-middle text-right font-mono tnum text-[var(--color-fg-dim)]">
+                        {money(a.totalCents)}
+                        <span className="ml-1 text-[10px] text-[var(--color-fg-muted)]">est.</span>
+                      </td>
+                      <td className="px-5 py-3 align-middle text-right font-mono tnum font-semibold">
+                        {money(a.shareCents)}
+                        <span className="ml-1.5 text-[10px] text-[var(--color-fg-muted)]">
+                          ({a.effectivePct}%)
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                   {earnings.invoices.map((inv) => (
                     <tr key={inv.id} className="border-b border-[var(--color-border-soft)]/60 last:border-b-0">
                       <td className="px-5 py-3 align-middle font-medium tracking-tight">
@@ -256,9 +290,11 @@ export default async function PartnerDashboardPage({
         </section>
 
         <p className="text-[11px] font-mono text-[var(--color-fg-muted)] leading-relaxed">
-          Your share is computed on collected (paid) invoices only; in-flight invoices are shown for
-          visibility and settle into &quot;Earned&quot; once collected. Voided invoices never count.
-          Questions or payouts: hi@getescapehatch.com.
+          Your share is computed on collected (paid) invoices only. ACCRUING rows are live estimates
+          of the brand&apos;s currently open billing period — the same math their next invoice will
+          use — and move with performance until the period closes. In-flight invoices settle into
+          &quot;Earned&quot; once collected; voided invoices never count. Questions or payouts:
+          hi@getescapehatch.com.
         </p>
       </div>
     </div>

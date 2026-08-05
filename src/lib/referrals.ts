@@ -1,10 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { computeAccruing } from "@/lib/billing/earnings";
 
 // Referral earnings are computed at read time from the billing_invoices
 // ledger — no separate payout table. Basis: PAID invoice total_cents ×
 // effective share pct (merchant override ?? referrer default). "Pending"
 // covers invoices still in flight (pending_review / charging / failed);
-// voided invoices never count.
+// voided invoices never count. With includeAccruing, active-billing merchants
+// also get the currently-open period's estimate via computeAccruing — the
+// SAME lib the /admin/billing console uses, so partner and admin numbers
+// can never disagree.
 
 export type Referrer = {
   id: string;
@@ -25,6 +29,21 @@ export type ReferredMerchantRow = {
   referral_share_pct: number | null;
   referrer_id: string | null;
   created_at: string;
+  // Billing fields — required only when includeAccruing is requested.
+  billing_anchor?: string | null;
+  rev_share_pct?: number | string;
+  base_fee_cents?: number;
+  base_fee_waived?: boolean;
+};
+
+/** Currently-open billing period estimate for one referred merchant. */
+export type AccruingShare = {
+  merchant_id: string;
+  periodStart: string;
+  periodEnd: string;
+  totalCents: number;
+  shareCents: number;
+  effectivePct: number;
 };
 
 export type PartnerInvoice = {
@@ -47,13 +66,18 @@ export type ReferredMerchantEarnings = {
   paidShareCents: number;
   pendingTotalCents: number;
   pendingShareCents: number;
+  /** Currently-open billing period (0 when not on a plan / not requested). */
+  accruingTotalCents: number;
+  accruingShareCents: number;
 };
 
 export type ReferrerEarnings = {
   merchants: ReferredMerchantEarnings[];
   invoices: PartnerInvoice[]; // newest first, paid + in-flight
+  accruing: AccruingShare[]; // open-period estimates for active-billing merchants
   paidShareCents: number;
   pendingShareCents: number;
+  accruingShareCents: number;
   paidTotalCents: number;
 };
 
@@ -71,9 +95,41 @@ export async function fetchReferrerEarnings(
   sb: SupabaseClient,
   referrer: Referrer,
   merchants: ReferredMerchantRow[],
+  opts?: { includeAccruing?: boolean },
 ): Promise<ReferrerEarnings> {
   const ids = merchants.map((m) => m.id);
   const pctByMerchant = new Map(merchants.map((m) => [m.id, effectiveSharePct(referrer, m)]));
+
+  // Open-period estimates, computed concurrently with the invoice read. A
+  // failure on one merchant degrades to no accruing row, never a page error.
+  const accruingPromise: Promise<AccruingShare[]> = !opts?.includeAccruing
+    ? Promise.resolve([])
+    : Promise.all(
+        merchants
+          .filter((m) => m.billing_status === "active" && m.billing_anchor)
+          .map(async (m): Promise<AccruingShare | null> => {
+            try {
+              const a = await computeAccruing(sb, {
+                id: m.id,
+                billing_anchor: m.billing_anchor as string,
+                rev_share_pct: Number(m.rev_share_pct ?? 0),
+                base_fee_cents: m.base_fee_cents ?? 0,
+                base_fee_waived: m.base_fee_waived ?? false,
+              });
+              const pct = pctByMerchant.get(m.id)!;
+              return {
+                merchant_id: m.id,
+                periodStart: a.periodStart,
+                periodEnd: a.periodEnd,
+                totalCents: a.totalCents,
+                shareCents: shareOf(a.totalCents, pct),
+                effectivePct: pct,
+              };
+            } catch {
+              return null;
+            }
+          }),
+      ).then((rows) => rows.filter((r): r is AccruingShare => r !== null));
 
   type InvRow = {
     id: string;
@@ -116,8 +172,12 @@ export async function fetchReferrerEarnings(
     byMerchant.set(inv.merchant_id, s);
   }
 
+  const accruing = await accruingPromise;
+  const accruingByMerchant = new Map(accruing.map((a) => [a.merchant_id, a]));
+
   const merchantEarnings: ReferredMerchantEarnings[] = merchants.map((m) => {
     const s = byMerchant.get(m.id) ?? { paidT: 0, paidS: 0, pendT: 0, pendS: 0 };
+    const a = accruingByMerchant.get(m.id);
     return {
       merchant: m,
       effectivePct: pctByMerchant.get(m.id)!,
@@ -125,14 +185,18 @@ export async function fetchReferrerEarnings(
       paidShareCents: s.paidS,
       pendingTotalCents: s.pendT,
       pendingShareCents: s.pendS,
+      accruingTotalCents: a?.totalCents ?? 0,
+      accruingShareCents: a?.shareCents ?? 0,
     };
   });
 
   return {
     merchants: merchantEarnings,
     invoices,
+    accruing,
     paidShareCents: merchantEarnings.reduce((n, m) => n + m.paidShareCents, 0),
     pendingShareCents: merchantEarnings.reduce((n, m) => n + m.pendingShareCents, 0),
+    accruingShareCents: merchantEarnings.reduce((n, m) => n + m.accruingShareCents, 0),
     paidTotalCents: merchantEarnings.reduce((n, m) => n + m.paidTotalCents, 0),
   };
 }

@@ -63,7 +63,9 @@ export async function GET(req: NextRequest) {
   const [merchantsRes, invoicesRes, referrersRes, perfRes, freshness] = await Promise.all([
     sb
       .from("merchants")
-      .select("id, name, domain, status, escape_enabled, billing_status, referrer_id, created_at"),
+      .select(
+        "id, name, domain, status, escape_enabled, billing_status, referrer_id, referral_share_pct, created_at",
+      ),
     sb
       .from("billing_invoices")
       .select("id, merchant_id, kind, total_cents, status, created_at")
