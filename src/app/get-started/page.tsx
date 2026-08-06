@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { brand } from "@/lib/branding";
-import { EarlyAccessForm } from "@/components/EarlyAccessForm";
+import { StartForm } from "@/components/StartForm";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,7 +15,7 @@ export default async function GetStartedPage({
   return (
     <div className="min-h-dvh grid place-items-center px-5 py-16 mesh-bg grain relative">
       <div className="absolute inset-0 dotgrid opacity-30 pointer-events-none [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_70%)]" />
-      <div className="relative w-full max-w-2xl">
+      <div className="relative w-full max-w-xl">
         <Link href="/" className="inline-flex items-center gap-2.5 font-semibold tracking-tight focus-ring rounded-md">
           <span aria-hidden className="inline-flex size-7 items-center justify-center rounded-lg" style={{ background: "var(--color-accent)" }}>
             <svg viewBox="0 0 24 24" className="size-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -28,15 +28,18 @@ export default async function GetStartedPage({
         </Link>
         <div className="mt-7 text-center">
           <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fg-muted)] font-medium">
-            Early access
+            Two weeks free
           </div>
-          <h1 className="mt-1 h-display text-3xl sm:text-4xl">Tell us about your brand</h1>
-          <p className="mt-2 text-sm text-[var(--color-fg-dim)] max-w-md mx-auto">
-            A few details so we can get you set up. We&apos;ll reach out within one business day.
+          <h1 className="mt-1 h-display text-3xl sm:text-4xl text-balance">
+            Find out what the in-app browser costs you
+          </h1>
+          <p className="mt-3 text-[15px] text-[var(--color-fg-dim)] max-w-md mx-auto leading-relaxed">
+            Two fields and you&apos;re done. We run a randomized test on your own Instagram traffic and
+            show you the number before you pay anything.
           </p>
         </div>
 
-        <EarlyAccessForm initialEmail={email} />
+        <StartForm initialEmail={email} />
 
         <p className="mt-7 text-center text-[11px] text-[var(--color-fg-muted)] leading-relaxed">
           By submitting you agree to the{" "}
