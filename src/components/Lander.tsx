@@ -1898,18 +1898,6 @@ function FAQ({ variant = "v1" }: { variant?: LanderVariant }) {
       q: "Is the snippet GDPR / CCPA compliant?",
       a: "We don't set cookies, we don't fingerprint, we don't ship analytics off your domain. The only data we collect is an IP-hashed event row per escape — no PII, no third-party trackers. Add us under \"functional\" in your consent banner if you have one.",
     },
-    metaRoas: {
-      q: "Meta shows the escaped campaigns doing worse. What's going on?",
-      a: "iOS strips Meta's click ID during any app-to-browser handoff, so the pixel undercounts exactly the visitors who convert best — they land in your reports as direct traffic. We re-carry the click ID and restore it before your pixel fires, which closes most of the gap, and your first-party numbers show the truth. It's the most common surprise on this product, and it's a measurement artifact, not performance.",
-    },
-    loadTime: {
-      q: "Doesn't the extra browser hop cost you conversions?",
-      a: "It adds roughly a second. We've looked for that cost on every account and never found one that comes close to what a working checkout returns — the real browser has their saved cards, their logins and Apple Pay. The control group would show it if it were happening.",
-    },
-    noLift: {
-      q: "What if the test shows no lift?",
-      a: "You switch it off and pay nothing. Results genuinely vary — most brands land in the 20–40% range, a few go much higher, and a couple come out flat. You'll still leave knowing what the in-app browser costs you, measured on your own traffic.",
-    },
     platforms: {
       q: "Does it work on TikTok, Snapchat, Facebook?",
       a: "Instagram is the only IAB with a clean auto-escape (on iOS and Android). For TikTok / Snap / FB, EscapeHatch ships a polished one-tap \"Open in Safari\" overlay. Not as seamless, but recovers most of the lost conversions.",
@@ -1927,8 +1915,8 @@ function FAQ({ variant = "v1" }: { variant?: LanderVariant }) {
   // v2 = priority objections first (compliance, attribution, performance,
   // time-to-results, privacy), then platform/edge questions.
   const items = variant === "v2"
-    ? [all.metaRoas, all.loadTime, all.noLift, all.tos, all.pixel, all.perf, all.fast, all.privacy, all.platforms, all.plus, all.headless]
-    : [all.metaRoas, all.loadTime, all.noLift, all.tos, all.pixel, all.perf, all.platforms, all.plus, all.headless, all.fast, all.privacy];
+    ? [all.tos, all.pixel, all.perf, all.fast, all.privacy, all.platforms, all.plus, all.headless]
+    : [all.tos, all.pixel, all.perf, all.platforms, all.plus, all.headless, all.fast, all.privacy];
   return (
     <section id="faq" className="relative">
       <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent" />
