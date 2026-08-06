@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { zTestTwoProp } from "@/lib/db";
 import { computeAccruing } from "@/lib/billing/earnings";
 import { fetchReferrerEarnings, type Referrer, type ReferredMerchantRow } from "@/lib/referrals";
+import { fetchFollowUps, type FollowUp } from "@/lib/slack-followups";
 
 // Daily ops digest data layer. Everything here reads the same tables/RPCs the
 // admin pages use — no metric is computed a second way, so Slack can never
@@ -96,6 +97,8 @@ export type Digest = {
   rolledOut: { count: number; names: string[]; revenueCents: number };
   partners: { name: string; earnedCents: number; pendingCents: number; brands: number }[];
   rollupAgeHours: number;
+  /** Client channels where they spoke last. Empty when Slack reading is off. */
+  followUps: FollowUp[];
 };
 
 export function toInt(v: number | string | null | undefined): number {
@@ -389,9 +392,15 @@ export async function buildDigest(sb: SupabaseClient, now: number): Promise<Dige
     }
   }
 
+  // Slack follow-ups are optional: without a token (or if Slack is down) the
+  // section simply doesn't render.
+  const slackToken = process.env.SLACK_USER_TOKEN;
+  const followUps = slackToken ? await fetchFollowUps(slackToken).catch(() => []) : [];
+
   return {
     dateLabel: new Date(now).toISOString().slice(0, 10),
     attention,
+    followUps,
     totals,
     priorTotals,
     pipeline,

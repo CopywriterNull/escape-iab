@@ -1,4 +1,5 @@
 import { compactMoney, money, pctDelta, MIN_CONTROL_ORDERS, type Digest } from "@/lib/digest";
+import { formatWaiting } from "@/lib/slack-followups";
 
 // Block Kit composition for the daily digest.
 //
@@ -21,6 +22,7 @@ type Block = Record<string, unknown>;
 
 const MAX_ATTENTION_ROWS = 6;
 const MAX_PIPELINE_ROWS = 5;
+const MAX_FOLLOWUP_ROWS = 6;
 
 function mrkdwn(text: string) {
   return { type: "mrkdwn", text };
@@ -176,6 +178,43 @@ export function buildDigestBlocks(d: Digest, origin: string): Block[] {
         type: "section",
         text: mrkdwn(`:moneybag:  *${p.name}* — *${money(p.accruingCents)}* accruing this period${closes}${lift}`),
         accessory: linkButton("Billing", `${origin}/admin/billing`),
+      });
+    }
+  }
+
+  // ---- Follow-ups: conversations where the client spoke last ----
+  if (d.followUps.length > 0) {
+    blocks.push({ type: "divider" });
+    blocks.push({
+      type: "section",
+      text: mrkdwn(
+        `*Waiting on you* · ${d.followUps.length} client conversation${d.followUps.length === 1 ? "" : "s"} where they spoke last`,
+      ),
+    });
+    for (const f of d.followUps.slice(0, MAX_FOLLOWUP_ROWS)) {
+      const urgency = f.hoursWaiting >= 48 ? ":exclamation:" : ":speech_balloon:";
+      const who = f.lastSpeaker ? `*${f.lastSpeaker}*` : "They";
+      const asked = f.isQuestion ? "asked" : "wrote";
+      blocks.push({
+        type: "section",
+        text: mrkdwn(
+          `${urgency}  *#${f.channel}* — ${who} ${asked} ${formatWaiting(f.hoursWaiting)} ago${f.excerpt ? `\n_“${f.excerpt}”_` : ""}`,
+        ),
+        // app_redirect opens the channel in whichever Slack client they're on,
+        // without needing the team id baked into the link.
+        accessory: linkButton(
+          "Reply",
+          `https://slack.com/app_redirect?channel=${f.channelId}`,
+          f.hoursWaiting >= 48 ? "danger" : undefined,
+        ),
+      });
+    }
+    if (d.followUps.length > MAX_FOLLOWUP_ROWS) {
+      blocks.push({
+        type: "context",
+        elements: [
+          mrkdwn(`_+${d.followUps.length - MAX_FOLLOWUP_ROWS} more channels waiting on a reply._`),
+        ],
       });
     }
   }
