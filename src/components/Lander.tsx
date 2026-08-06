@@ -70,9 +70,11 @@ export function Lander({
         </>
       )}
       <CaseStudy data={proof?.caseStudy ?? null} />
+      <NothingChanges />
       <DashboardPreview />
       {isV2 ? <FeaturesV2 /> : <Features />}
       <ABCallout />
+      <HowWeMeasure />
       <SnippetPreview />
       <SpendCalculator proof={proof?.calculator ?? null} />
       <Pricing />
@@ -207,7 +209,7 @@ function Hero({ proof, variant = "v1" }: { proof?: LanderProof; variant?: Lander
         <div className="flex justify-center mb-7 hero-enter hero-enter-1">
           <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-card)]/80 px-3.5 py-1 text-[12px] text-[var(--color-fg-dim)] backdrop-blur">
             <span className="size-1.5 rounded-full bg-[var(--color-success)] pulse-ring" />
-            <span className="font-medium tracking-tight">Now in private beta</span>
+            <span className="font-medium tracking-tight">Two weeks free · no contract · see the numbers first</span>
           </span>
         </div>
         <h1 className="text-center max-w-4xl mx-auto text-balance px-1">
@@ -219,12 +221,12 @@ function Hero({ proof, variant = "v1" }: { proof?: LanderProof; variant?: Lander
           </span>
         </h1>
         <p className="mx-auto mt-7 max-w-2xl text-center text-[var(--color-fg-dim)] text-[17px] leading-relaxed hero-enter hero-enter-4">
-          Every paid IG ad click opens inside Instagram&apos;s broken in-app browser. EscapeHatch detects it and reopens your store in <TextHighlighter delay={400}>Safari</TextHighlighter> before checkout loads. One snippet. 60-second install.
+          Every paid IG click opens inside Instagram&apos;s in-app browser — no saved cards, no Shop Pay, no session that survives a swipe. EscapeHatch reopens your store in <TextHighlighter delay={400}>their real browser</TextHighlighter> before the page paints, and the tab stays there. Same ad, same spend, nothing to change in Meta.
         </p>
         <div className="hero-enter hero-enter-5">
           <Waitlist />
           <p className="mt-3 text-center text-xs text-[var(--color-fg-muted)]">
-            From $300/mo for Shopify storefronts · Custom pilots for high-volume teams
+            Free for two weeks · then $300/mo + 10% of measured lift · caps at volume
           </p>
           {variant === "v2" ? (
             <p className="mt-3 text-center">
@@ -311,7 +313,7 @@ function Waitlist() {
         className="w-full sm:flex-1 px-4 py-3 rounded-full bg-[var(--color-card)] border border-[var(--color-border)] text-sm placeholder:text-[var(--color-fg-muted)] focus:outline-none focus:border-[var(--color-accent)]/60 focus:ring-2 focus:ring-[color-mix(in_srgb,var(--color-accent)_20%,transparent)]"
       />
       <RainbowButton type="submit" className="w-full sm:w-auto group !h-[46px] !px-5 !text-sm">
-        <span>Get early access</span>
+        <span>Start the two-week test</span>
         <span className="btn-icon"><ArrowRight /></span>
       </RainbowButton>
     </form>
@@ -1178,7 +1180,7 @@ function HowItWorks() {
             </span>
           </h2>
           <p className="mt-4 text-[14.5px] text-[var(--color-fg-dim)] leading-relaxed">
-            One sentence: visitor lands in Instagram&apos;s broken in-app browser, our snippet detects it and re-opens the same page in Safari, your checkout works.
+            A visitor lands in Instagram&apos;s in-app browser, our snippet detects it and reopens the same page in their real browser, and your checkout works. Then the tab stays open — so days later, when they reopen Safari, you&apos;re still on screen. Retargeting you didn&apos;t pay for.
           </p>
         </div>
         <div className="mt-14 md:mt-16">
@@ -1511,7 +1513,7 @@ function ABCallout() {
               Every install starts with a 50/50 split. After 7-14 days you have a defensible number — your CVR lift, in your data, with your customers.
             </p>
             <div className="mt-7">
-              <CTAButton href="#waitlist" size="md">Join the waitlist</CTAButton>
+              <CTAButton href="#waitlist" size="md">Start the two-week test</CTAButton>
             </div>
           </div>
           <div className="md:col-span-7">
@@ -1524,32 +1526,35 @@ function ABCallout() {
 }
 
 function ABTable() {
+  // Real published windows (src/lib/case-studies.ts), not illustrative numbers.
   const rows = [
-    { b: "A · escape", s: "12,481", c: "2.38%", positive: true },
-    { b: "B · control", s: "12,506", c: "2.10%", positive: false },
+    { brand: "Home fragrance", visitors: "53,784", cvr: "+159%", z: "z 15.4" },
+    { brand: "Energy drinks", visitors: "13,164", cvr: "+241%", z: "z 7.1" },
+    { brand: "Supplements", visitors: "24,426", cvr: "+37%", z: "z 3.3" },
   ];
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elev)] overflow-hidden">
       <div className="px-5 py-3 flex items-center justify-between text-[11px] text-[var(--color-fg-muted)] uppercase tracking-wider">
-        <span>Last 14 days · IG-sourced sessions</span>
-        <span className="font-mono normal-case tnum">14,987 escapes</span>
+        <span>Completed 50/50 windows</span>
+        <span className="font-mono normal-case">brands anonymized</span>
       </div>
       <div className="divide-y divide-[var(--color-border)]">
         {rows.map((r) => (
-          <div key={r.b} className="px-5 py-4 grid grid-cols-3 items-center text-sm">
-            <div className="font-medium tracking-tight">{r.b}</div>
-            <div className="font-mono text-[var(--color-fg-dim)] tnum">{r.s}</div>
-            <div className={`font-mono text-right tnum ${r.positive ? "text-[var(--color-success)] font-semibold" : "text-[var(--color-danger)]"}`}>{r.c}</div>
+          <div key={r.brand} className="px-5 py-4 grid grid-cols-3 items-center text-sm">
+            <div className="font-medium tracking-tight">{r.brand}</div>
+            <div className="font-mono text-[var(--color-fg-dim)] tnum text-center">{r.visitors}</div>
+            <div className="font-mono text-right tnum">
+              <span className="text-[var(--color-success)] font-semibold">{r.cvr}</span>
+              <span className="ml-2 text-[11px] text-[var(--color-fg-muted)]">{r.z}</span>
+            </div>
           </div>
         ))}
       </div>
-      <div className="px-5 py-4 flex items-center justify-between border-t border-[var(--color-border)]">
-        <span className="text-sm text-[var(--color-fg-dim)]">Lift</span>
-        <span className="text-lg font-semibold text-[var(--color-success)] tnum">+13.3%</span>
-      </div>
-      <div className="px-5 pb-4 -mt-2 flex items-center justify-between text-[11px] font-mono text-[var(--color-fg-muted)]">
-        <span>p &lt; .001</span>
-        <span>z = 6.42 · 95% CI [+38.1%, +56.4%]</span>
+      <div className="px-5 py-4 border-t border-[var(--color-border)] flex items-center justify-between">
+        <span className="text-[12.5px] text-[var(--color-fg-dim)]">Checkout-conversion lift vs control</span>
+        <Link href="/case-studies" className="text-[12.5px] font-medium text-[var(--color-accent)] hover:underline underline-offset-2">
+          All ten results →
+        </Link>
       </div>
     </div>
   );
@@ -1690,64 +1695,98 @@ function ConfidenceTile({ pct }: { pct: number }) {
   );
 }
 
+/* -------- Nothing changes (objection pre-handling) -------- */
+
+// The three questions that gate every technical review call: does it break the
+// site, does it break attribution, can we turn it off.
+function NothingChanges() {
+  const items = [
+    { t: "Your ads", d: "No new links, no new creative, no campaign changes. Your media buyer does nothing." },
+    { t: "Your attribution", d: "fbclid and every UTM pass through untouched and get restored on the other side. Triple Whale, Northbeam and Shopify reporting keep working." },
+    { t: "Your site", d: "One script in the theme header. No theme rebuild, no checkout changes, no app conflicts." },
+    { t: "Your control", d: "A kill switch that takes effect immediately, and no contract to get out of." },
+  ];
+  return (
+    <section className="relative">
+      <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent" />
+      <div className="mx-auto max-w-6xl px-5 py-24 md:py-28">
+        <div className="text-center max-w-2xl mx-auto">
+          <SectionLabel>What we touch</SectionLabel>
+          <h2 className="mt-3 text-balance">
+            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">The honest answer to</span>
+            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">&ldquo;what does this break?&rdquo;</span>
+          </h2>
+          <p className="mt-4 text-[14.5px] text-[var(--color-fg-dim)] leading-relaxed">
+            Almost nothing. It sits beside your stack instead of inside it — which is why a dev review
+            usually takes about ten minutes.
+          </p>
+        </div>
+        <div className="mt-14 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {items.map((i) => (
+            <div key={i.t} className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-card)] p-6">
+              <div className="flex items-center gap-2">
+                <Check />
+                <h3 className="text-[15px] font-semibold tracking-tight">{i.t}</h3>
+              </div>
+              <p className="mt-2.5 text-[13.5px] leading-relaxed text-[var(--color-fg-dim)]">{i.d}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------- How we measure (trust) -------- */
+
+function HowWeMeasure() {
+  const steps = [
+    { n: "1", t: "A real control group, always", d: "We hold back 10% of your Instagram traffic — 50% during the first test — and never escape it. Your lift is the gap between two groups running at the same moment, so a viral week or a sale hits both arms equally." },
+    { n: "2", t: "Your Shopify orders, not Meta's", d: "Purchases come from Shopify Customer Events and order webhooks — the orders in your admin. No attribution windows, no view-through, no double counting against your other channels." },
+    { n: "3", t: "Outliers trimmed both ways", d: "One wholesale-sized order can invent a 200% lift or erase a real one. We remove extremes from both arms before computing anything, and show you the raw view too." },
+    { n: "4", t: "Significance before invoices", d: "We report until the result is statistically real. You see the number, and only then does billing start." },
+  ];
+  return (
+    <section className="mx-auto max-w-6xl px-5 pb-28">
+      <div className="card-hi p-8 md:p-12">
+        <div className="grid md:grid-cols-12 gap-10 items-start">
+          <div className="md:col-span-5">
+            <SectionLabel>How we measure</SectionLabel>
+            <h2 className="mt-3 text-balance">
+              <span className="block h-display text-[26px] sm:text-3xl md:text-[40px]">Assume every vendor</span>
+              <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[40px] text-[var(--color-accent)]">over-attributes.</span>
+            </h2>
+            <p className="mt-5 text-[var(--color-fg-dim)] leading-relaxed">
+              You should. So here is exactly how the number you get billed on is produced — and why
+              you can hand it to a CFO without flinching.
+            </p>
+          </div>
+          <ol className="md:col-span-7 space-y-6">
+            {steps.map((x) => (
+              <li key={x.n} className="flex gap-4">
+                <span className="shrink-0 size-6 rounded-full border border-[var(--color-accent)]/40 text-[var(--color-accent)] font-mono text-[11px] flex items-center justify-center mt-0.5">
+                  {x.n}
+                </span>
+                <div>
+                  <h3 className="text-[15px] font-semibold tracking-tight">{x.t}</h3>
+                  <p className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--color-fg-dim)]">{x.d}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* -------- Pricing -------- */
 
+// The real offer, as sold on calls: two weeks free, then a $300 platform fee
+// plus 10% of measured incremental revenue, with a cap available at volume.
+// (Replaced volume tiers that quoted high-spend brands a bigger minimum before
+// anything was proven — the opposite of how this is actually sold.)
 function Pricing() {
-  type Tier = {
-    name: string;
-    price: string;
-    sub: string;
-    cta: { label: string; href: string };
-    features: string[];
-    featured?: boolean;
-    badge?: string;
-  };
-  const tiers: Tier[] = [
-    {
-      name: "Pro",
-      price: "$300",
-      sub: "/mo — for one serious storefront.",
-      featured: true,
-      badge: "Starts here",
-      cta: { label: "Get started", href: "#waitlist" },
-      features: [
-        "Up to 50,000 IG-IAB escapes / month",
-        "1 storefront",
-        "Built-in A/B with confidence intervals",
-        "Branded fallback overlay (FB, Messenger, TikTok, Snap)",
-        "Real-time dashboard + raw event export",
-        "Email support",
-      ],
-    },
-    {
-      name: "Scale",
-      price: "$1,500",
-      sub: "/mo — for brands doing real volume.",
-      cta: { label: "Get started", href: "#waitlist" },
-      features: [
-        "Up to 250,000 IG-IAB escapes / month",
-        "Up to 5 storefronts",
-        "Webhook to Klaviyo / Triple Whale / Northbeam",
-        "First-party CNAME serving",
-        "Priority launch support",
-        "Monthly performance review",
-      ],
-    },
-    {
-      name: "Enterprise",
-      price: "Custom",
-      sub: "500k+ escapes / mo · portfolio brands.",
-      cta: { label: "Talk to us", href: "mailto:hi@getescapehatch.com?subject=EscapeHatch%20Enterprise" },
-      features: [
-        "Unlimited escapes & storefronts",
-        "Scoped paid pilot + rollout plan",
-        "Custom storefront integration",
-        "SLA, DPA, security review",
-        "Shared Slack channel",
-        "Launch monitoring + kill switch",
-      ],
-    },
-  ];
   return (
     <section id="pricing" className="relative">
       <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent" />
@@ -1755,79 +1794,87 @@ function Pricing() {
         <div className="text-center max-w-2xl mx-auto">
           <SectionLabel>Pricing</SectionLabel>
           <h2 className="mt-3 text-balance">
-            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">Simple pricing</span>
-            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">for serious IG traffic.</span>
+            <span className="block h-display text-[26px] sm:text-3xl md:text-[44px]">You keep the upside.</span>
+            <span className="block mt-1.5 h-editorial text-[26px] sm:text-3xl md:text-[44px] text-[var(--color-accent)]">We take a slice of what we add.</span>
           </h2>
-          <p className="mt-3 text-[var(--color-fg-dim)]">
-            Try it for 3 days free. If it works, we gift the incremental revenue from the trial window; after that, pricing is based on verified lift.
+          <p className="mt-4 text-[var(--color-fg-dim)]">
+            No setup fee, no annual contract, no minimum volume. You see the numbers before you pay anything.
           </p>
         </div>
-        <div className="mt-14 grid md:grid-cols-3 gap-7 md:gap-4 items-stretch">
-          {tiers.map((t) => (
-            <PricingCard key={t.name} tier={t} />
-          ))}
+
+        <div className="mt-14 grid md:grid-cols-[1.25fr_1fr] gap-5 items-stretch max-w-4xl mx-auto">
+          <div
+            className="rounded-2xl border-2 border-[var(--color-accent)]/45 bg-[var(--color-card-hi)] p-8"
+            style={{ boxShadow: "var(--shadow-elev)" }}
+          >
+            <div className="text-[10.5px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent)]">
+              The whole offer
+            </div>
+            <div className="mt-6 flex items-end gap-3 flex-wrap">
+              <span className="h-display text-[52px] leading-none tnum">Free</span>
+              <span className="text-[15px] text-[var(--color-fg-dim)] pb-2">for the first two weeks</span>
+            </div>
+            <p className="mt-4 text-[14.5px] leading-relaxed text-[var(--color-fg-dim)]">
+              We install it, run the split test on your own traffic, and report until the result is
+              statistically real. If the lift isn&apos;t there, you switch it off and owe nothing — and you
+              still walk away knowing what the in-app browser costs you.
+            </p>
+
+            <div className="mt-8 pt-8 border-t border-[var(--color-border-soft)]">
+              <div className="text-[10.5px] uppercase tracking-[0.2em] font-semibold text-[var(--color-fg-muted)]">
+                After it&apos;s proven
+              </div>
+              <div className="mt-4 flex items-end gap-2 flex-wrap">
+                <span className="h-display text-[40px] leading-none tnum">$300</span>
+                <span className="text-[14px] text-[var(--color-fg-dim)] pb-1.5">/mo platform fee</span>
+                <span className="h-display text-[26px] leading-none text-[var(--color-fg-muted)] px-1.5 pb-1">+</span>
+                <span className="h-display text-[40px] leading-none tnum">10%</span>
+                <span className="text-[14px] text-[var(--color-fg-dim)] pb-1.5">of incremental revenue</span>
+              </div>
+              <p className="mt-4 text-[13.5px] leading-relaxed text-[var(--color-fg-dim)]">
+                Incremental means the gap between the escaped group and the control group, on Instagram
+                traffic only — not your total revenue, not your other channels. No lift in a month means
+                no performance fee that month.
+              </p>
+            </div>
+
+            <div className="mt-8">
+              <CTAButton href="#waitlist" size="md">Start the two-week test</CTAButton>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-8 flex flex-col">
+            <div className="text-[10.5px] uppercase tracking-[0.2em] font-semibold text-[var(--color-fg-muted)]">
+              Spending heavily on Instagram?
+            </div>
+            <p className="mt-5 text-[14.5px] leading-relaxed text-[var(--color-fg-dim)]">
+              Past roughly six figures a month in Instagram revenue, a percentage stops making sense for
+              either of us. Those brands move to a capped or fixed monthly fee — we&apos;ve done it several
+              times, and we&apos;ll raise it before you have to.
+            </p>
+            <p className="mt-5 text-[14.5px] leading-relaxed text-[var(--color-fg-dim)]">
+              Not ecommerce? Lead-gen and service businesses run on a flat monthly fee instead, since
+              there&apos;s no order value to share.
+            </p>
+            <div className="mt-auto pt-8">
+              <a
+                href="mailto:hi@getescapehatch.com?subject=Escape%20Hatch%20—%20volume%20pricing"
+                className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[var(--color-accent)] hover:underline underline-offset-2"
+              >
+                Talk about a cap <ArrowRight />
+              </a>
+            </div>
+          </div>
         </div>
+
         <p className="mt-8 text-center text-[12px] text-[var(--color-fg-muted)]">
-          All plans include the snippet, dashboard, A/B test infra, and patch auto-updates. Trial requires the snippet to stay installed and unmodified during measurement. Month-to-month, no annual lock-in.
+          Month-to-month, cancel anytime · Kill switch from day one · The trial needs the snippet to stay
+          installed and unmodified while we measure
         </p>
       </div>
     </section>
   );
 }
-
-function PricingCard({ tier }: { tier: { name: string; price: string; sub: string; cta: { label: string; href: string }; features: string[]; featured?: boolean; badge?: string } }) {
-  const cardBody = (
-    <div
-      className={`relative rounded-2xl flex flex-col h-full ${
-        tier.featured
-          ? "border-2 border-[var(--color-accent)]/50 bg-[var(--color-card-hi)]"
-          : "border border-[var(--color-border)] bg-[var(--color-card)]"
-      }`}
-      style={tier.featured ? { boxShadow: "var(--shadow-elev)" } : undefined}
-    >
-      {tier.badge ? (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.18em] font-semibold bg-[var(--color-accent)] text-white shadow-[var(--shadow-accent)]">
-          <span className="size-1 rounded-full bg-white" />
-          {tier.badge}
-        </span>
-      ) : null}
-      <div className="p-7 pb-5">
-        <h3 className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[var(--color-fg-muted)]">{tier.name}</h3>
-        <div className="mt-5 h-[64px] flex items-baseline gap-1.5">
-          <span className="h-display text-5xl tnum">{tier.price}</span>
-          <span className="text-sm text-[var(--color-fg-dim)]">{tier.sub}</span>
-        </div>
-      </div>
-      <ul className="px-7 space-y-2.5 text-[14px] flex-1">
-        {tier.features.map((f) => (
-          <li key={f} className="flex items-start gap-2 text-[var(--color-fg-dim)]">
-            <Check />
-            <span className="text-[var(--color-fg)]">{f}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="p-7 pt-7 mt-auto">
-        <a
-          href={tier.cta.href}
-          className={`group block text-center rounded-full px-4 py-2.5 font-medium press lift focus-ring ${
-            tier.featured
-              ? "bg-[var(--color-accent)] text-white"
-              : "border border-[var(--color-border)] hover:border-[var(--color-fg-muted)] text-[var(--color-fg)]"
-          }`}
-          style={tier.featured ? { boxShadow: "var(--shadow-accent)" } : undefined}
-        >
-          <span className="inline-flex items-center gap-2.5">
-            <span>{tier.cta.label}</span>
-            <span className="btn-icon"><ArrowRight /></span>
-          </span>
-        </a>
-      </div>
-    </div>
-  );
-  return tier.featured ? <ShineBorder radius={18}>{cardBody}</ShineBorder> : cardBody;
-}
-
-/* -------- FAQ -------- */
 
 function FAQ({ variant = "v1" }: { variant?: LanderVariant }) {
   const all = {
@@ -1851,13 +1898,25 @@ function FAQ({ variant = "v1" }: { variant?: LanderVariant }) {
       q: "Is the snippet GDPR / CCPA compliant?",
       a: "We don't set cookies, we don't fingerprint, we don't ship analytics off your domain. The only data we collect is an IP-hashed event row per escape — no PII, no third-party trackers. Add us under \"functional\" in your consent banner if you have one.",
     },
+    metaRoas: {
+      q: "Meta shows the escaped campaigns doing worse. What's going on?",
+      a: "iOS strips Meta's click ID during any app-to-browser handoff, so the pixel undercounts exactly the visitors who convert best — they land in your reports as direct traffic. We re-carry the click ID and restore it before your pixel fires, which closes most of the gap, and your first-party numbers show the truth. It's the most common surprise on this product, and it's a measurement artifact, not performance.",
+    },
+    loadTime: {
+      q: "Doesn't the extra browser hop cost you conversions?",
+      a: "It adds roughly a second. We've looked for that cost on every account and never found one that comes close to what a working checkout returns — the real browser has their saved cards, their logins and Apple Pay. The control group would show it if it were happening.",
+    },
+    noLift: {
+      q: "What if the test shows no lift?",
+      a: "You switch it off and pay nothing. Results genuinely vary — most brands land in the 20–40% range, a few go much higher, and a couple come out flat. You'll still leave knowing what the in-app browser costs you, measured on your own traffic.",
+    },
     platforms: {
       q: "Does it work on TikTok, Snapchat, Facebook?",
       a: "Instagram is the only IAB with a clean auto-escape (on iOS and Android). For TikTok / Snap / FB, EscapeHatch ships a polished one-tap \"Open in Safari\" overlay. Not as seamless, but recovers most of the lost conversions.",
     },
     plus: {
       q: "Does it work on Shopify Plus?",
-      a: "Yes. EscapeHatch is a script, not a Shopify app. The snippet drops into your storefront <head>, and we've validated against checkout extensibility, Shop Pay, and the Plus B2B portal. Multi-store rollups are a Scale plan feature so a single dashboard covers every storefront.",
+      a: "Yes. EscapeHatch is a script, not a Shopify app. The snippet drops into your storefront <head>, and we've validated against checkout extensibility, Shop Pay, and the Plus B2B portal. Multi-store rollups mean a single dashboard covers every storefront.",
     },
     headless: {
       q: "Does it work outside Shopify — headless, custom, WooCommerce, BigCommerce?",
@@ -1868,8 +1927,8 @@ function FAQ({ variant = "v1" }: { variant?: LanderVariant }) {
   // v2 = priority objections first (compliance, attribution, performance,
   // time-to-results, privacy), then platform/edge questions.
   const items = variant === "v2"
-    ? [all.tos, all.pixel, all.perf, all.fast, all.privacy, all.platforms, all.plus, all.headless]
-    : [all.tos, all.pixel, all.perf, all.platforms, all.plus, all.headless, all.fast, all.privacy];
+    ? [all.metaRoas, all.loadTime, all.noLift, all.tos, all.pixel, all.perf, all.fast, all.privacy, all.platforms, all.plus, all.headless]
+    : [all.metaRoas, all.loadTime, all.noLift, all.tos, all.pixel, all.perf, all.platforms, all.plus, all.headless, all.fast, all.privacy];
   return (
     <section id="faq" className="relative">
       <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-[var(--color-border)] to-transparent" />
