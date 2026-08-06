@@ -104,6 +104,16 @@ Weekly: review each active brand's test window (graduate 50/50 winners to a plan
 
 **Refunds/disputes:** handle in Stripe directly; the invoice row stays `paid` (the ledger records what was collected at the time).
 
+
+### Slack follow-ups in the digest
+
+The digest reads your shared client channels (Slack Connect + `#escapehatch-<brand>`) and flags any where **the client spoke last** more than 4 hours ago — with who spoke, how long they've waited, an excerpt, and a Reply button that opens the channel.
+
+- Token: `SLACK_USER_TOKEN` (Vercel Production). Scopes are read-only and **channel-only** — `channels:history`, `groups:history`, `channels:read`, `groups:read`, `users:read`. There are deliberately **no DM scopes**, so it can never read direct messages.
+- "Them vs us" is decided by Slack team id: a message author whose home workspace isn't ours is the client side of a Connect channel. Bots never count.
+- No token → the section silently doesn't render; the rest of the digest is unaffected. Same if Slack errors.
+- To rotate or revoke: api.slack.com/apps/A0BMYHG4DNK → Install App (reinstall mints a new token) or OAuth & Permissions → Revoke.
+
 ---
 
 ## 7. Referral / affiliate program
