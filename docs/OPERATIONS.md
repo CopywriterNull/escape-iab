@@ -60,6 +60,25 @@ Every install starts as a randomized **50/50 A/B test**: bucket `a` = escaped, b
 
 Weekly: review each active brand's test window (graduate 50/50 winners to a plan, §6), check `/admin/diagnostics` for accidentally-disabled merchants, and pay partners what `/admin/referrers` says you owe.
 
+### Automation
+
+Three crons run this cadence for you (`vercel.json`). All are auth-gated on `CRON_SECRET`; all take `?dry=1` to return the payload as JSON instead of acting.
+
+| Cron | When (UTC) | What |
+|---|---|---|
+| `/api/cron/retention` | `:17` hourly | Retention sweep + the hourly rollup refresh every dashboard depends on |
+| `/api/cron/daily-digest` | 13:00 | Portfolio digest → Slack. Data `src/lib/digest.ts`, blocks `src/lib/digest-blocks.ts` |
+| `/api/cron/ready-to-bill` | 13:20 | Tests that crossed significance **and** cleared the outlier trim → Slack, with the client pitch drafted |
+
+**Ready-to-bill is the step that used to be you remembering.** It applies two independent gates, and a brand must pass both:
+
+1. **Significance** — CVR z-test over 14 days of randomized traffic, control arm needs ≥300 visitors and ≥8 orders (same `classify()` the digest uses).
+2. **Money** — outlier-trimmed 30-day incremental via `fetchTrimmedViewEarnings`, the same math `computeInvoice` bills on, with the rev share ≥ $250/mo.
+
+The gates disagree more often than you'd expect, and that's the point: a brand can be CVR-significant while its trimmed incremental is ~zero because one whale order was carrying it. Pitching off the CVR number there means the first invoice lands far under what you quoted. Those brands appear under **"Significant, but not billable yet"** rather than being dropped silently.
+
+Repeat suppression lives in `graduation_alerts` (one row per merchant): a ready brand is re-posted at most every 7 days, and setting `dismissed_at` silences it permanently. `?dry=1` never writes, so previewing can't suppress the real post. **Nothing here contacts a client** — the draft is staged in Slack for a second click.
+
 ---
 
 ## 4. Merchant lifecycle runbook

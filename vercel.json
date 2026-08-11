@@ -2,6 +2,7 @@
   "crons": [
     { "path": "/api/cron/retention", "schedule": "17 * * * *" },
     { "path": "/api/cron/billing", "schedule": "0 9 * * *" },
-    { "path": "/api/cron/daily-digest", "schedule": "0 13 * * *" }
+    { "path": "/api/cron/daily-digest", "schedule": "0 13 * * *" },
+    { "path": "/api/cron/ready-to-bill", "schedule": "20 13 * * *" }
   ]
 }

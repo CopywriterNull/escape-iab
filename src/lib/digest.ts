@@ -127,7 +127,7 @@ function sumTotals(rows: PerfRow[]): Totals {
 const MIN_CONTROL_VISITORS = 300;
 export const MIN_CONTROL_ORDERS = 8;
 
-function classify(row: PerfRow): PipelineBrand["state"] {
+export function classify(row: PerfRow): PipelineBrand["state"] {
   const impB = toInt(row.impressions_b);
   const purB = toInt(row.purchases_b);
   if (impB < MIN_CONTROL_VISITORS) return "quiet";
