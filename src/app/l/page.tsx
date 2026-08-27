@@ -16,9 +16,10 @@ const C = {
   accent: "var(--color-accent)", accentSoft: "var(--color-accent-soft)",
 };
 
-// TODO: swap these two for your real URLs.
+// TODO: swap DEMO_URL for the real walkthrough video when it exists.
 const DEMO_URL = "https://getescapehatch.com/for-brands";
-const CALL_URL = "https://cal.com/getescapehatch";
+// Booking link is centralised in src/lib/booking.ts — never hand-write a calendar URL.
+const CALL_URL = "/book?src=linkinbio";
 
 function Mark({ s = 30 }: { s?: number }) {
   return (
@@ -32,7 +33,7 @@ const LINKS: { href: string; label: string; note: string; primary?: boolean; ext
   { href: "/get-started", label: "Get the snippet", note: "Live in ~15 minutes", primary: true },
   { href: DEMO_URL, label: "See how it works", note: "60-second walkthrough", external: true },
   { href: "/for-brands", label: "The results", note: "+45% RPV across 30 brands" },
-  { href: CALL_URL, label: "Book a call", note: "Talk to us", external: true },
+  { href: CALL_URL, label: "Book a call", note: "30 min, we look at your store" },
 ];
 
 export default function LinkInBio() {
