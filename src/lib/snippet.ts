@@ -40,8 +40,8 @@ type SnippetOpts = {
   abEnabled?: boolean;
   fallbackButton?: boolean;
   escapeEnabled?: boolean;
-  /** iOS scheme: "xws" (x-web-search://, default) or "meta" (instagram://extbrowser). */
-  escapeIosRoute?: "none" | "xws" | "meta";
+  /** iOS scheme: "none" (default, fire nothing) or "meta" (instagram://extbrowser). */
+  escapeIosRoute?: "none" | "meta";
   /** "auto" fires a URL scheme; "guided" shows the ••• walkthrough overlay. */
   escapeMode?: "auto" | "guided";
   guidedTitle?: string;
@@ -137,16 +137,14 @@ export function buildSnippet(opts: SnippetOpts): string {
   // Allowed hostnames baked at compile time. Empty array = no restriction
   // (F&F installs and pre-domain merchants keep working).
   const allowedDomains = JSON.stringify(opts.allowedDomains ?? []);
-  // iOS escape route. Default "xws" = x-web-search://, the only scheme still
-  // reaching the OS on IG 444 / iOS 26.3.1. "meta" pins the legacy
-  // instagram://extbrowser route for when a build reverses the gate.
   // iOS scheme route. Default "none": no scheme is fired at all, because every
   // page-initiated route on current IG builds either raises the consent modal
-  // or drops the visitor in Safari's search field. "meta" and "xws" stay
-  // available for re-testing when IG ships a new build.
-  const escIos = JSON.stringify(
-    opts.escapeIosRoute === "meta" ? "meta" : opts.escapeIosRoute === "xws" ? "xws" : "none",
-  );
+  // or drops the visitor in Safari's search field having lost the page.
+  // "meta" (instagram://extbrowser) stays available for re-testing when
+  // Instagram ships a new build. x-web-search is gone: it launches Safari but
+  // cannot carry a destination in any encoding, so it can only ever lose the
+  // visitor.
+  const escIos = JSON.stringify(opts.escapeIosRoute === "meta" ? "meta" : "none");
   // "auto" fires a scheme (works on Android). "guided" renders the overlay and
   // fires nothing — the only thing that still works on current iOS IG builds.
   const escMode = JSON.stringify(opts.escapeMode === "guided" ? "guided" : "auto");
@@ -240,20 +238,6 @@ try{
     return;
   }
 
-  // x-web-search:// hands Safari a bare host+path with NO query string, because
-  // Safari parses an &-laden string as a search query instead of a URL and we
-  // lose every param. The real query rides along as one base64url fragment
-  // token (no & or ? for Safari to choke on) and is unpacked here on landing,
-  // before anything reads location.search.
-  try{
-    var _h=location.hash||"";
-    if(_h.indexOf("#eh1.")===0){
-      var _b=_h.slice(5).replace(/-/g,"+").replace(/_/g,"/");
-      while(_b.length%4)_b+="=";
-      var _q=atob(_b);
-      history.replaceState(null,"",location.pathname+(_q?"?"+_q:"")); 
-    }
-  }catch(e){}
   var qsP=new URLSearchParams(location.search);
   // Decoy "external handoff" path — reads as the escape mechanism (safari:// with
   // a googlechrome:// x-callback fallback) but is a dead branch: real traffic
@@ -581,9 +565,10 @@ try{
   //              instagram:// and barcelona://extbrowser now raise the "trying
   //              to open an app outside of Instagram" modal even when fired from
   //              a real user tap; x-web-search:// reaches the OS but only opens
-  //              Safari's *search field* and cannot carry a destination, in any
+  //              Safari's *search field* and cannot carry a destination in any
   //              encoding (inline query, #fragment, %23 fragment, path-only
-  //              token hop, or with an explicit protocol — all seven tried).
+  //              token hop, explicit protocol — all seven tried on-device), so
+  //              it is not implemented at all.
   //              So on iOS we do not fire a scheme at all: ESC_MODE "guided"
   //              renders the overlay instead, which walks the visitor through
   //              the ••• menu. That menu is native IG code with no web-facing
@@ -684,18 +669,6 @@ try{
       ?atob("YmFyY2Vsb25hOi8vZXh0YnJvd3Nlci8/dXJsPQ==")
       :atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==");
     s=schemePrefix+encodeURIComponent(dest);
-  } else if(ESC_IOS==="xws"){
-    // Opt-in only, and not recommended: x-web-search:// launches Safari but
-    // cannot carry a destination in any encoding, so the visitor lands in an
-    // empty search field having lost the page. Kept for A/B curiosity, never
-    // the default.
-    var xb;
-    try{
-      var xu=new URL(dest);
-      var tok=btoa(xu.search.replace(/^\\?/,"")).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"");
-      xb=xu.host+xu.pathname+(tok?"#eh1."+tok:"");
-    }catch(e){ xb=dest.replace(/^https?:\\/\\//,""); }
-    s=atob("eC13ZWItc2VhcmNoOi8v")+xb;
   } else {
     // iOS default: fire nothing. Every page-initiated route is either gated
     // behind the consent modal or lands the visitor somewhere useless, and a
@@ -781,20 +754,6 @@ try{
     try{var hrBody=JSON.stringify({m:M,v:V,t:"hostname_rejected",hr:1,u:location.href,ts:Date.now()});if(navigator.sendBeacon){try{navigator.sendBeacon(I,new Blob([hrBody],{type:"text/plain;charset=UTF-8"}));}catch(e){}}}catch(e){}
     return;
   }
-  // x-web-search:// hands Safari a bare host+path with NO query string, because
-  // Safari parses an &-laden string as a search query instead of a URL and we
-  // lose every param. The real query rides along as one base64url fragment
-  // token (no & or ? for Safari to choke on) and is unpacked here on landing,
-  // before anything reads location.search.
-  try{
-    var _h=location.hash||"";
-    if(_h.indexOf("#eh1.")===0){
-      var _b=_h.slice(5).replace(/-/g,"+").replace(/_/g,"/");
-      while(_b.length%4)_b+="=";
-      var _q=atob(_b);
-      history.replaceState(null,"",location.pathname+(_q?"?"+_q:"")); 
-    }
-  }catch(e){}
   var qsP=new URLSearchParams(location.search);
   // Decoy "external handoff" path. Reads as THE escape mechanism (safari:// with
   // a googlechrome:// x-callback fallback) to anyone eyeballing or LLM-analyzing

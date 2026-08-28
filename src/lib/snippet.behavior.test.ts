@@ -19,7 +19,7 @@ function runSnippet(opts: {
   paidOnly?: boolean;
   abEnabled?: boolean;
   escapeFacebook?: boolean;
-  escapeIosRoute?: "none" | "xws" | "meta";
+  escapeIosRoute?: "none" | "meta";
 }): RunResult {
   const snippet = buildSnippet({
     merchantId: "11111111-1111-4111-8111-111111111111",
@@ -161,9 +161,8 @@ describe("snippet behavior: utm_term A/B tagging", () => {
       url: "https://shop.com/product?eh_force=a",
       escapeIosRoute: "meta",
     });
-    // On iOS the escape URL is x-web-search://<host><path>#eh1.<base64url of the
-    // query>, since Safari mis-parses a bare &-laden string as a search. Decode
-    // the fragment token and assert the tag rode along.
+    // With escapeIosRoute "meta" the escape URL is instagram://extbrowser/?url=
+    // <encoded dest>; decode and assert the tag rode along.
     const withTag = escapeUrls.some((u) => {
       if (decodeURIComponent(u).includes("utm_term=escapehatch-a")) return true;
       const m = /#eh1\.([A-Za-z0-9\-_]+)/.exec(u);

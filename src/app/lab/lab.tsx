@@ -64,7 +64,6 @@ const CANDIDATE_SCHEMES: { label: string; build: (u: string) => string }[] = [
   { label: "fb://extbrowser", build: (u) => "fb://extbrowser/?url=" + encodeURIComponent(u) },
   { label: "fb://browser", build: (u) => "fb://browser/?url=" + encodeURIComponent(u) },
   { label: "barcelona://extbrowser", build: (u) => "barcelona://extbrowser/?url=" + encodeURIComponent(u) },
-  { label: "x-web-search://", build: (u) => "x-web-search://" + u.replace(/^https?:\/\//, "") },
   { label: "shortcuts://run-shortcut", build: (u) => "shortcuts://run-shortcut?name=Open&input=" + encodeURIComponent(u) },
 ];
 
@@ -126,29 +125,12 @@ export function Lab() {
     };
     document.addEventListener("visibilitychange", onVis);
 
-    // ?auto=1 fires x-web-search:// on load with no tap, which is how the real
-    // snippet behaves. Tells us whether the route needs a user gesture.
-    try {
-      if (new URLSearchParams(location.search).get("auto") === "1") {
-        say("auto=1 -> firing x-web-search:// on load, no gesture");
-        setTimeout(() => {
-          const u = new URL(location.href);
-          u.searchParams.delete("auto");
-          u.searchParams.set("escaped", "1");
-          const tok = btoa(u.search.replace(/^\?/, ""))
-            .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-          location.replace("x-web-search://" + u.host + u.pathname + (tok ? "#eh1." + tok : ""));
-        }, 300);
-      }
-    } catch { /* ignore */ }
 
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [say]);
 
-  // Carry a realistic param set across the hop. x-web-search:// takes a bare
-  // host+path+query string, so the open question is whether Safari parses the
-  // whole thing as a URL or treats the &-separated tail as a search query.
-  // These land in the banner below, which is how we verify nothing was lost.
+  // Carry a realistic param set so the landing banner can show which params
+  // survived whichever route actually works.
   const dest = useCallback(() => {
     try {
       const u = new URL(location.href);
@@ -165,63 +147,18 @@ export function Lab() {
     }
   }, []);
 
-  // Variant A: the whole query inline. Safari sees ?a=1&b=2 and may decide the
-  // string is a search phrase rather than a URL.
-  const xws = useCallback(
-    () => "x-web-search://" + dest().replace(/^https?:\/\//, ""),
-    [dest],
-  );
-
-  // Variant B (what the snippet now ships): bare host+path, query carried as one
-  // base64url fragment token so there is no ? or & for Safari to trip over.
-  const xwsToken = useCallback(() => {
-    const u = new URL(dest());
-    const tok = btoa(u.search.replace(/^\?/, ""))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-    return "x-web-search://" + u.host + u.pathname + (tok ? "#eh1." + tok : "");
-  }, [dest]);
-
-  // Variant C: bare URL, no params at all. The control — if this navigates and
-  // the others do not, punctuation is the problem.
-  const xwsBare = useCallback(
-    () => "x-web-search://" + location.host + location.pathname,
-    [],
-  );
-
-  const b64url = useCallback(
-    (t: string) => btoa(t).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
-    [],
-  );
-
-  // Variant D: path-only hop through /e/<token>, which 302s to the real URL.
-  // No ? & or # anywhere, so Safari cannot mistake it for a search phrase.
-  const xwsHop = useCallback(
-    () => "x-web-search://" + location.host + "/e/" + b64url(dest()),
-    [b64url, dest],
-  );
-
-  // Variant E: same idea but percent-encoded punctuation, in case the OS
-  // decodes before handing the string to Safari.
-  const xwsPctFragment = useCallback(() => {
-    const u = new URL(dest());
-    return (
-      "x-web-search://" + u.host + u.pathname + "%23eh1." + b64url(u.search.replace(/^\?/, ""))
-    );
-  }, [b64url, dest]);
-
-  // Variant F: include the protocol, which is the strongest hint to Safari that
-  // the string is a URL and not something to search for.
-
-
+  // Meta's extbrowser route. Gated behind the consent modal on IG 444, kept so
+  // we can re-test it whenever Instagram ships a new build.
   const igScheme = useCallback(() => {
     const ua = navigator.userAgent || "";
-    const kind = detectKind(ua);
-    const prefix = kind === "threads" ? "barcelona://extbrowser/?url=" : "instagram://extbrowser/?url=";
+    const prefix =
+      detectKind(ua) === "threads"
+        ? "barcelona://extbrowser/?url="
+        : "instagram://extbrowser/?url=";
     return prefix + encodeURIComponent(dest());
   }, [dest]);
 
+  // Android's Chrome handoff — the one route that still works unattended.
   const androidIntent = useCallback(() => {
     const d = dest();
     return (
@@ -231,6 +168,16 @@ export function Lab() {
     );
   }, [dest]);
 
+  const b64url = useCallback(
+    (t: string) => btoa(t).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
+    [],
+  );
+
+
+
+  // JS-initiated navigation. Kept only as a control: the WebView drops these
+  // silently for a blocked scheme, which is why a dead button looks identical
+  // to a dead route.
   const fire = useCallback(
     (label: string, url: string) => {
       setHiddenSeen(false);
@@ -238,16 +185,10 @@ export function Lab() {
       try {
         location.replace(url);
       } catch (e) {
-        say(`location.replace threw: ${String(e)} — trying location.href`);
-        try {
-          location.href = url;
-        } catch (e2) {
-          say(`location.href threw too: ${String(e2)}`);
-        }
+        say(`location.replace threw: ${String(e)}`);
       }
-      // If nothing has backgrounded us after ~1.2s the navigation was swallowed.
       setTimeout(() => {
-        if (!document.hidden) say(`${label}: still foreground after 1.2s — swallowed or prompt shown`);
+        if (!document.hidden) say(`${label}: still foreground after 1.2s`);
       }, 1200);
     },
     [say],
@@ -328,11 +269,6 @@ export function Lab() {
         {(
           [
             ["instagram://extbrowser", () => igScheme()],
-            ["x-web-search → /e/<token> hop", () => xwsHop()],
-            ["x-web-search bare host/path", () => xwsBare()],
-            ["x-web-search #eh1.<token>", () => xwsToken()],
-            ["x-web-search %23 fragment", () => xwsPctFragment()],
-            ["x-web-search inline query", () => xws()],
             ["android intent:// → Chrome", () => androidIntent()],
             ["x-safari-https://", () => dest().replace(/^https?:/, "x-safari-https:")],
             ["googlechrome://x-callback-url", () => "googlechrome://x-callback-url/open?url=" + encodeURIComponent(dest())],
@@ -403,7 +339,7 @@ function Landed() {
   const [params, setParams] = useState<[string, string][] | null>(null);
   useEffect(() => {
     // Unpack the fragment token first — that is how the real snippet restores
-    // the query after an x-web-search hop.
+    // the query after a token-carrying hop.
     try {
       const h = location.hash || "";
       if (h.indexOf("#eh1.") === 0) {

@@ -6,7 +6,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export const dynamic = "force-static";
+// Never cache: this page is iterated on constantly and is opened inside an IAB
+// that happily serves a stale copy, which makes a test look like a failed route.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export default function LabPage() {
   return <Lab />;
