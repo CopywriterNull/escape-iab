@@ -46,6 +46,7 @@ type SnippetOpts = {
   escapeMode?: "auto" | "guided";
   guidedTitle?: string;
   guidedSubtitle?: string;
+  guidedButtonLabel?: string;
   fallbackText?: string | null;
   paidOnly?: boolean;
   /** Percent of in-test traffic placed in bucket A (escape arm). 50 =
@@ -150,10 +151,11 @@ export function buildSnippet(opts: SnippetOpts): string {
   const escMode = JSON.stringify(opts.escapeMode === "guided" ? "guided" : "auto");
   const guidedTitle = JSON.stringify(opts.guidedTitle ?? "");
   const guidedSub = JSON.stringify(opts.guidedSubtitle ?? "");
+  const guidedBtn = JSON.stringify(opts.guidedButtonLabel ?? "");
 
   return `(function(){
 try{
-  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord},UT_TAG=${utmTagging},ESC_IOS=${escIos},ESC_MODE=${escMode},GT=${guidedTitle},GS=${guidedSub},AD=${allowedDomains};
+  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord},UT_TAG=${utmTagging},ESC_IOS=${escIos},ESC_MODE=${escMode},GT=${guidedTitle},GS=${guidedSub},GB=${guidedBtn},AD=${allowedDomains};
 
   // Async kill-switch — if a prior /api/escape/status response in this
   // session marked us disabled, bail before doing anything. Lets inlined /
@@ -607,8 +609,35 @@ try{
       sub.textContent=GS||"Instagram's built-in browser can drop your cart and your saved logins.";
       sub.setAttribute("style","font-size:14px;line-height:1.5;opacity:.72;margin-bottom:26px;max-width:290px");
 
+      // Primary CTA on iOS Meta IABs: a real anchor to the extbrowser route.
+      // The route is consent-gated, not dead — a user-activated navigation
+      // raises iOS's "open outside Instagram?" sheet, and tapping Open makes IG
+      // resolve the url= param and hand the plain https destination to Safari
+      // (confirmed in device syslog: FBSystemService opens com.apple.mobilesafari
+      // with an https: URL on behalf of Instagram right after consent). So we
+      // give them the button and pre-empt the sheet in the copy, instead of
+      // firing it silently and eating an unexplained modal.
+      var isMeta=(kind==="instagram"||kind==="threads");
+      if(isIOS&&isMeta){
+        var go=document.createElement("a");
+        go.href=(kind==="threads"
+          ?atob("YmFyY2Vsb25hOi8vZXh0YnJvd3Nlci8/dXJsPQ==")
+          :atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ=="))+encodeURIComponent(dest);
+        go.textContent=GB||"Continue in Safari";
+        go.setAttribute("style","display:block;background:#fff;color:#000;padding:17px 26px;border-radius:14px;font-size:17px;font-weight:700;text-decoration:none;margin-bottom:12px;min-width:250px");
+        go.addEventListener("click",function(){beacon("guided_scheme_tapped");});
+        var note=document.createElement("div");
+        note.textContent="iOS will ask to confirm — tap Open.";
+        note.setAttribute("style","font-size:13px;opacity:.6;margin-bottom:22px");
+        o.appendChild(go);o.appendChild(note);
+      }
+
       var steps=document.createElement("div");
-      steps.setAttribute("style","text-align:left;max-width:290px;font-size:15px;line-height:1.7;margin-bottom:26px");
+      steps.setAttribute("style","text-align:left;max-width:290px;font-size:14px;line-height:1.7;margin-bottom:24px;opacity:.85");
+      var or_=document.createElement("div");
+      or_.textContent="or do it manually:";
+      or_.setAttribute("style","font-size:12px;text-transform:uppercase;letter-spacing:.6px;opacity:.4;margin-bottom:10px");
+      o.appendChild(or_);
       var mkStep=function(n,label,strong){
         var d=document.createElement("div");
         d.setAttribute("style","margin-bottom:8px");
