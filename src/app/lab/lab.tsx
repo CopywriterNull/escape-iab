@@ -184,11 +184,36 @@ export function Lab() {
   }, [dest]);
 
   // Variant C: bare URL, no params at all. The control — if this navigates and
-  // B does not, the fragment is the problem.
+  // the others do not, punctuation is the problem.
   const xwsBare = useCallback(
-    () => "x-web-search://" + location.host + location.pathname + "#eh1." + btoa("escaped=1"),
+    () => "x-web-search://" + location.host + location.pathname,
     [],
   );
+
+  const b64url = useCallback(
+    (t: string) => btoa(t).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
+    [],
+  );
+
+  // Variant D: path-only hop through /e/<token>, which 302s to the real URL.
+  // No ? & or # anywhere, so Safari cannot mistake it for a search phrase.
+  const xwsHop = useCallback(
+    () => "x-web-search://" + location.host + "/e/" + b64url(dest()),
+    [b64url, dest],
+  );
+
+  // Variant E: same idea but percent-encoded punctuation, in case the OS
+  // decodes before handing the string to Safari.
+  const xwsPctFragment = useCallback(() => {
+    const u = new URL(dest());
+    return (
+      "x-web-search://" + u.host + u.pathname + "%23eh1." + b64url(u.search.replace(/^\?/, ""))
+    );
+  }, [b64url, dest]);
+
+  // Variant F: include the protocol, which is the strongest hint to Safari that
+  // the string is a URL and not something to search for.
+
 
   const igScheme = useCallback(() => {
     const ua = navigator.userAgent || "";
@@ -295,17 +320,26 @@ export function Lab() {
       </Section>
 
       <Section title="Escape attempts (tap = user gesture)">
-        <button style={{ ...btn, background: "#4ade80" }} onClick={() => fire("xws token (tap)", xwsToken())}>
-          0. x-web-search + fragment token — on tap ← what ships
+        <button style={{ ...btn, background: "#4ade80" }} onClick={() => fire("A: /e/ hop (tap)", xwsHop())}>
+          A. x-web-search → /e/&lt;token&gt; path-only hop ← best bet
         </button>
-        <button style={{ ...btn, background: "#4ade80" }} onClick={() => setTimeout(() => fire("xws token (auto)", xwsToken()), 400)}>
-          0b. x-web-search + fragment token — auto-fired, no gesture
+        <button style={{ ...btn, background: "#4ade80" }} onClick={() => setTimeout(() => fire("A2: /e/ hop (auto)", xwsHop()), 400)}>
+          A2. same, auto-fired with no gesture
         </button>
-        <button style={{ ...btn, background: "#bbf7d0" }} onClick={() => fire("xws bare", xwsBare())}>
-          0c. x-web-search, bare path only (control)
+        <button style={{ ...btn, background: "#bbf7d0" }} onClick={() => fire("B: bare path", xwsBare())}>
+          B. x-web-search, bare host/path, no params (control)
         </button>
-        <button style={{ ...btn, background: "#fde68a" }} onClick={() => fire("xws inline query", xws())}>
-          0d. x-web-search with inline ?a=1&amp;b=2 query (old way)
+        <button style={{ ...btn, background: "#fde68a" }} onClick={() => fire("C: fragment token", xwsToken())}>
+          C. host/path#eh1.&lt;token&gt; (the one that came up empty)
+        </button>
+        <button style={{ ...btn, background: "#fde68a" }} onClick={() => fire("D: %23 fragment", xwsPctFragment())}>
+          D. same but %23-encoded #
+        </button>
+        <button style={{ ...btn, background: "#fde68a" }} onClick={() => fire("E: inline query", xws())}>
+          E. inline ?a=1&amp;b=2 query (the original)
+        </button>
+        <button style={{ ...btn, background: "#fde68a" }} onClick={() => fire("F: with protocol", "x-web-search://https://" + location.host + "/e/" + b64url(dest()))}>
+          F. x-web-search://https://host/e/&lt;token&gt;
         </button>
         <button style={btn} onClick={() => fire("extbrowser (tap)", igScheme())}>
           1. instagram/barcelona://extbrowser — on tap
