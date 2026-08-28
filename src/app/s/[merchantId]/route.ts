@@ -48,6 +48,12 @@ export async function GET(
   // utm_term A/B tagging (Shopify-visible). Off unless explicitly enabled
   // per-merchant (G FUEL + Kaiyo). Missing column reads as off.
   let utmTagging = false;
+  // Escape mechanism. "auto" fires a scheme unattended (still works on Android);
+  // "guided" shows the overlay whose primary CTA is a user-tapped extbrowser
+  // anchor — the only thing that reaches Safari on current iOS IG builds, since
+  // the route is consent-gated and a silent fire is dropped without even
+  // showing the sheet. Missing column reads as "auto" (legacy behavior).
+  let escapeMode: "auto" | "guided" = "auto";
   let allowedDomains: string[] = [];
   let valid = isValidShape;
   if (isValidShape) {
@@ -72,6 +78,7 @@ export async function GET(
         // Only an explicit `true` in the DB keeps paid-only on. Missing
         // column or `false`/null reads as escape-all (the new default).
         paidOnly = m.paid_only === true;
+        if (m.escape_mode === "guided") escapeMode = "guided";
         // ab_split_pct lands as a number when migration 0016 is applied;
         // until then, fall back to 50 so the snippet keeps serving.
         const rawSplit = m.ab_split_pct;
@@ -137,6 +144,7 @@ export async function GET(
         escapeMessenger,
         escapeDiscord,
         utmTagging,
+        escapeMode,
         allowedDomains,
       })
     : buildAttributionOnlySnippet({
