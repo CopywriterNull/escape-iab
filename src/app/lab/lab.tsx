@@ -24,12 +24,25 @@ function detectKind(ua: string): string {
   return "none (not an in-app browser)";
 }
 
-// Globals a normal mobile Safari/Chrome page already has. Anything outside this
-// set that isn't on the window prototype is a candidate injected bridge.
-const KNOWN_GLOBALS = new Set([
-  "webkit", "chrome", "Prototype", "__NEXT_DATA__", "next", "__next_f",
-  "regeneratorRuntime", "React", "ReactDOM", "__REACT_DEVTOOLS_GLOBAL_HOOK__",
-]);
+// A pristine same-origin iframe gives us a baseline `window` that WebKit built
+// without any page script running. Diffing the top window against it surfaces
+// exactly what the host app injected — comparing against a hardcoded list is
+// useless because window's own-property set IS the entire standard API surface.
+function injectedGlobals(): string[] {
+  try {
+    const f = document.createElement("iframe");
+    f.style.cssText = "position:absolute;width:0;height:0;border:0;opacity:0";
+    document.body.appendChild(f);
+    const clean = f.contentWindow as unknown as Window | null;
+    if (!clean) return ["<no iframe contentWindow>"];
+    const baseline = new Set(Object.getOwnPropertyNames(clean));
+    const out = Object.getOwnPropertyNames(window).filter((k) => !baseline.has(k));
+    f.remove();
+    return out;
+  } catch (e) {
+    return [`<error: ${String(e)}>`];
+  }
+}
 
 export function Lab() {
   const [rows, setRows] = useState<Row[]>([]);
@@ -61,17 +74,8 @@ export function Lab() {
     }
     setHandlers(hs);
 
-    // 2. What non-standard globals were injected (Android @JavascriptInterface
-    //    bridges land here; so do IG's own tracking shims)?
-    let gs: string[] = [];
-    try {
-      const proto = Object.getPrototypeOf(window) as object;
-      gs = Object.getOwnPropertyNames(window).filter(
-        (k) => !(k in proto) && !KNOWN_GLOBALS.has(k) && !/^(_|\$)/.test(k),
-      );
-    } catch (e) {
-      gs = [`<error enumerating globals: ${String(e)}>`];
-    }
+    // 2. What did the host app inject on top of a pristine WebKit window?
+    const gs = injectedGlobals();
     setGlobals(gs);
 
     setRows([
@@ -82,6 +86,8 @@ export function Lab() {
       { label: "referrer", value: document.referrer || "(none)" },
       { label: "webkit.messageHandlers", value: hs.length ? `${hs.length} handler(s)` : "absent / empty" },
       { label: "injected globals", value: gs.length ? `${gs.length} found` : "none" },
+      { label: "IABMV token", value: /IABMV\/(\d+)/.exec(ua)?.[1] ?? "absent" },
+      { label: "IG app version", value: /Instagram ([\d.]+)/.exec(ua)?.[1] ?? "n/a" },
       { label: "standalone", value: String((navigator as unknown as { standalone?: boolean }).standalone) },
       { label: "visibilityState", value: document.visibilityState },
     ]);
