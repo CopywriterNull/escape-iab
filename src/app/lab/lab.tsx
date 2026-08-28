@@ -260,6 +260,50 @@ export function Lab() {
         )}
       </Section>
 
+      <Section title="Near-automatic: fire on first interaction">
+        <p style={{ opacity: 0.55, marginBottom: 12 }}>
+          Arms a one-shot document listener. Your next touch anywhere — a scroll or a
+          tap — fires instagram://extbrowser. This is the closest to automatic iOS
+          allows: no button to find, but the OS still requires that real gesture and
+          still shows its confirm sheet. Watch whether the sheet appears the first
+          time only or every time.
+        </p>
+        <button
+          style={{ ...btn, background: "#93c5fd" }}
+          onClick={() => {
+            say("armed — touch anywhere to fire extbrowser");
+            const fireOnce = () => {
+              document.removeEventListener("pointerdown", fireOnce, true);
+              document.removeEventListener("touchend", fireOnce, true);
+              say("first interaction captured -> navigating to extbrowser");
+              const a = document.createElement("a");
+              a.href = igScheme();
+              document.body.appendChild(a);
+              a.click();
+            };
+            document.addEventListener("pointerdown", fireOnce, true);
+            document.addEventListener("touchend", fireOnce, true);
+          }}
+        >
+          Arm first-interaction auto-fire
+        </button>
+        <button
+          style={{ ...btn, background: "#c4b5fd" }}
+          onClick={() => {
+            say("iframe-src fire (tests whether a gesture-free sub-navigation slips the sheet)");
+            const f = document.createElement("iframe");
+            f.style.display = "none";
+            f.src = igScheme();
+            document.body.appendChild(f);
+            setTimeout(() => {
+              if (!document.hidden) say("iframe: still foreground — dropped");
+            }, 1200);
+          }}
+        >
+          iframe src = extbrowser (control, expect drop)
+        </button>
+      </Section>
+
       <Section title="Escape attempts">
         <p style={{ opacity: 0.55, marginBottom: 12 }}>
           Every row below is a real &lt;a href&gt; — a genuine user-activated navigation.
