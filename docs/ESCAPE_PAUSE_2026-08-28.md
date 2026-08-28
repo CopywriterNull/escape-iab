@@ -37,3 +37,23 @@ update merchants set escape_enabled = true where id in (<ids below>);
 | Vitanics | tryvitanics.com | 343628ca-27f2-402b-8c29-9e4ac13b746a | true | none |
 
 Not in the list (already off before the pause): Cased / ridecased.com, and every `pending` merchant.
+
+## Guided-mode pilots (2026-08-28, later same day)
+
+iOS auto-escape confirmed dead on IG 444 / iOS 26.3.1 (see the
+project_escapehatch_ios_escape_dead memory / commit e71912b). These merchants are
+re-enabled in **guided** mode (`escape_mode='guided', escape_enabled=true`) — the
+overlay's primary CTA is a primed user-tapped `instagram://extbrowser` anchor; the
+sheet is unavoidable so we prime it instead of firing silently. Android stays
+zero-tap via `intent://`.
+
+| Merchant | Domain | id | billing |
+|---|---|---|---|
+| PURE Diffuser Co | purediffuserco.com | 85abf31e-b340-4a57-addf-d667f8b73b40 | active |
+| Retropia | retro-pia.com | 158120e7-599b-4c4e-85de-9948670f4d7c | none |
+| Retropia (dup row) | retro-pia.com | 87b831b9-eda5-4f52-9006-91686b68e06e | none |
+
+The other 21 merchants from the pause list remain `escape_enabled=false`. Read
+`guided_escaped / guided_shown` per pilot before rolling guided out further.
+Note: `/s/<id>.js` is served with `cache-control: max-age=3600`, so a mode change
+can take up to an hour to fully propagate off Vercel's edge cache.
