@@ -10,6 +10,15 @@ const ALLOWED_EVENTS = new Set([
   "escape_skipped",
   "fallback_shown",
   "fallback_clicked",
+  // Guided-mode funnel (iOS IG 444+, where auto-escape is impossible and the
+  // overlay's primed extbrowser button is the mechanism). guided_escaped is the
+  // one that means "actually reached Safari"; the cohort split (escaped vs
+  // shown-but-stayed vs control) is reconstructed from these + purchase by eh_sid.
+  "guided_shown",
+  "guided_scheme_tapped",
+  "guided_escaped",
+  "guided_copied",
+  "guided_dismissed",
   "cart_check",
 ]);
 const ALLOWED_KINDS = new Set([
