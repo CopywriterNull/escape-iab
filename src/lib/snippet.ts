@@ -42,6 +42,10 @@ type SnippetOpts = {
   escapeEnabled?: boolean;
   /** iOS scheme: "xws" (x-web-search://, default) or "meta" (instagram://extbrowser). */
   escapeIosRoute?: "xws" | "meta";
+  /** "auto" fires a URL scheme; "guided" shows the ••• walkthrough overlay. */
+  escapeMode?: "auto" | "guided";
+  guidedTitle?: string;
+  guidedSubtitle?: string;
   fallbackText?: string | null;
   paidOnly?: boolean;
   /** Percent of in-test traffic placed in bucket A (escape arm). 50 =
@@ -137,10 +141,15 @@ export function buildSnippet(opts: SnippetOpts): string {
   // reaching the OS on IG 444 / iOS 26.3.1. "meta" pins the legacy
   // instagram://extbrowser route for when a build reverses the gate.
   const escIos = JSON.stringify(opts.escapeIosRoute === "meta" ? "meta" : "xws");
+  // "auto" fires a scheme (works on Android). "guided" renders the overlay and
+  // fires nothing — the only thing that still works on current iOS IG builds.
+  const escMode = JSON.stringify(opts.escapeMode === "guided" ? "guided" : "auto");
+  const guidedTitle = JSON.stringify(opts.guidedTitle ?? "");
+  const guidedSub = JSON.stringify(opts.guidedSubtitle ?? "");
 
   return `(function(){
 try{
-  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord},UT_TAG=${utmTagging},ESC_IOS=${escIos},AD=${allowedDomains};
+  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord},UT_TAG=${utmTagging},ESC_IOS=${escIos},ESC_MODE=${escMode},GT=${guidedTitle},GS=${guidedSub},AD=${allowedDomains};
 
   // Async kill-switch — if a prior /api/escape/status response in this
   // session marked us disabled, bail before doing anything. Lets inlined /
@@ -559,17 +568,108 @@ try{
   try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");nu.searchParams.set("eh_sid",sid);nu.searchParams.set("eh_escape","1");if(fc)nu.searchParams.set("eh_fbclid",fc);dest=nu.toString();}catch(e){}
   // Scheme selection, verified on-device against IG 444 / iOS 26.3.1 (IABMV/1):
   //
-  //   Android  -> intent:// to Chrome. extbrowser is swallowed on newer builds;
-  //               the intent carries S.browser_fallback_url so a device without
-  //               Chrome still lands on the same https dest.
-  //   iOS      -> x-web-search://. The Meta extbrowser routes (instagram:// and
-  //               barcelona://) are gated on current builds — dead even when
-  //               fired from a real user tap — but x-web-search:// still reaches
-  //               the OS and opens Safari. It takes a bare host+path+query with
-  //               no protocol, so we strip it.
+  //   Android -> intent:// to Chrome. Still works. extbrowser is swallowed on
+  //              newer builds; the intent carries S.browser_fallback_url so a
+  //              device without Chrome still lands on the same https dest.
+  //   iOS     -> nothing works. Every page-initiated route was tested on-device:
+  //              instagram:// and barcelona://extbrowser now raise the "trying
+  //              to open an app outside of Instagram" modal even when fired from
+  //              a real user tap; x-web-search:// reaches the OS but only opens
+  //              Safari's *search field* and cannot carry a destination, in any
+  //              encoding (inline query, #fragment, %23 fragment, path-only
+  //              token hop, or with an explicit protocol — all seven tried).
+  //              So on iOS we do not fire a scheme at all: ESC_MODE "guided"
+  //              renders the overlay instead, which walks the visitor through
+  //              the ••• menu. That menu is native IG code with no web-facing
+  //              entry point (the IAB exposes no webkit.messageHandlers), so a
+  //              user tap is genuinely the only way out on this build.
   //
-  // ESC_IOS lets a merchant pin the old Meta route if a future IG build
-  // reverses the gate: "meta" forces extbrowser, anything else uses the default.
+  // ESC_IOS pins the legacy Meta route for when a future IG build reverses the
+  // gate: "meta" forces extbrowser, anything else uses the default above.
+  // Guided mode: no scheme fires. Render a branded panel that points at the
+  // ••• menu, which is the only mechanism that still lands the visitor on the
+  // page with the URL intact. Bucket A still means "we intervened", so the A/B
+  // maths is unchanged — only the mechanism differs.
+  var showGuided=function(){
+    try{
+      if(document.getElementById("eh-guided"))return;
+      var isIOS=/iPhone|iPad|iPod/i.test(u);
+      var o=document.createElement("div");
+      o.id="eh-guided";
+      o.setAttribute("style","position:fixed;inset:0;z-index:2147483647;background:rgba(8,8,10,.92);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#fff;text-align:center");
+
+      // Arrow pointing at the ••• button. On iOS IG it sits top-right of the
+      // in-app browser chrome; on Android it is top-right as well.
+      var arrow=document.createElement("div");
+      arrow.textContent="\u2B06\uFE0F";
+      arrow.setAttribute("style","position:absolute;top:8px;right:18px;font-size:30px;animation:ehb 1.2s ease-in-out infinite");
+      var st=document.createElement("style");
+      st.textContent="@keyframes ehb{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}";
+      o.appendChild(st);
+      o.appendChild(arrow);
+
+      var hd=document.createElement("div");
+      hd.textContent=GT||"Open this page in your browser";
+      hd.setAttribute("style","font-size:21px;font-weight:700;margin-bottom:10px;max-width:300px");
+
+      var sub=document.createElement("div");
+      sub.textContent=GS||"Instagram's built-in browser can drop your cart and your saved logins.";
+      sub.setAttribute("style","font-size:14px;line-height:1.5;opacity:.72;margin-bottom:26px;max-width:290px");
+
+      var steps=document.createElement("div");
+      steps.setAttribute("style","text-align:left;max-width:290px;font-size:15px;line-height:1.7;margin-bottom:26px");
+      var mkStep=function(n,label,strong){
+        var d=document.createElement("div");
+        d.setAttribute("style","margin-bottom:8px");
+        d.appendChild(document.createTextNode(n+". "+label+" "));
+        var b=document.createElement("b");b.textContent=strong;d.appendChild(b);
+        return d;
+      };
+      steps.appendChild(mkStep(1,"Tap","\u2022\u2022\u2022"));
+      steps.appendChild(mkStep(2,"Choose",isIOS?"Open in external browser":"Open in Chrome"));
+
+      // Clipboard fallback for anyone who cannot find the menu.
+      var copy=document.createElement("button");
+      copy.type="button";
+      copy.textContent="Copy link instead";
+      copy.setAttribute("style","background:transparent;border:1px solid rgba(255,255,255,.28);color:#fff;padding:12px 20px;border-radius:999px;font-size:14px;font-weight:600;cursor:pointer");
+      copy.addEventListener("click",function(){
+        try{
+          if(navigator.clipboard&&navigator.clipboard.writeText){
+            navigator.clipboard.writeText(dest).then(function(){copy.textContent="Link copied";},function(){copy.textContent="Copy failed";});
+          }
+        }catch(e){}
+        beacon("guided_copied");
+      });
+
+      var dismiss=document.createElement("button");
+      dismiss.type="button";
+      dismiss.textContent="Continue here anyway";
+      dismiss.setAttribute("style","position:absolute;bottom:26px;background:none;border:none;color:rgba(255,255,255,.5);font-size:13px;text-decoration:underline;cursor:pointer");
+      dismiss.addEventListener("click",function(){
+        try{o.remove();document.body.style.overflow="";}catch(e){}
+        beacon("guided_dismissed");
+      });
+
+      o.appendChild(hd);o.appendChild(sub);o.appendChild(steps);o.appendChild(copy);o.appendChild(dismiss);
+      var mount=function(){try{document.body.appendChild(o);document.body.style.overflow="hidden";beacon("guided_shown");}catch(e){}};
+      if(document.body)mount();else document.addEventListener("DOMContentLoaded",mount);
+
+      // If they follow the steps the page goes hidden; log that as the win so
+      // guided_escaped / guided_shown is a real conversion rate.
+      var done=false;
+      document.addEventListener("visibilitychange",function(){
+        if(document.hidden&&!done){done=true;beacon("guided_escaped");}
+      });
+    }catch(e){}
+  };
+
+  if(ESC_MODE==="guided"){
+    if(!FORCED){try{sessionStorage.setItem("eh_a","1");}catch(e){}}
+    showGuided();
+    return;
+  }
+
   var s;
   if(/Android/i.test(u)){
     s="intent://"+dest.replace(/^https?:\\/\\//,"")+"#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url="+encodeURIComponent(dest)+";end";
