@@ -44,6 +44,30 @@ function injectedGlobals(): string[] {
   }
 }
 
+// IG routes scheme URLs through an internal deeplink table. `extbrowser` is
+// gated on current builds; these are other plausible route names for the same
+// native "open outside the app" handler. Probing them is black-box: each is a
+// real anchor, so the tap is a genuine user gesture (the strongest signal we
+// can send), and the hidden-watcher tells us if any of them reached the OS.
+const CANDIDATE_SCHEMES: { label: string; build: (u: string) => string }[] = [
+  { label: "instagram://extbrowser", build: (u) => "instagram://extbrowser/?url=" + encodeURIComponent(u) },
+  { label: "instagram://external_browser", build: (u) => "instagram://external_browser/?url=" + encodeURIComponent(u) },
+  { label: "instagram://open_external", build: (u) => "instagram://open_external/?url=" + encodeURIComponent(u) },
+  { label: "instagram://openexternal", build: (u) => "instagram://openexternal/?url=" + encodeURIComponent(u) },
+  { label: "instagram://open_in_browser", build: (u) => "instagram://open_in_browser/?url=" + encodeURIComponent(u) },
+  { label: "instagram://open_in_external_browser", build: (u) => "instagram://open_in_external_browser/?url=" + encodeURIComponent(u) },
+  { label: "instagram://browser", build: (u) => "instagram://browser/?url=" + encodeURIComponent(u) },
+  { label: "instagram://openurl", build: (u) => "instagram://openurl?url=" + encodeURIComponent(u) },
+  { label: "instagram://open", build: (u) => "instagram://open?url=" + encodeURIComponent(u) },
+  { label: "instagram://safari", build: (u) => "instagram://safari/?url=" + encodeURIComponent(u) },
+  { label: "instagram://webview_external", build: (u) => "instagram://webview_external/?url=" + encodeURIComponent(u) },
+  { label: "fb://extbrowser", build: (u) => "fb://extbrowser/?url=" + encodeURIComponent(u) },
+  { label: "fb://browser", build: (u) => "fb://browser/?url=" + encodeURIComponent(u) },
+  { label: "barcelona://extbrowser", build: (u) => "barcelona://extbrowser/?url=" + encodeURIComponent(u) },
+  { label: "x-web-search://", build: (u) => "x-web-search://" + u.replace(/^https?:\/\//, "") },
+  { label: "shortcuts://run-shortcut", build: (u) => "shortcuts://run-shortcut?name=Open&input=" + encodeURIComponent(u) },
+];
+
 export function Lab() {
   const [rows, setRows] = useState<Row[]>([]);
   const [handlers, setHandlers] = useState<string[]>([]);
@@ -239,6 +263,29 @@ export function Lab() {
         >
           6. plain &lt;a href=&quot;instagram://extbrowser&quot;&gt; anchor
         </a>
+      </Section>
+
+      <Section title={`Scheme probe (${CANDIDATE_SCHEMES.length} candidates, tap each)`}>
+        <p style={{ opacity: 0.5, marginBottom: 10 }}>
+          Real anchors — the tap is a genuine user gesture. Watch the Result box: green
+          means that route reached the OS.
+        </p>
+        {CANDIDATE_SCHEMES.map((c) => (
+          <a
+            key={c.label}
+            style={{ ...btn, textDecoration: "none" }}
+            href={mounted ? c.build(dest()) : "#"}
+            onClick={() => {
+              setHiddenSeen(false);
+              say(`tapped ${c.label}`);
+              setTimeout(() => {
+                if (!document.hidden) say(`${c.label}: still foreground after 1.2s — dead route`);
+              }, 1200);
+            }}
+          >
+            {c.label}
+          </a>
+        ))}
       </Section>
 
       <Section title="Result">
