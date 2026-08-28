@@ -40,6 +40,8 @@ type SnippetOpts = {
   abEnabled?: boolean;
   fallbackButton?: boolean;
   escapeEnabled?: boolean;
+  /** iOS scheme: "xws" (x-web-search://, default) or "meta" (instagram://extbrowser). */
+  escapeIosRoute?: "xws" | "meta";
   fallbackText?: string | null;
   paidOnly?: boolean;
   /** Percent of in-test traffic placed in bucket A (escape arm). 50 =
@@ -131,10 +133,14 @@ export function buildSnippet(opts: SnippetOpts): string {
   // Allowed hostnames baked at compile time. Empty array = no restriction
   // (F&F installs and pre-domain merchants keep working).
   const allowedDomains = JSON.stringify(opts.allowedDomains ?? []);
+  // iOS escape route. Default "xws" = x-web-search://, the only scheme still
+  // reaching the OS on IG 444 / iOS 26.3.1. "meta" pins the legacy
+  // instagram://extbrowser route for when a build reverses the gate.
+  const escIos = JSON.stringify(opts.escapeIosRoute === "meta" ? "meta" : "xws");
 
   return `(function(){
 try{
-  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord},UT_TAG=${utmTagging},AD=${allowedDomains};
+  var M=${merchantId},I=${ingestUrl},V=${version},AB=${abEnabled},FB=${fallbackButton},KE=${escapeEnabled},FT=${fallbackText},PO=${paidOnly},SPLIT=${splitThreshold},EI=${escapeInstagram},ET=${escapeThreads},EF=${escapeFacebook},EM=${escapeMessenger},ED=${escapeDiscord},UT_TAG=${utmTagging},ESC_IOS=${escIos},AD=${allowedDomains};
 
   // Async kill-switch — if a prior /api/escape/status response in this
   // session marked us disabled, bail before doing anything. Lets inlined /
@@ -537,20 +543,29 @@ try{
 
   var dest=location.href;
   try{var nu=new URL(location.href);nu.searchParams.set("opened_external_browser","true");nu.searchParams.set("source_browser","instagram_in_app");nu.searchParams.set("eh_sid",sid);nu.searchParams.set("eh_escape","1");if(fc)nu.searchParams.set("eh_fbclid",fc);dest=nu.toString();}catch(e){}
-  // Threads uses barcelona://extbrowser/?url= ; Instagram uses instagram://
-  // Both schemes accept identical payloads and hand off to system default.
-  var schemePrefix=kind==="threads"
-    ?atob("YmFyY2Vsb25hOi8vZXh0YnJvd3Nlci8/dXJsPQ==")
-    :atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==");
-  // Android: the Meta extbrowser scheme is unreliable there (newer IG builds
-  // swallow it), so hand off to Chrome via an intent:// URL. Chrome opens
-  // dest directly; if Chrome is missing the OS falls back to
-  // S.browser_fallback_url, which is the same https dest.
+  // Scheme selection, verified on-device against IG 444 / iOS 26.3.1 (IABMV/1):
+  //
+  //   Android  -> intent:// to Chrome. extbrowser is swallowed on newer builds;
+  //               the intent carries S.browser_fallback_url so a device without
+  //               Chrome still lands on the same https dest.
+  //   iOS      -> x-web-search://. The Meta extbrowser routes (instagram:// and
+  //               barcelona://) are gated on current builds — dead even when
+  //               fired from a real user tap — but x-web-search:// still reaches
+  //               the OS and opens Safari. It takes a bare host+path+query with
+  //               no protocol, so we strip it.
+  //
+  // ESC_IOS lets a merchant pin the old Meta route if a future IG build
+  // reverses the gate: "meta" forces extbrowser, anything else uses the default.
   var s;
   if(/Android/i.test(u)){
     s="intent://"+dest.replace(/^https?:\\/\\//,"")+"#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url="+encodeURIComponent(dest)+";end";
-  } else {
+  } else if(ESC_IOS==="meta"){
+    var schemePrefix=kind==="threads"
+      ?atob("YmFyY2Vsb25hOi8vZXh0YnJvd3Nlci8/dXJsPQ==")
+      :atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==");
     s=schemePrefix+encodeURIComponent(dest);
+  } else {
+    s=atob("eC13ZWItc2VhcmNoOi8v")+dest.replace(/^https?:\\/\\//,"");
   }
   // Don't write the sticky eh_a flag for forced QA visits so the tester
   // can refresh and re-trigger the redirect without clearing storage.

@@ -125,18 +125,48 @@ export function Lab() {
       }
     };
     document.addEventListener("visibilitychange", onVis);
+
+    // ?auto=1 fires x-web-search:// on load with no tap, which is how the real
+    // snippet behaves. Tells us whether the route needs a user gesture.
+    try {
+      if (new URLSearchParams(location.search).get("auto") === "1") {
+        say("auto=1 -> firing x-web-search:// on load, no gesture");
+        setTimeout(() => {
+          const u = new URL(location.href);
+          u.searchParams.delete("auto");
+          u.searchParams.set("escaped", "1");
+          location.replace("x-web-search://" + u.toString().replace(/^https?:\/\//, ""));
+        }, 300);
+      }
+    } catch { /* ignore */ }
+
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [say]);
 
+  // Carry a realistic param set across the hop. x-web-search:// takes a bare
+  // host+path+query string, so the open question is whether Safari parses the
+  // whole thing as a URL or treats the &-separated tail as a search query.
+  // These land in the banner below, which is how we verify nothing was lost.
   const dest = useCallback(() => {
     try {
       const u = new URL(location.href);
+      u.searchParams.delete("auto");
       u.searchParams.set("escaped", "1");
+      u.searchParams.set("opened_external_browser", "true");
+      u.searchParams.set("eh_sid", "0123abcd-4567-89ef-0123-456789abcdef");
+      u.searchParams.set("utm_source", "instagram");
+      u.searchParams.set("utm_medium", "paid");
+      u.searchParams.set("eh_fbclid", "IwTESTCLICKID123");
       return u.toString();
     } catch {
       return location.href;
     }
   }, []);
+
+  const xws = useCallback(
+    () => "x-web-search://" + dest().replace(/^https?:\/\//, ""),
+    [dest],
+  );
 
   const igScheme = useCallback(() => {
     const ua = navigator.userAgent || "";
@@ -211,6 +241,8 @@ export function Lab() {
         Open this inside the app&apos;s in-app browser (DM yourself the link and tap it).
       </p>
 
+      <Landed />
+
       <Section title="Environment">
         {rows.map((r) => (
           <div key={r.label} style={{ marginBottom: 6 }}>
@@ -241,6 +273,12 @@ export function Lab() {
       </Section>
 
       <Section title="Escape attempts (tap = user gesture)">
+        <button style={{ ...btn, background: "#4ade80" }} onClick={() => fire("x-web-search (tap)", xws())}>
+          0. x-web-search:// — on tap (full param set)
+        </button>
+        <button style={{ ...btn, background: "#4ade80" }} onClick={() => setTimeout(() => fire("x-web-search (auto)", xws()), 400)}>
+          0b. x-web-search:// — auto-fired, no gesture
+        </button>
         <button style={btn} onClick={() => fire("extbrowser (tap)", igScheme())}>
           1. instagram/barcelona://extbrowser — on tap
         </button>
@@ -297,6 +335,33 @@ export function Lab() {
           <div key={i} style={{ opacity: i === 0 ? 1 : 0.55, marginBottom: 3 }}>{l}</div>
         ))}
       </Section>
+    </div>
+  );
+}
+
+// Shown when we arrive carrying ?escaped=1 — i.e. this load is the far side of
+// a successful hop. Prints every param so we can see which survived.
+function Landed() {
+  const [params, setParams] = useState<[string, string][] | null>(null);
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    if (q.get("escaped") !== "1") return;
+    setParams([...q.entries()]);
+  }, []);
+  if (!params) return null;
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const stillIab = /Instagram|FBAN|FBAV|Barcelona/i.test(ua);
+  return (
+    <div style={{ background: stillIab ? "#7f1d1d" : "#14532d", padding: 14, borderRadius: 10, marginBottom: 20 }}>
+      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 8, fontFamily: "system-ui" }}>
+        {stillIab ? "LANDED — but still inside the in-app browser" : "LANDED IN A REAL BROWSER"}
+      </div>
+      <div style={{ marginBottom: 6, opacity: 0.85 }}>{params.length} param(s) survived the hop:</div>
+      {params.map(([k, v]) => (
+        <div key={k} style={{ opacity: 0.9 }}>
+          {k} = {v}
+        </div>
+      ))}
     </div>
   );
 }
