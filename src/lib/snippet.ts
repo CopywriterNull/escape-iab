@@ -542,12 +542,26 @@ try{
   var schemePrefix=kind==="threads"
     ?atob("YmFyY2Vsb25hOi8vZXh0YnJvd3Nlci8/dXJsPQ==")
     :atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==");
-  var s=schemePrefix+encodeURIComponent(dest);
+  // Android: the Meta extbrowser scheme is unreliable there (newer IG builds
+  // swallow it), so hand off to Chrome via an intent:// URL. Chrome opens
+  // dest directly; if Chrome is missing the OS falls back to
+  // S.browser_fallback_url, which is the same https dest.
+  var s;
+  if(/Android/i.test(u)){
+    s="intent://"+dest.replace(/^https?:\\/\\//,"")+"#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url="+encodeURIComponent(dest)+";end";
+  } else {
+    s=schemePrefix+encodeURIComponent(dest);
+  }
   // Don't write the sticky eh_a flag for forced QA visits so the tester
   // can refresh and re-trigger the redirect without clearing storage.
   if(!FORCED){try{sessionStorage.setItem("eh_a","1");}catch(e){}}
   beacon("escape_attempt");
-  setTimeout(function(){try{location.replace(s);}catch(e){location.href=s;}},60);
+  // Fire on the next frame rather than a fixed delay: the WebView needs one
+  // paint before it will honor a scheme navigation, and anything longer just
+  // gives the user time to start scrolling.
+  function fireEscape(){try{location.replace(s);}catch(e){location.href=s;}}
+  if(typeof requestAnimationFrame==="function"){requestAnimationFrame(function(){setTimeout(fireEscape,0);});}
+  else setTimeout(fireEscape,50);
 
   // Visibility polling — if the OS opened our scheme, the page goes hidden.
   // Poll document.hidden at three intervals; any positive hit marks the
