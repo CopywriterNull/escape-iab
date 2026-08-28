@@ -19,6 +19,7 @@ function runSnippet(opts: {
   paidOnly?: boolean;
   abEnabled?: boolean;
   escapeFacebook?: boolean;
+  escapeIosRoute?: "none" | "xws" | "meta";
 }): RunResult {
   const snippet = buildSnippet({
     merchantId: "11111111-1111-4111-8111-111111111111",
@@ -27,6 +28,7 @@ function runSnippet(opts: {
     paidOnly: opts.paidOnly ?? false,
     abEnabled: opts.abEnabled ?? true,
     escapeFacebook: opts.escapeFacebook,
+    escapeIosRoute: opts.escapeIosRoute,
   });
 
   const replaceStateUrls: string[] = [];
@@ -152,9 +154,12 @@ describe("snippet behavior: utm_term A/B tagging", () => {
   });
 
   it("the escape destination URL carries the tag into Safari (bucket A)", () => {
+    // iOS fires no scheme by default now, so pin the Meta route to exercise the
+    // tag-carrying logic itself rather than the route choice.
     const { escapeUrls } = runSnippet({
       utmTagging: true,
       url: "https://shop.com/product?eh_force=a",
+      escapeIosRoute: "meta",
     });
     // On iOS the escape URL is x-web-search://<host><path>#eh1.<base64url of the
     // query>, since Safari mis-parses a bare &-laden string as a search. Decode

@@ -41,7 +41,7 @@ type SnippetOpts = {
   fallbackButton?: boolean;
   escapeEnabled?: boolean;
   /** iOS scheme: "xws" (x-web-search://, default) or "meta" (instagram://extbrowser). */
-  escapeIosRoute?: "xws" | "meta";
+  escapeIosRoute?: "none" | "xws" | "meta";
   /** "auto" fires a URL scheme; "guided" shows the ••• walkthrough overlay. */
   escapeMode?: "auto" | "guided";
   guidedTitle?: string;
@@ -140,7 +140,13 @@ export function buildSnippet(opts: SnippetOpts): string {
   // iOS escape route. Default "xws" = x-web-search://, the only scheme still
   // reaching the OS on IG 444 / iOS 26.3.1. "meta" pins the legacy
   // instagram://extbrowser route for when a build reverses the gate.
-  const escIos = JSON.stringify(opts.escapeIosRoute === "meta" ? "meta" : "xws");
+  // iOS scheme route. Default "none": no scheme is fired at all, because every
+  // page-initiated route on current IG builds either raises the consent modal
+  // or drops the visitor in Safari's search field. "meta" and "xws" stay
+  // available for re-testing when IG ships a new build.
+  const escIos = JSON.stringify(
+    opts.escapeIosRoute === "meta" ? "meta" : opts.escapeIosRoute === "xws" ? "xws" : "none",
+  );
   // "auto" fires a scheme (works on Android). "guided" renders the overlay and
   // fires nothing — the only thing that still works on current iOS IG builds.
   const escMode = JSON.stringify(opts.escapeMode === "guided" ? "guided" : "auto");
@@ -678,9 +684,11 @@ try{
       ?atob("YmFyY2Vsb25hOi8vZXh0YnJvd3Nlci8/dXJsPQ==")
       :atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==");
     s=schemePrefix+encodeURIComponent(dest);
-  } else {
-    // Bare host+path + a single fragment token. No query string survives Safari's
-    // "is this a URL or a search?" parse, so we carry it encoded instead.
+  } else if(ESC_IOS==="xws"){
+    // Opt-in only, and not recommended: x-web-search:// launches Safari but
+    // cannot carry a destination in any encoding, so the visitor lands in an
+    // empty search field having lost the page. Kept for A/B curiosity, never
+    // the default.
     var xb;
     try{
       var xu=new URL(dest);
@@ -688,6 +696,12 @@ try{
       xb=xu.host+xu.pathname+(tok?"#eh1."+tok:"");
     }catch(e){ xb=dest.replace(/^https?:\\/\\//,""); }
     s=atob("eC13ZWItc2VhcmNoOi8v")+xb;
+  } else {
+    // iOS default: fire nothing. Every page-initiated route is either gated
+    // behind the consent modal or lands the visitor somewhere useless, and a
+    // failed scheme still costs a scary prompt. Show the walkthrough instead.
+    showGuided();
+    return;
   }
   // Don't write the sticky eh_a flag for forced QA visits so the tester
   // can refresh and re-trigger the redirect without clearing storage.
