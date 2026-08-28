@@ -319,50 +319,46 @@ export function Lab() {
         )}
       </Section>
 
-      <Section title="Escape attempts (tap = user gesture)">
-        <button style={{ ...btn, background: "#4ade80" }} onClick={() => fire("A: /e/ hop (tap)", xwsHop())}>
-          A. x-web-search → /e/&lt;token&gt; path-only hop ← best bet
-        </button>
-        <button style={{ ...btn, background: "#4ade80" }} onClick={() => setTimeout(() => fire("A2: /e/ hop (auto)", xwsHop()), 400)}>
-          A2. same, auto-fired with no gesture
-        </button>
-        <button style={{ ...btn, background: "#bbf7d0" }} onClick={() => fire("B: bare path", xwsBare())}>
-          B. x-web-search, bare host/path, no params (control)
-        </button>
-        <button style={{ ...btn, background: "#fde68a" }} onClick={() => fire("C: fragment token", xwsToken())}>
-          C. host/path#eh1.&lt;token&gt; (the one that came up empty)
-        </button>
-        <button style={{ ...btn, background: "#fde68a" }} onClick={() => fire("D: %23 fragment", xwsPctFragment())}>
-          D. same but %23-encoded #
-        </button>
-        <button style={{ ...btn, background: "#fde68a" }} onClick={() => fire("E: inline query", xws())}>
-          E. inline ?a=1&amp;b=2 query (the original)
-        </button>
-        <button style={{ ...btn, background: "#fde68a" }} onClick={() => fire("F: with protocol", "x-web-search://https://" + location.host + "/e/" + b64url(dest()))}>
-          F. x-web-search://https://host/e/&lt;token&gt;
-        </button>
-        <button style={btn} onClick={() => fire("extbrowser (tap)", igScheme())}>
-          1. instagram/barcelona://extbrowser — on tap
-        </button>
-        <button style={btn} onClick={() => setTimeout(() => fire("extbrowser (auto)", igScheme()), 400)}>
-          2. same scheme, fired 400ms later (no gesture)
-        </button>
-        <button style={btn} onClick={() => fire("android intent", androidIntent())}>
-          3. intent:// → Chrome (Android only)
-        </button>
-        <button style={btn} onClick={() => fire("x-safari-https", dest().replace(/^https?:/, "x-safari-https:"))}>
-          4. x-safari-https:// (legacy)
-        </button>
-        <button style={btn} onClick={() => fire("googlechrome x-callback", "googlechrome://x-callback-url/open?url=" + encodeURIComponent(dest()))}>
-          5. googlechrome://x-callback-url
-        </button>
-        <a
-          style={{ ...btn, textDecoration: "none" }}
-          href={mounted ? igScheme() : "#"}
-          onClick={() => say("anchor href extbrowser tapped (native navigation, no JS)")}
+      <Section title="Escape attempts">
+        <p style={{ opacity: 0.55, marginBottom: 12 }}>
+          Every row below is a real &lt;a href&gt; — a genuine user-activated navigation.
+          JS-fired location.replace() to a blocked scheme is dropped silently by the
+          WebView with no modal at all, which is why the old buttons appeared dead.
+        </p>
+        {(
+          [
+            ["instagram://extbrowser", () => igScheme()],
+            ["x-web-search → /e/<token> hop", () => xwsHop()],
+            ["x-web-search bare host/path", () => xwsBare()],
+            ["x-web-search #eh1.<token>", () => xwsToken()],
+            ["x-web-search %23 fragment", () => xwsPctFragment()],
+            ["x-web-search inline query", () => xws()],
+            ["android intent:// → Chrome", () => androidIntent()],
+            ["x-safari-https://", () => dest().replace(/^https?:/, "x-safari-https:")],
+            ["googlechrome://x-callback-url", () => "googlechrome://x-callback-url/open?url=" + encodeURIComponent(dest())],
+          ] as [string, () => string][]
+        ).map(([label, build]) => (
+          <a
+            key={label}
+            style={{ ...btn, textDecoration: "none" }}
+            href={mounted ? build() : "#"}
+            onClick={() => {
+              setHiddenSeen(false);
+              say(`tapped ${label}`);
+              setTimeout(() => {
+                if (!document.hidden) say(`${label}: still foreground after 1.5s`);
+              }, 1500);
+            }}
+          >
+            {label}
+          </a>
+        ))}
+        <button
+          style={{ ...btn, background: "#fca5a5" }}
+          onClick={() => fire("JS-fired extbrowser (control)", igScheme())}
         >
-          6. plain &lt;a href=&quot;instagram://extbrowser&quot;&gt; anchor
-        </a>
+          JS-fired extbrowser (control — expect silence)
+        </button>
       </Section>
 
       <Section title={`Scheme probe (${CANDIDATE_SCHEMES.length} candidates, tap each)`}>
