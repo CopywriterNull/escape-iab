@@ -135,7 +135,9 @@ export function Lab() {
           const u = new URL(location.href);
           u.searchParams.delete("auto");
           u.searchParams.set("escaped", "1");
-          location.replace("x-web-search://" + u.toString().replace(/^https?:\/\//, ""));
+          const tok = btoa(u.search.replace(/^\?/, ""))
+            .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+          location.replace("x-web-search://" + u.host + u.pathname + (tok ? "#eh1." + tok : ""));
         }, 300);
       }
     } catch { /* ignore */ }
@@ -163,9 +165,29 @@ export function Lab() {
     }
   }, []);
 
+  // Variant A: the whole query inline. Safari sees ?a=1&b=2 and may decide the
+  // string is a search phrase rather than a URL.
   const xws = useCallback(
     () => "x-web-search://" + dest().replace(/^https?:\/\//, ""),
     [dest],
+  );
+
+  // Variant B (what the snippet now ships): bare host+path, query carried as one
+  // base64url fragment token so there is no ? or & for Safari to trip over.
+  const xwsToken = useCallback(() => {
+    const u = new URL(dest());
+    const tok = btoa(u.search.replace(/^\?/, ""))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    return "x-web-search://" + u.host + u.pathname + (tok ? "#eh1." + tok : "");
+  }, [dest]);
+
+  // Variant C: bare URL, no params at all. The control — if this navigates and
+  // B does not, the fragment is the problem.
+  const xwsBare = useCallback(
+    () => "x-web-search://" + location.host + location.pathname + "#eh1." + btoa("escaped=1"),
+    [],
   );
 
   const igScheme = useCallback(() => {
@@ -273,11 +295,17 @@ export function Lab() {
       </Section>
 
       <Section title="Escape attempts (tap = user gesture)">
-        <button style={{ ...btn, background: "#4ade80" }} onClick={() => fire("x-web-search (tap)", xws())}>
-          0. x-web-search:// — on tap (full param set)
+        <button style={{ ...btn, background: "#4ade80" }} onClick={() => fire("xws token (tap)", xwsToken())}>
+          0. x-web-search + fragment token — on tap ← what ships
         </button>
-        <button style={{ ...btn, background: "#4ade80" }} onClick={() => setTimeout(() => fire("x-web-search (auto)", xws()), 400)}>
-          0b. x-web-search:// — auto-fired, no gesture
+        <button style={{ ...btn, background: "#4ade80" }} onClick={() => setTimeout(() => fire("xws token (auto)", xwsToken()), 400)}>
+          0b. x-web-search + fragment token — auto-fired, no gesture
+        </button>
+        <button style={{ ...btn, background: "#bbf7d0" }} onClick={() => fire("xws bare", xwsBare())}>
+          0c. x-web-search, bare path only (control)
+        </button>
+        <button style={{ ...btn, background: "#fde68a" }} onClick={() => fire("xws inline query", xws())}>
+          0d. x-web-search with inline ?a=1&amp;b=2 query (old way)
         </button>
         <button style={btn} onClick={() => fire("extbrowser (tap)", igScheme())}>
           1. instagram/barcelona://extbrowser — on tap
@@ -344,8 +372,18 @@ export function Lab() {
 function Landed() {
   const [params, setParams] = useState<[string, string][] | null>(null);
   useEffect(() => {
+    // Unpack the fragment token first — that is how the real snippet restores
+    // the query after an x-web-search hop.
+    try {
+      const h = location.hash || "";
+      if (h.indexOf("#eh1.") === 0) {
+        let b = h.slice(5).replace(/-/g, "+").replace(/_/g, "/");
+        while (b.length % 4) b += "=";
+        history.replaceState(null, "", location.pathname + "?" + atob(b));
+      }
+    } catch { /* ignore */ }
     const q = new URLSearchParams(location.search);
-    if (q.get("escaped") !== "1") return;
+    if (q.get("escaped") !== "1" && q.get("opened_external_browser") !== "true") return;
     setParams([...q.entries()]);
   }, []);
   if (!params) return null;

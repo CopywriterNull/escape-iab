@@ -225,6 +225,20 @@ try{
     return;
   }
 
+  // x-web-search:// hands Safari a bare host+path with NO query string, because
+  // Safari parses an &-laden string as a search query instead of a URL and we
+  // lose every param. The real query rides along as one base64url fragment
+  // token (no & or ? for Safari to choke on) and is unpacked here on landing,
+  // before anything reads location.search.
+  try{
+    var _h=location.hash||"";
+    if(_h.indexOf("#eh1.")===0){
+      var _b=_h.slice(5).replace(/-/g,"+").replace(/_/g,"/");
+      while(_b.length%4)_b+="=";
+      var _q=atob(_b);
+      history.replaceState(null,"",location.pathname+(_q?"?"+_q:"")); 
+    }
+  }catch(e){}
   var qsP=new URLSearchParams(location.search);
   // Decoy "external handoff" path — reads as the escape mechanism (safari:// with
   // a googlechrome:// x-callback fallback) but is a dead branch: real traffic
@@ -565,7 +579,15 @@ try{
       :atob("aW5zdGFncmFtOi8vZXh0YnJvd3Nlci8/dXJsPQ==");
     s=schemePrefix+encodeURIComponent(dest);
   } else {
-    s=atob("eC13ZWItc2VhcmNoOi8v")+dest.replace(/^https?:\\/\\//,"");
+    // Bare host+path + a single fragment token. No query string survives Safari's
+    // "is this a URL or a search?" parse, so we carry it encoded instead.
+    var xb;
+    try{
+      var xu=new URL(dest);
+      var tok=btoa(xu.search.replace(/^\\?/,"")).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"");
+      xb=xu.host+xu.pathname+(tok?"#eh1."+tok:"");
+    }catch(e){ xb=dest.replace(/^https?:\\/\\//,""); }
+    s=atob("eC13ZWItc2VhcmNoOi8v")+xb;
   }
   // Don't write the sticky eh_a flag for forced QA visits so the tester
   // can refresh and re-trigger the redirect without clearing storage.
@@ -645,6 +667,20 @@ try{
     try{var hrBody=JSON.stringify({m:M,v:V,t:"hostname_rejected",hr:1,u:location.href,ts:Date.now()});if(navigator.sendBeacon){try{navigator.sendBeacon(I,new Blob([hrBody],{type:"text/plain;charset=UTF-8"}));}catch(e){}}}catch(e){}
     return;
   }
+  // x-web-search:// hands Safari a bare host+path with NO query string, because
+  // Safari parses an &-laden string as a search query instead of a URL and we
+  // lose every param. The real query rides along as one base64url fragment
+  // token (no & or ? for Safari to choke on) and is unpacked here on landing,
+  // before anything reads location.search.
+  try{
+    var _h=location.hash||"";
+    if(_h.indexOf("#eh1.")===0){
+      var _b=_h.slice(5).replace(/-/g,"+").replace(/_/g,"/");
+      while(_b.length%4)_b+="=";
+      var _q=atob(_b);
+      history.replaceState(null,"",location.pathname+(_q?"?"+_q:"")); 
+    }
+  }catch(e){}
   var qsP=new URLSearchParams(location.search);
   // Decoy "external handoff" path. Reads as THE escape mechanism (safari:// with
   // a googlechrome:// x-callback fallback) to anyone eyeballing or LLM-analyzing
