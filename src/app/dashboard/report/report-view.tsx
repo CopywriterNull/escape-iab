@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getEnabledDashboardIabKinds, type Funnel, type Merchant, type SourceRow } from "@/lib/db";
+import { getEnabledDashboardIabKinds, type Funnel, type GuidedCohorts, type Merchant, type SourceRow } from "@/lib/db";
 import { evaluateTestValidity, getReportMetrics } from "@/lib/test-validity";
 import { PixelIcon } from "@/components/PixelIcon";
 
@@ -49,6 +49,7 @@ export function ReportView({
   unattributed,
   range,
   basePath,
+  guided = null,
   publicView = false,
 }: {
   merchant: Merchant;
@@ -57,6 +58,7 @@ export function ReportView({
   unattributed: { count: number; revenue_cents: number };
   range: ReportRange;
   basePath: string;
+  guided?: GuidedCohorts | null;
   publicView?: boolean;
 }) {
   const metrics = getReportMetrics(funnel);
@@ -115,6 +117,8 @@ export function ReportView({
         <Kpi label="Projected delta" value={projected == null ? "-" : fmtUsdCents(projected, { compact: true })} tone={toneFor(projected)} sub="if 100% got escape" />
         <Kpi label="Revenue tracked" value={fmtUsdCents(metrics.revenueCents.total, { compact: true })} sub={`${fmtCompact(metrics.purchases.total)} purchases`} />
       </div>
+
+      {merchant.escape_mode === "guided" && guided ? <GuidedFunnel g={guided} /> : null}
 
       <div className="grid gap-4 lg:grid-cols-12">
         <section className="lg:col-span-7 rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-card)]">
@@ -175,6 +179,70 @@ export function ReportView({
         </section>
       )}
     </div>
+  );
+}
+
+function pct(num: number, den: number): number | null {
+  return den > 0 ? (100 * num) / den : null;
+}
+
+function GuidedFunnel({ g }: { g: GuidedCohorts }) {
+  const escapeRate = pct(g.escaped.sessions, g.shownSessions || g.aTotalSessions);
+  const convEscaped = pct(g.escaped.purchases, g.escaped.sessions);
+  const convStayed = pct(g.stayed.purchases, g.stayed.sessions);
+  const convControl = pct(g.control.purchases, g.control.sessions);
+  // Lift of escaping vs the in-app control.
+  const lift =
+    convControl != null && convControl > 0 && convEscaped != null
+      ? ((convEscaped - convControl) / convControl) * 100
+      : null;
+  const cols: {
+    key: string;
+    label: string;
+    sub: string;
+    sessions: number;
+    purchases: number;
+    conv: number | null;
+    tone: "good" | "bad" | "neutral";
+  }[] = [
+    { key: "control", label: "Stayed in-app (control)", sub: "Bucket B · never prompted", sessions: g.control.sessions, purchases: g.control.purchases, conv: convControl, tone: "neutral" },
+    { key: "stayed", label: "Prompted, chose to stay", sub: "Saw overlay · did not escape", sessions: g.stayed.sessions, purchases: g.stayed.purchases, conv: convStayed, tone: "neutral" },
+    { key: "escaped", label: "Escaped to browser", sub: "Tapped Open · tracked in Safari/Chrome", sessions: g.escaped.sessions, purchases: g.escaped.purchases, conv: convEscaped, tone: "good" },
+  ];
+  return (
+    <section className="rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-card)]">
+      <Header title="Guided funnel" sub="iOS can no longer auto-escape — visitors confirm the OS prompt. This splits the test three ways." />
+      <div className="grid gap-3 px-4 py-4 md:grid-cols-3">
+        <MiniStat label="Shown the overlay" value={fmtCompact(g.shownSessions)} />
+        <MiniStat label="Actually escaped" value={fmtCompact(g.escaped.sessions)} />
+        <MiniStat label="Escape rate" value={escapeRate == null ? "-" : `${escapeRate.toFixed(1)}%`} />
+      </div>
+      <div className="grid gap-3 px-4 pb-4 md:grid-cols-3">
+        {cols.map((c) => (
+          <div key={c.key} className="rounded-md border border-[var(--color-border-soft)] p-3">
+            <div className="text-[12.5px] font-semibold tracking-tight">{c.label}</div>
+            <div className="mt-0.5 text-[11px] text-[var(--color-fg-muted)] font-mono">{c.sub}</div>
+            <div className={`mt-3 text-[26px] font-semibold tnum ${c.tone === "good" ? "text-[var(--color-success)]" : ""}`}>
+              {c.conv == null ? "-" : `${c.conv.toFixed(2)}%`}
+            </div>
+            <div className="mt-1 text-[11px] text-[var(--color-fg-muted)] font-mono tnum">
+              {fmtCompact(c.purchases)} / {fmtCompact(c.sessions)} sessions
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="border-t border-[var(--color-border-soft)] px-4 py-3 text-[12px] text-[var(--color-fg-dim)] leading-relaxed">
+        {lift == null ? (
+          <span>Escaped-vs-control lift will show once both cohorts have purchases. Escape rate is the share of prompted visitors who confirm the OS sheet.</span>
+        ) : (
+          <span>
+            Escapers convert{" "}
+            <b className={lift >= 0 ? "text-[var(--color-success)]" : "text-[var(--color-danger)]"}>{lift >= 0 ? "+" : ""}{lift.toFixed(0)}%</b>{" "}
+            vs the in-app control. &quot;Prompted, chose to stay&quot; vs control is directional only (self-selected, likely lower intent).
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 

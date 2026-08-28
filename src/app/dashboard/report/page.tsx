@@ -1,5 +1,6 @@
 import {
   getCurrentMerchant,
+  getGuidedCohorts,
   getSourceBreakdown,
   getTestFunnel,
   getUnattributedPurchaseStats,
@@ -23,10 +24,11 @@ export default async function ClientReportPage({ searchParams }: { searchParams:
     );
   }
 
-  const [funnel, sources, unattributed] = await Promise.all([
+  const [funnel, sources, unattributed, guided] = await Promise.all([
     getTestFunnel(merchant.id, range.days),
     getSourceBreakdown(merchant.id, range.days, 6),
     getUnattributedPurchaseStats(merchant.id, range.days),
+    merchant.escape_mode === "guided" ? getGuidedCohorts(merchant.id, range.days) : Promise.resolve(null),
   ]);
 
   return (
@@ -37,6 +39,7 @@ export default async function ClientReportPage({ searchParams }: { searchParams:
       unattributed={unattributed}
       range={range}
       basePath="/dashboard/report"
+      guided={guided}
     />
   );
 }

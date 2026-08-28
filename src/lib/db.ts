@@ -66,6 +66,9 @@ export type Merchant = {
   /** When true, snippet stamps utm_term=escapehatch-<bucket> (Shopify-visible
    *  A/B). Off by default; enabled per-merchant (G FUEL + Kaiyo). */
   utm_tagging?: boolean;
+  /** "auto" = fire a scheme unattended (Android); "guided" = overlay whose CTA
+   *  is a user-tapped extbrowser anchor (iOS IG 444+). */
+  escape_mode?: "auto" | "guided";
   /** live = normal dashboard; pending = gated-signup approval experience. */
   status?: "live" | "pending";
   /** Performance-plan billing state (set via /admin/billing). */
@@ -832,6 +835,40 @@ export async function getPeriodDelta(
     },
     comparable: true,
     priorLabel: priorLabelFor(days),
+  };
+}
+
+export type GuidedCohorts = {
+  control: { sessions: number; purchases: number; revenueCents: number };
+  escaped: { sessions: number; purchases: number; revenueCents: number };
+  stayed: { sessions: number; purchases: number; revenueCents: number };
+  shownSessions: number;
+  aTotalSessions: number;
+};
+
+// Guided-mode cohort split (post iOS-444 model). Calls the eh_guided_cohorts
+// RPC and shapes it for the report panel. Returns null on any error so the
+// report still renders without the panel.
+export async function getGuidedCohorts(
+  merchantId: string,
+  days: number,
+): Promise<GuidedCohorts | null> {
+  const admin = getSupabaseAdmin();
+  if (!admin) return null;
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const { data, error } = await admin.rpc("eh_guided_cohorts", {
+    p_merchant: merchantId,
+    p_since: since,
+  });
+  if (error || !data || !Array.isArray(data) || data.length === 0) return null;
+  const r = data[0] as Record<string, number>;
+  const n = (v: number | null | undefined) => Number(v ?? 0);
+  return {
+    control: { sessions: n(r.control_b_sessions), purchases: n(r.control_b_purchases), revenueCents: n(r.control_b_revenue_cents) },
+    escaped: { sessions: n(r.a_escaped_sessions), purchases: n(r.a_escaped_purchases), revenueCents: n(r.a_escaped_revenue_cents) },
+    stayed: { sessions: n(r.a_stayed_sessions), purchases: n(r.a_stayed_purchases), revenueCents: n(r.a_stayed_revenue_cents) },
+    shownSessions: n(r.a_shown_sessions),
+    aTotalSessions: n(r.a_total_sessions),
   };
 }
 

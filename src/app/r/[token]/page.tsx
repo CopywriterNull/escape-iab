@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import {
+  getGuidedCohorts,
   getSourceBreakdown,
   getTestFunnel,
   getUnattributedPurchaseStats,
@@ -57,10 +58,11 @@ export default async function PublicReportPage({
     );
   }
 
-  const [funnel, sources, unattributed] = await Promise.all([
+  const [funnel, sources, unattributed, guided] = await Promise.all([
     getTestFunnel(merchant.id, range.days),
     getSourceBreakdown(merchant.id, range.days, 6),
     getUnattributedPurchaseStats(merchant.id, range.days),
+    merchant.escape_mode === "guided" ? getGuidedCohorts(merchant.id, range.days) : Promise.resolve(null),
   ]);
 
   return (
@@ -71,6 +73,7 @@ export default async function PublicReportPage({
         sources={sources}
         unattributed={unattributed}
         range={range}
+        guided={guided}
         basePath={`/r/${token}`}
         publicView
       />
