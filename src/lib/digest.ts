@@ -170,11 +170,16 @@ export async function buildDigest(sb: SupabaseClient, now: number): Promise<Dige
         .limit(1),
     ]);
 
-  const merchants = (merchantsRes.data ?? []) as MerchantRow[];
+  // Churned merchants stay in the DB for history but leave every report —
+  // totals, segments, and attention alike.
+  const merchants = ((merchantsRes.data ?? []) as MerchantRow[]).filter(
+    (m) => m.status !== "churned",
+  );
   const byId = new Map(merchants.map((m) => [m.id, m]));
-  const rows24 = (perf24.data ?? []) as PerfRow[];
-  const rows48 = (perf48.data ?? []) as PerfRow[];
-  const rows14 = (perf14d.data ?? []) as PerfRow[];
+  const notChurned = (r: PerfRow) => byId.has(r.merchant_id);
+  const rows24 = ((perf24.data ?? []) as PerfRow[]).filter(notChurned);
+  const rows48 = ((perf48.data ?? []) as PerfRow[]).filter(notChurned);
+  const rows14 = ((perf14d.data ?? []) as PerfRow[]).filter(notChurned);
 
   const totals = sumTotals(rows24);
   const totals48 = sumTotals(rows48);

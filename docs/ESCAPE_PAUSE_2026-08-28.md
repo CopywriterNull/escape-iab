@@ -52,8 +52,14 @@ zero-tap via `intent://`.
 | PURE Diffuser Co | purediffuserco.com | 85abf31e-b340-4a57-addf-d667f8b73b40 | active |
 | Retropia | retro-pia.com | 158120e7-599b-4c4e-85de-9948670f4d7c | none |
 | Retropia (dup row) | retro-pia.com | 87b831b9-eda5-4f52-9006-91686b68e06e | none |
+| MUDWTR (2026-08-31) | mudwtr.com | e7570019-2206-4af7-b28f-180ca110c16d | none |
+| AnotherVoid (2026-08-31) | anothervoid.co | 693bc1f9-8681-4201-a2ab-a2f5298874c2 | none |
 
-The other 21 merchants from the pause list remain `escape_enabled=false`. Read
+**Do not restore:** Glimmr (1c36475f) churned 2026-08-31 — `merchants.status='churned'`
+(new status value; the daily digest filters churned merchants out entirely). Skip it
+in any bulk restore from the table above.
+
+The remaining merchants from the pause list stay `escape_enabled=false`. Read
 `guided_escaped / guided_shown` per pilot before rolling guided out further.
 Note: `/s/<id>.js` is served with `cache-control: max-age=3600`, so a mode change
 can take up to an hour to fully propagate off Vercel's edge cache.
