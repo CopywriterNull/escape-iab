@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    await admin.from("escape_events").insert({
+    const { error: insertError } = await admin.from("escape_events").insert({
       merchant_id: merchantId,
       event_type: eventType,
       bucket,
@@ -178,6 +178,12 @@ export async function POST(req: NextRequest) {
       // cart_check: stash ck (0|1) in value_cents
       value_cents: eventType === "cart_check" ? ck : null,
     });
+    // Never 500 a beacon, but do NOT swallow the failure silently: a dropped
+    // insert (e.g. an event_type the DB CHECK constraint rejects) is invisible
+    // otherwise — the beacon still gets {ok:true}. Log so it shows in Vercel.
+    if (insertError) {
+      console.error("[track] escape_events insert failed", { eventType, code: insertError.code, message: insertError.message });
+    }
 
     const today = new Date().toISOString().slice(0, 10);
     const field = ROLLUP_FIELD[eventType];
