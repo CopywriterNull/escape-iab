@@ -21,7 +21,28 @@ export function buildShopifyPixel(opts: PixelOpts): string {
 var EH_M = ${merchantId};
 var EH_BASE = ${ingestUrl};
 
+// When the cart attribute is missing, read our first-party eh_sid cookie
+// through the pixel sandbox. Since 2026-09-25 Shopify no longer sets a
+// readable _shopify_y, so the snippet's impressions mostly lack a clientId
+// and eh_sid is the only key that joins a pixel event back to its visit.
 function ehSend(et, params) {
+  if (!params.sid) {
+    try {
+      if (typeof browser !== "undefined" && browser.cookie && browser.cookie.get) {
+        browser.cookie.get("eh_sid").then(function (v) {
+          if (v) params.sid = v;
+          ehFire(et, params);
+        }, function () {
+          ehFire(et, params);
+        });
+        return;
+      }
+    } catch (e) {}
+  }
+  ehFire(et, params);
+}
+
+function ehFire(et, params) {
   try {
     var qs = "m=" + encodeURIComponent(EH_M) + "&e=" + encodeURIComponent(et);
     for (var k in params) {
